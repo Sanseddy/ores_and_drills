@@ -1,6 +1,6 @@
 package dev.world.level.levelgen;
 
-import dev.FactoryExpansionMod;
+import dev.OresAndDrillsMod;
 import dev.config.OreDepositConfig;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -70,6 +70,36 @@ public final class OreUnifier {
         return Optional.empty();
     }
 
+    /**
+     * Resolves the physical block that represents this material, regardless of whether the
+     * supplied block is itself allowed to launch worldgen. Data-driven rules use this to turn
+     * a common tag such as {@code #c:ores/uranium} into one canonical generated material.
+     */
+    public static Optional<Block> unifiedBlockFor(Block sourceOre) {
+        ResourceLocation sourceId = BuiltInRegistries.BLOCK.getKey(sourceOre);
+        if (sourceId == null) {
+            return Optional.empty();
+        }
+        MaterialGroup group = groups().get(materialKey(sourceOre, sourceId));
+        if (group == null || !group.hasDuplicateNamespaces()) {
+            return Optional.of(sourceOre);
+        }
+        return Optional.ofNullable(group.sameBaseOrDefault(sourceOre, sourceId));
+    }
+
+    /** One physical representative per material, used by data-driven deposit rules. */
+    public static Optional<Block> canonicalMaterialBlockFor(Block sourceOre) {
+        ResourceLocation sourceId = BuiltInRegistries.BLOCK.getKey(sourceOre);
+        if (sourceId == null) {
+            return Optional.empty();
+        }
+        MaterialGroup group = groups().get(materialKey(sourceOre, sourceId));
+        if (group == null) {
+            return Optional.of(sourceOre);
+        }
+        return Optional.ofNullable(group.defaultBlock());
+    }
+
     public static boolean isCanonicalSource(Block sourceOre) {
         return canonicalFor(sourceOre).isPresent();
     }
@@ -78,6 +108,13 @@ public final class OreUnifier {
     public static int modPriorityRank(Block block) {
         ResourceLocation id = BuiltInRegistries.BLOCK.getKey(block);
         return id == null ? Integer.MAX_VALUE / 2 : priorityIndex(modPriorities(), id.getNamespace());
+    }
+
+    /** Tags and datapacks were reloaded; rebuild material membership and priorities on demand. */
+    public static void clearCache() {
+        groups = null;
+        modPriorities = null;
+        OBSERVED_BASE.clear();
     }
 
     private static List<String> modPriorities() {
@@ -100,7 +137,7 @@ public final class OreUnifier {
 
         for (Block block : OreTags.oreBlocks()) {
             ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(block);
-            if (blockId == null || blockId.getNamespace().equals(FactoryExpansionMod.MOD_ID)) {
+            if (blockId == null || blockId.getNamespace().equals(OresAndDrillsMod.MOD_ID)) {
                 continue;
             }
 
@@ -114,7 +151,7 @@ public final class OreUnifier {
             result.put(entry.getKey(), new MaterialGroup(entry.getValue()));
         }
 
-        FactoryExpansionMod.LOGGER.trace("Ore deposits: built ore unification groups for {} materials", result.size());
+        OresAndDrillsMod.LOGGER.trace("Ore deposits: built ore unification groups for {} materials", result.size());
         return Map.copyOf(result);
     }
 
@@ -131,10 +168,10 @@ public final class OreUnifier {
                             priorities.add(element.getAsString());
                         }
                     }
-                    FactoryExpansionMod.LOGGER.info("Ore deposits: loaded Almost Unified mod_priorities from {}", almostUnifiedConfig);
+                    OresAndDrillsMod.LOGGER.info("Ore deposits: loaded Almost Unified mod_priorities from {}", almostUnifiedConfig);
                 }
             } catch (RuntimeException | IOException exception) {
-                FactoryExpansionMod.LOGGER.warn("Ore deposits: failed to read Almost Unified priorities from {}", almostUnifiedConfig, exception);
+                OresAndDrillsMod.LOGGER.warn("Ore deposits: failed to read Almost Unified priorities from {}", almostUnifiedConfig, exception);
             }
         }
 
@@ -283,6 +320,10 @@ public final class OreUnifier {
                     .block();
         }
 
+        private Block defaultBlock() {
+            return defaultCandidate == null ? null : defaultCandidate.block();
+        }
+
         private static OreCandidate chooseDefaultCandidate(List<OreCandidate> candidates) {
             return candidates.stream()
                     .min(candidateComparator())
@@ -291,7 +332,18 @@ public final class OreUnifier {
 
         private static Comparator<OreCandidate> candidateComparator() {
             return Comparator.comparingInt(OreCandidate::priority)
+                    .thenComparingInt(candidate -> basePreference(
+                            resolvedBaseKey(candidate.block(), candidate.id())
+                    ))
                     .thenComparing(candidate -> candidate.id().toString());
+        }
+
+        private static int basePreference(String base) {
+            return switch (base) {
+                case "stone" -> 0;
+                case "deepslate" -> 1;
+                default -> 2;
+            };
         }
     }
 }

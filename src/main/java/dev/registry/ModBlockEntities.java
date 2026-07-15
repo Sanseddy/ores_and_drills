@@ -1,6 +1,6 @@
 package dev.registry;
 
-import dev.FactoryExpansionMod;
+import dev.OresAndDrillsMod;
 import dev.drill.AdvancedMiningDrill;
 import dev.drill.BurnerMiningDrill;
 import dev.drill.ElectricMiningDrill;
@@ -13,7 +13,7 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 public final class ModBlockEntities {
     public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITY_TYPES = DeferredRegister.create(
             Registries.BLOCK_ENTITY_TYPE,
-            FactoryExpansionMod.MOD_ID
+            OresAndDrillsMod.MOD_ID
     );
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<BurnerMiningDrill.BlockEntity>> BURNER_MINING_DRILL =

@@ -1,6 +1,6 @@
 package dev.registry;
 
-import dev.FactoryExpansionMod;
+import dev.OresAndDrillsMod;
 import dev.drill.AdvancedMiningDrill;
 import dev.drill.BurnerMiningDrill;
 import dev.drill.ElectricMiningDrill;
@@ -12,7 +12,7 @@ import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 public final class ModMenuTypes {
-    public static final DeferredRegister<MenuType<?>> MENU_TYPES = DeferredRegister.create(Registries.MENU, FactoryExpansionMod.MOD_ID);
+    public static final DeferredRegister<MenuType<?>> MENU_TYPES = DeferredRegister.create(Registries.MENU, OresAndDrillsMod.MOD_ID);
 
     public static final DeferredHolder<MenuType<?>, MenuType<BurnerMiningDrill.Menu>> BURNER_MINING_DRILL =
             MENU_TYPES.register("burner_mining_drill", () -> new MenuType<>(BurnerMiningDrill.Menu::new, FeatureFlags.VANILLA_SET));

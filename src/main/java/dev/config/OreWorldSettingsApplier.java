@@ -1,6 +1,7 @@
 package dev.config;
 
-import dev.FactoryExpansionMod;
+import dev.OresAndDrillsMod;
+import dev.world.level.levelgen.DepositTerrainValidator;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.fml.config.ModConfig;
@@ -25,8 +26,9 @@ public final class OreWorldSettingsApplier {
         OreDepositConfig.DISABLED_DEPOSIT_ORES.set(encodeDisabled(disabledOres));
         OreOverrides.setWorldOverrides(overrides);
         OreDepositConfig.SPEC.save();
+        DepositTerrainValidator.clearCache();
 
-        FactoryExpansionMod.LOGGER.info("Ore deposits: applied ore settings from the Ore Settings screen");
+        OresAndDrillsMod.LOGGER.info("Ore deposits: applied ore settings from the Ore Settings screen");
     }
 
     /** Keeps the active datapack preset selection in sync whenever the common config (re)loads. */

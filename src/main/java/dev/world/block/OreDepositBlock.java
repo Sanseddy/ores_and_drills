@@ -5,6 +5,7 @@ import com.mojang.serialization.MapCodec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
@@ -16,6 +17,7 @@ import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
+import net.minecraft.world.level.material.FluidState;
 
 import java.util.function.BiConsumer;
 
@@ -57,6 +59,55 @@ public class OreDepositBlock extends Block {
     @Override
     public SoundType getSoundType(BlockState state, LevelReader level, BlockPos pos, Entity entity) {
         return OreDepositData.baseBlockStateAt(level, pos).getSoundType(level, pos, entity);
+    }
+
+    @Override
+    protected float getDestroyProgress(BlockState state, Player player, BlockGetter level, BlockPos pos) {
+        float baseProgress = super.getDestroyProgress(state, player, level, pos);
+        if (baseProgress <= 0.0F || !(level instanceof Level concreteLevel)) {
+            return baseProgress;
+        }
+
+        OreDepositData.Visual visual = OreDepositData.visualAt(concreteLevel, pos);
+        if (visual == null) {
+            return baseProgress;
+        }
+
+        return baseProgress * OreDepositMiningSpeed.progressMultiplier(
+                visual.richness(),
+                OreDepositData.FILL_STAGE_COUNT
+        );
+    }
+
+    /**
+     * Mines one virtual ore unit before vanilla damages the tool. The following
+     * {@link #onDestroyedByPlayer} call keeps the physical deposit in place until its stored ore is
+     * exhausted, without cancelling NeoForge's {@code BlockEvent.BreakEvent}.
+     */
+    @Override
+    public BlockState playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
+        if (!player.isCreative() && level instanceof ServerLevel serverLevel) {
+            OreDepositData.mineByPlayerBeforeRemoval(serverLevel, pos, state, player);
+            return state;
+        }
+
+        return super.playerWillDestroy(level, pos, state, player);
+    }
+
+    @Override
+    public boolean onDestroyedByPlayer(
+            BlockState state,
+            Level level,
+            BlockPos pos,
+            Player player,
+            boolean willHarvest,
+            FluidState fluid
+    ) {
+        if (!player.isCreative()) {
+            return false;
+        }
+
+        return super.onDestroyedByPlayer(state, level, pos, player, willHarvest, fluid);
     }
 
     @Override

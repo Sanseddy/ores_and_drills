@@ -1,6 +1,6 @@
 package dev.world.level.levelgen;
 
-import dev.FactoryExpansionMod;
+import dev.OresAndDrillsMod;
 import dev.config.OreDepositConfig;
 import dev.config.OreOverrides;
 import dev.config.OreSettingsPresetManager;
@@ -25,6 +25,7 @@ import net.minecraft.world.level.levelgen.feature.configurations.OreConfiguratio
 import net.minecraft.world.level.levelgen.heightproviders.HeightProvider;
 import net.minecraft.world.level.levelgen.placement.PlacementModifier;
 import net.minecraft.world.level.levelgen.placement.PlacementModifierType;
+import net.minecraft.world.level.levelgen.structure.templatesystem.RuleTest;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -36,6 +37,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -58,6 +60,9 @@ public final class OreGenerationWeights {
     private static final Map<String, Set<String>> MATERIALS_BY_BIOME = new ConcurrentHashMap<>();
     /** Expected source attempts per material in each biome; unlike the dimension table this keeps biome variants separate. */
     private static final Map<String, Map<String, Double>> FREQUENCY_BY_BIOME = new ConcurrentHashMap<>();
+    /** Original host predicates grouped by source biome/material. Locate uses these contexts to mirror the
+     * source-biome-aware MEDIUM/LARGE placement without knowing anything about a particular mod or ore. */
+    private static final Map<SourceContextKey, Map<String, RuleTest>> SOURCE_TARGETS = new ConcurrentHashMap<>();
     /** Classifies custom dimensions through the biome that is actually being decorated. */
     private static final Map<String, OreSpawnDimensions.SpawnDimension> DIMENSION_BY_BIOME = new ConcurrentHashMap<>();
     /** Per (dimension, biome) memoization of {@link #biomeScopedEntries}, invalidated by {@link #currentToken()}. */
@@ -80,6 +85,7 @@ public final class OreGenerationWeights {
         DATA_SNAPSHOTS.clear();
         MATERIALS_BY_BIOME.clear();
         FREQUENCY_BY_BIOME.clear();
+        SOURCE_TARGETS.clear();
         DIMENSION_BY_BIOME.clear();
         SCOPED_CACHE.clear();
         WEIGHT_TABLE_CACHE.clear();
@@ -121,10 +127,12 @@ public final class OreGenerationWeights {
     public static void recordObservation(
             Block ore,
             Holder<Biome> biome,
+            String sourceSignature,
             ConfiguredFeature<?, ?> configured,
             List<PlacementModifier> placement,
             float chance,
-            int sourceSize
+            int sourceSize,
+            RuleTest sourceTarget
     ) {
         ResourceLocation oreId = BuiltInRegistries.BLOCK.getKey(ore);
         if (oreId == null) {
@@ -138,10 +146,21 @@ public final class OreGenerationWeights {
         OreSpawnDimensions.SpawnDimension dimension = OreSpawnDimensions.dimensionFor(biome);
         String biomeId = biome.unwrapKey().map(key -> key.location().toString()).orElse("<direct>");
         DIMENSION_BY_BIOME.putIfAbsent(biomeId, dimension);
+        if (sourceTarget != null && !"<direct>".equals(biomeId)) {
+            SOURCE_TARGETS.compute(new SourceContextKey(biomeId, materialKey), (ignored, existing) -> {
+                Map<String, RuleTest> targets = existing == null
+                        ? new TreeMap<>()
+                        : new TreeMap<>(existing);
+                targets.putIfAbsent(
+                        ReplaceOreFeaturesBiomeModifier.stableRuleTestKey(sourceTarget), sourceTarget
+                );
+                return Map.copyOf(targets);
+            });
+        }
         // The same placed/configured feature is attached to many biomes. Counting it once per biome inflated
         // a normal dimension-wide budget by the biome count (123k attempts/chunk in a representative pack).
         // Biome eligibility is tracked separately below, while frequency is recorded once per actual generator.
-        String key = dimension + "|" + System.identityHashCode(configured) + "|" + placement.hashCode()
+        String key = dimension + "|" + sourceSignature
                 + "|" + Float.floatToIntBits(chance) + "|" + materialKey;
         MATERIALS_BY_BIOME.computeIfAbsent(biomeId, ignored -> ConcurrentHashMap.newKeySet()).add(materialKey);
         FrequencyEstimate frequencyEstimate = estimateEffectiveFrequency(placement, chance, configured);
@@ -301,6 +320,32 @@ public final class OreGenerationWeights {
     /** Same eligible set {@link #selectedMaterialForRegion} draws from, exposed for the debug table (section 9). */
     public static List<OreGenerationData> eligibleEntries(ResourceLocation dimension, ResourceLocation biomeId) {
         return biomeScopedEntries(dimensionFromLevel(dimension, biomeId), biomeId);
+    }
+
+    /** All automatically observed biome/host contexts in which this material owns an original ore feature. */
+    public static List<SourceContext> sourceContexts(ResourceLocation dimension, String materialKey) {
+        if (materialKey == null || materialKey.isEmpty()) {
+            return List.of();
+        }
+        List<SourceContext> contexts = new ArrayList<>();
+        for (Map.Entry<SourceContextKey, Map<String, RuleTest>> entry : SOURCE_TARGETS.entrySet()) {
+            SourceContextKey key = entry.getKey();
+            if (!materialKey.equals(key.materialKey())) {
+                continue;
+            }
+            ResourceLocation biomeId = ResourceLocation.tryParse(key.biomeId());
+            if (biomeId == null
+                    || dimensionFromLevel(dimension, biomeId) != DIMENSION_BY_BIOME.get(key.biomeId())) {
+                continue;
+            }
+            List<RuleTest> targets = entry.getValue().entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .map(Map.Entry::getValue)
+                    .toList();
+            contexts.add(new SourceContext(biomeId, targets));
+        }
+        contexts.sort(Comparator.comparing(context -> context.biomeId().toString()));
+        return List.copyOf(contexts);
     }
 
     public static MaterialFrequency materialFrequency(
@@ -520,6 +565,34 @@ public final class OreGenerationWeights {
             float chance,
             ConfiguredFeature<?, ?> configured
     ) {
+        double attempts = originalAttemptFrequency(placement, chance);
+        double placementSuccessProbability = Mth.clamp(chance, 0.0F, 1.0F);
+
+        // Height ranges and replacement predicates describe where an already-created attempt may land;
+        // they do not create more independent attempts. Keep them as diagnostics, but never let a tall
+        // biome, a broad #c:stones tag, or a configuration with several replacement targets change the
+        // material's automatically detected rarity.
+        int[] heightRange = heightRangeFromPlacement(placement);
+        HeightProvider heightProvider = heightProviderFromPlacement(placement);
+        double heightAvailability = heightRange == null
+                ? 1.0D
+                : Mth.clamp((heightRange[1] - heightRange[0] + 1) / (double)(DEFAULT_MAX_GEN_Y - DEFAULT_MIN_GEN_Y + 1),
+                        0.001D, 1.0D) * heightDistributionShapeFactor(heightProvider);
+        double biomeAvailability = 1.0D; // The actual selection pool is biome-scoped.
+        double targetBlockAvailability = targetBlockAvailability(configured);
+        double exposureSurvivalProbability = configured.config() instanceof OreConfiguration ore
+                ? Mth.clamp(1.0D - ore.discardChanceOnAirExposure, 0.0D, 1.0D)
+                : 1.0D;
+        return new FrequencyEstimate(
+                Math.max(0.000001D, attempts),
+                placementSuccessProbability <= 0.0D ? 0.0D : attempts / placementSuccessProbability,
+                placementSuccessProbability, heightAvailability, biomeAvailability,
+                targetBlockAvailability, exposureSurvivalProbability
+        );
+    }
+
+    /** Expected independent source attempts; spatial filters intentionally do not multiply this value. */
+    static double originalAttemptFrequency(List<PlacementModifier> placement, float chance) {
         double attempts = 1.0D;
         for (PlacementModifier modifier : placement) {
             PlacementModifierType<?> type = modifier.type();
@@ -531,29 +604,7 @@ public final class OreGenerationWeights {
                 attempts /= Math.max(1.0D, firstIntField(modifier, 1));
             }
         }
-
-        // Frequency means expected successful placement opportunities, not ore blocks. A height provider
-        // does not remove an attempt, but it does determine how much of the vertical world can actually host
-        // that generator. Multiplying by its normalized support prevents a narrow, high-count feature from
-        // looking as common as one available through the whole underground range.
-        int[] heightRange = heightRangeFromPlacement(placement);
-        HeightProvider heightProvider = heightProviderFromPlacement(placement);
-        double heightAvailability = heightRange == null
-                ? 1.0D
-                : Mth.clamp((heightRange[1] - heightRange[0] + 1) / (double)(DEFAULT_MAX_GEN_Y - DEFAULT_MIN_GEN_Y + 1),
-                        0.001D, 1.0D) * heightDistributionShapeFactor(heightProvider);
-        double placementSuccessProbability = Mth.clamp(chance, 0.0F, 1.0F);
-        double biomeAvailability = 1.0D; // The actual selection pool is biome-scoped.
-        double targetBlockAvailability = targetBlockAvailability(configured);
-        double exposureSurvivalProbability = configured.config() instanceof OreConfiguration ore
-                ? Mth.clamp(1.0D - ore.discardChanceOnAirExposure, 0.0D, 1.0D)
-                : 1.0D;
-        double effective = attempts * placementSuccessProbability * heightAvailability * biomeAvailability
-                * targetBlockAvailability * exposureSurvivalProbability;
-        return new FrequencyEstimate(
-                Math.max(0.000001D, effective), attempts, placementSuccessProbability, heightAvailability,
-                biomeAvailability, targetBlockAvailability, exposureSurvivalProbability
-        );
+        return OreSourceFrequencyMath.originalFrequency(attempts, chance);
     }
 
     /**
@@ -601,7 +652,7 @@ public final class OreGenerationWeights {
 
     private static void warnConservativeEstimate(String key, String detail) {
         if (CONSERVATIVE_ESTIMATE_WARNINGS.add(key)) {
-            FactoryExpansionMod.LOGGER.debug("Ore deposits: conservative effective-frequency estimate: {}", detail);
+            OresAndDrillsMod.LOGGER.debug("Ore deposits: conservative effective-frequency estimate: {}", detail);
         }
     }
 
@@ -877,14 +928,14 @@ public final class OreGenerationWeights {
             totalWeight += weights[index];
         }
 
-        FactoryExpansionMod.LOGGER.debug("Ore deposits: {} tier '{}' ore weight table", spawnDimension, tierName);
+        OresAndDrillsMod.LOGGER.debug("Ore deposits: {} tier '{}' ore weight table", spawnDimension, tierName);
         for (int index = 0; index < entries.size(); index++) {
             OreGenerationData entry = entries.get(index);
             DepositTierMath.RarityWeight rarity = DepositTierMath.adaptiveTierOreWeight(
                     DepositTier.byIndex(tier), entry.originalFrequency(), maximumOriginalFrequency, rarityParameters()
             );
             double chancePercent = totalWeight > 0.0D ? weights[index] / totalWeight * 100.0D : 0.0D;
-            FactoryExpansionMod.LOGGER.debug(
+            OresAndDrillsMod.LOGGER.debug(
                     "  Ore ID: {} | Original expected attempts: {} | Placement success probability: {} | Height availability: {} | Biome availability: {} | Target-block availability: {} | Exposure survival probability: {} | Effective original frequency: {} | Maximum effective frequency: {} | Relative frequency: {} | Rare tail: {} | Base exponent: {} | Adaptive exponent: {} | Final selection weight: {} | Selection chance: {}% | Relative selection rarity: 1 in {} (biome-scoped, tier={})",
                     entry.oreId(),
                     String.format(Locale.ROOT, "%.6f", entry.expectedAttempts()),
@@ -907,7 +958,7 @@ public final class OreGenerationWeights {
             if (tier < DepositTier.MEDIUM.ordinal()
                     && rarity.relativeFrequency() < 0.01D
                     && chancePercent > 5.0D) {
-                FactoryExpansionMod.LOGGER.warn(
+                OresAndDrillsMod.LOGGER.warn(
                         "Ore deposits: unusually high {} selection chance for very rare {} in {}: {}%",
                         tierName, entry.oreId(), biomeId, String.format(Locale.ROOT, "%.4f", chancePercent)
                 );
@@ -1003,6 +1054,15 @@ public final class OreGenerationWeights {
             double targetBlockAvailability,
             double exposureSurvivalProbability
     ) {
+    }
+
+    private record SourceContextKey(String biomeId, String materialKey) {
+    }
+
+    public record SourceContext(ResourceLocation biomeId, List<RuleTest> targets) {
+        public SourceContext {
+            targets = List.copyOf(targets);
+        }
     }
 
     public record MaterialFrequency(

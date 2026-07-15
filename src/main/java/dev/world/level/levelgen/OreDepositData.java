@@ -89,8 +89,11 @@ public final class OreDepositData {
         OreDepositChunkData data = chunk.getExistingDataOrNull(ModAttachments.ORE_DEPOSITS);
         OreDepositChunkData.Entry entry = data != null ? data.get(pos) : null;
         if (entry != null && data.remove(pos)) {
+            ResourceLocation oreId = oreId(level, entry.oreIndex());
+            if (oreId != null) {
+                ConfirmedDepositIndex.get(level).markBlockDepleted(pos, oreId);
+            }
             if (entry.tier() >= OreDepositFeature.TIER_MEDIUM) {
-                ResourceLocation oreId = oreId(level, entry.oreIndex());
                 Block ore = oreId == null ? null : BuiltInRegistries.BLOCK.get(oreId);
                 if (ore != null) {
                     LargeDepositSpatialIndex.get(level).markBlockDepleted(
@@ -169,6 +172,25 @@ public final class OreDepositData {
     }
 
     public static boolean mineByPlayer(ServerLevel level, BlockPos pos, BlockState state, Player player) {
+        return mineByPlayer(level, pos, state, player, true);
+    }
+
+    /**
+     * Player-breaking entry point used from {@code OreDepositBlock#playerWillDestroy}. Vanilla damages
+     * the tool immediately after that callback, so this variant performs the virtual mining and player
+     * bookkeeping but deliberately leaves tool durability to the normal breaking pipeline.
+     */
+    public static boolean mineByPlayerBeforeRemoval(ServerLevel level, BlockPos pos, BlockState state, Player player) {
+        return mineByPlayer(level, pos, state, player, false);
+    }
+
+    private static boolean mineByPlayer(
+            ServerLevel level,
+            BlockPos pos,
+            BlockState state,
+            Player player,
+            boolean damageTool
+    ) {
         OreDepositChunkData.Entry entry = entry(level, pos, true);
         if (entry == null || entry.remainingOre() <= 0) {
             return false;
@@ -183,7 +205,9 @@ public final class OreDepositData {
         if (!oreState.canHarvestBlock(level, pos, player)) {
             // Matches vanilla: mining ore with too weak a tool still wastes that unit of the vein, no drop, no XP.
             depleteWithoutDrop(level, pos);
-            tool.mineBlock(level, state, pos, player);
+            if (damageTool) {
+                tool.mineBlock(level, state, pos, player);
+            }
             player.awardStat(Stats.BLOCK_MINED.get(state.getBlock()));
             player.causeFoodExhaustion(0.005F);
             return true;
@@ -194,7 +218,9 @@ public final class OreDepositData {
             Block.popResourceFromFace(level, pos, minedDropFace(pos, player), mined);
         }
 
-        tool.mineBlock(level, state, pos, player);
+        if (damageTool) {
+            tool.mineBlock(level, state, pos, player);
+        }
         player.awardStat(Stats.BLOCK_MINED.get(state.getBlock()));
         player.causeFoodExhaustion(0.005F);
         return true;

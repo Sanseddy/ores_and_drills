@@ -40,3 +40,17 @@ type = "optional"
 versionRange = "[15.10.0,)"
 ordering = "AFTER"
 side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "create"
+type = "optional"
+versionRange = "[6.0.0,)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "justhammers"
+type = "optional"
+versionRange = "[21.1.4,)"
+ordering = "AFTER"
+side = "BOTH"

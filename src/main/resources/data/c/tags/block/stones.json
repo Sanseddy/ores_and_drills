@@ -7,6 +7,8 @@
     "minecraft:end_stone",
     "#minecraft:base_stone_overworld",
     "#minecraft:base_stone_nether",
+    "#minecraft:stone_ore_replaceables",
+    "#minecraft:deepslate_ore_replaceables",
     {
       "id": "create:limestone",
       "required": false
@@ -33,6 +35,18 @@
     },
     {
       "id": "alexscaves:radrock",
+      "required": false
+    },
+    {
+      "id": "alexscaves:guanostone",
+      "required": false
+    },
+    {
+      "id": "alexscaves:coprolith",
+      "required": false
+    },
+    {
+      "id": "alexscaves:galena",
       "required": false
     }
   ]

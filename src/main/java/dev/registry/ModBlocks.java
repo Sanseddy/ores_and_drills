@@ -1,6 +1,6 @@
 package dev.registry;
 
-import dev.FactoryExpansionMod;
+import dev.OresAndDrillsMod;
 import dev.drill.AdvancedMiningDrill;
 import dev.drill.BurnerMiningDrill;
 import dev.drill.ElectricMiningDrill;
@@ -20,8 +20,8 @@ import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 public final class ModBlocks {
-    public static final DeferredRegister<Block> BLOCKS = DeferredRegister.create(Registries.BLOCK, FactoryExpansionMod.MOD_ID);
-    public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(FactoryExpansionMod.MOD_ID);
+    public static final DeferredRegister<Block> BLOCKS = DeferredRegister.create(Registries.BLOCK, OresAndDrillsMod.MOD_ID);
+    public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(OresAndDrillsMod.MOD_ID);
 
     private static final BlockBehaviour.Properties DRILL_PROPERTIES = BlockBehaviour.Properties.ofFullCopy(Blocks.GLASS)
             .noOcclusion()

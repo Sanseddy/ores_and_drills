@@ -9,11 +9,11 @@ public final class OreDepositConfig {
     
     // EN: Hard lower limit for the distance between large deposits, in blocks.
     // RU: Жёсткая нижняя граница расстояния между крупными залежами, в блоках.
-    public static final int MIN_LARGE_DEPOSIT_SPACING_LIMIT = 400;
+    public static final int MIN_LARGE_DEPOSIT_SPACING_LIMIT = 200;
    
     // EN: Hard upper limit for the distance between large deposits, in blocks.
     // RU: Жёсткая верхняя граница расстояния между крупными залежами, в блоках.
-    public static final int MAX_LARGE_DEPOSIT_SPACING_LIMIT = 1500;
+    public static final int MAX_LARGE_DEPOSIT_SPACING_LIMIT = 750;
 
     // EN: Maximum deposit-generation attempts per chunk; prevents lag spikes.
     // RU: Максимальное число попыток генерации залежей на чанк; защита от лагов.
@@ -46,7 +46,7 @@ public final class OreDepositConfig {
 
     // EN: Share of an ore's original frequency allocated to TINY/SMALL deposits.
     // RU: Доля исходной частоты руды, выделяемая маленьким залежам TINY/SMALL.
-    public static final double SMALL_DEPOSIT_FREQUENCY_SHARE = 0.85D;
+    public static final double SMALL_DEPOSIT_FREQUENCY_SHARE = 0.65D;
 
     // EN: Relative frequency of SMALL compared with TINY; a lower value makes SMALL rarer.
     // RU: Относительная частота SMALL по сравнению с TINY: меньше число — реже SMALL.
@@ -74,7 +74,7 @@ public final class OreDepositConfig {
 
     // EN: Chance for a rare ore to become a large deposit; a higher value favors MEDIUM/LARGE deposits.
     // RU: Шанс редкой руды стать крупной залежью: больше число — чаще MEDIUM/LARGE для редких руд.
-    public static final double LARGE_DEPOSIT_RARE_ORE_BOOST = 0.45D;
+    public static final double LARGE_DEPOSIT_RARE_ORE_BOOST = 0.75D;
 
     // EN: Technical minimum ore-selection weight; prevents an ore from reaching zero chance.
     // RU: Технический минимальный вес выбора руды; не даёт руде получить нулевой шанс.
@@ -95,6 +95,7 @@ public final class OreDepositConfig {
     public static final ModConfigSpec.ConfigValue<List<? extends String>> DISABLED_DEPOSIT_ORES;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> MOD_PRIORITIES;
     public static final ModConfigSpec.ConfigValue<String> ACTIVE_PRESET;
+    public static final ModConfigSpec.BooleanValue STRICT_WALL_DEPOSIT_LOCATE;
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -122,6 +123,10 @@ public final class OreDepositConfig {
                 .defineListAllowEmpty("mod_priorities",
                         List.of("minecraft", "alltheores", "create", "mekanism", "thermal", "immersiveengineering", "modern_industrialization"),
                         () -> "minecraft", OreDepositConfig::isValidModId);
+        STRICT_WALL_DEPOSIT_LOCATE = builder
+                .comment("Если включено, /locate для TINY/SMALL возвращает только реально созданные",
+                        "стеновые или подземные месторождения из ConfirmedDepositIndex и не показывает seed-кандидаты.")
+                .define("strict_wall_deposit_locate", false);
         builder.pop();
         SPEC = builder.build();
     }

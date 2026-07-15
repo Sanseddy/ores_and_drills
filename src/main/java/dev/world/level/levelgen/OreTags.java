@@ -1,6 +1,7 @@
 package dev.world.level.levelgen;
 
-import dev.FactoryExpansionMod;
+import dev.OresAndDrillsMod;
+import dev.registry.ModBlockTags;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -14,14 +15,14 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public final class OreTags {
-    public static final TagKey<Block> ORES = TagKey.create(Registries.BLOCK, ResourceLocation.fromNamespaceAndPath("c", "ores"));
+    public static final TagKey<Block> ORES = ModBlockTags.ORES;
     private static Set<Block> cachedOreBlocks;
 
     private OreTags() {
     }
 
     public static boolean isOre(BlockState state) {
-        return state.is(ORES) || state.getTags().anyMatch(OreTags::isOreTag) || hasOreLikeId(state.getBlock());
+        return state.is(ORES) || state.getTags().anyMatch(OreTags::isOreTag);
     }
 
     public static Set<Block> oreBlocks() {
@@ -43,14 +44,8 @@ public final class OreTags {
                 addExternalBlock(result, holder.value());
             }
         });
-        for (Block block : BuiltInRegistries.BLOCK) {
-            if (hasOreLikeId(block)) {
-                result.add(block);
-            }
-        }
-
-        FactoryExpansionMod.LOGGER.trace("Ore deposits: found {} ore block(s)", result.size());
-        FactoryExpansionMod.LOGGER.trace(
+        OresAndDrillsMod.LOGGER.trace("Ore deposits: found {} ore block(s)", result.size());
+        OresAndDrillsMod.LOGGER.trace(
                 "Ore deposits: ore blocks are {}",
                 result.stream()
                         .map(BuiltInRegistries.BLOCK::getKey)
@@ -77,22 +72,9 @@ public final class OreTags {
         return namespace.equals("c") || namespace.equals("forge") || namespace.equals("neoforge");
     }
 
-    private static boolean hasOreLikeId(Block block) {
-        ResourceLocation id = BuiltInRegistries.BLOCK.getKey(block);
-        if (id == null || id.getNamespace().equals(FactoryExpansionMod.MOD_ID)) {
-            return false;
-        }
-
-        String path = id.getPath();
-        return path.endsWith("_ore")
-                || path.endsWith("_ores")
-                || path.contains("_ore_")
-                || path.startsWith("ore_");
-    }
-
     private static void addExternalBlock(Set<Block> target, Block block) {
         ResourceLocation id = BuiltInRegistries.BLOCK.getKey(block);
-        if (id != null && !id.getNamespace().equals(FactoryExpansionMod.MOD_ID)) {
+        if (id != null && !id.getNamespace().equals(OresAndDrillsMod.MOD_ID)) {
             target.add(block);
         }
     }

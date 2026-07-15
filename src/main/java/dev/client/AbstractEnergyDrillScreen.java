@@ -1,6 +1,6 @@
 package dev.client;
 
-import dev.FactoryExpansionMod;
+import dev.OresAndDrillsMod;
 import dev.network.FluidTankClickPayload;
 import dev.world.block.entity.AbstractDrillBlockEntity;
 import dev.world.inventory.AbstractEnergyDrillMenu;
@@ -26,7 +26,7 @@ public abstract class AbstractEnergyDrillScreen extends AbstractContainerScreen<
     private static final int FLUID_TANK_INSET = 0;
     private static final int WATER_TINT = 0xFF3F76E4;
     private static final ResourceLocation DRILL_ICON_TEXTURE = ResourceLocation.fromNamespaceAndPath(
-            FactoryExpansionMod.MOD_ID, "textures/gui/drill_gui.png");
+            OresAndDrillsMod.MOD_ID, "textures/gui/drill_gui.png");
     private static final int DRILL_ICON_WIDTH = 46;
     private static final int DRILL_ICON_HEIGHT = 66;
     private static final int DRILL_ICON_SHEET_HEIGHT = DRILL_ICON_HEIGHT * AbstractDrillBlockEntity.GUI_ANIMATION_FRAME_COUNT;

@@ -1,6 +1,6 @@
 package dev.registry;
 
-import dev.FactoryExpansionMod;
+import dev.OresAndDrillsMod;
 import dev.world.level.levelgen.OreDepositChunkData;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -50,7 +50,7 @@ public final class ModAttachments {
 
     public static final DeferredRegister<AttachmentType<?>> ATTACHMENTS = DeferredRegister.create(
             NeoForgeRegistries.Keys.ATTACHMENT_TYPES,
-            FactoryExpansionMod.MOD_ID
+            OresAndDrillsMod.MOD_ID
     );
 
     public static final DeferredHolder<AttachmentType<?>, AttachmentType<OreDepositChunkData>> ORE_DEPOSITS =

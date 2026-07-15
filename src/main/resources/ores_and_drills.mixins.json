@@ -6,6 +6,10 @@
   "mixins": [
     "CanyonWorldCarverMixin",
     "CaveWorldCarverMixin",
+    "CreateBlockBreakingMovementBehaviourMixin",
+    "CreateBlockHelperMixin",
+    "CreateMovementContextAccessor",
+    "JustHammersXPlatMixin",
     "LevelMixin",
     "PrimaryLevelDataMixin",
     "NoiseGeneratorSettingsMixin",
@@ -13,7 +17,6 @@
   ],
   "client": [
     "CreateWorldScreenWorldTabMixin",
-    "MultiPlayerGameModeMixin",
     "RenderChunkRegionAccessor"
   ],
   "injectors": {

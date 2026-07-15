@@ -1,6 +1,6 @@
 package dev.world.level.levelgen;
 
-import dev.FactoryExpansionMod;
+import dev.OresAndDrillsMod;
 import dev.config.OreDepositConfig;
 import dev.config.OreOverrides;
 import dev.config.OreSettingsPresetManager;
@@ -20,13 +20,9 @@ import net.minecraft.world.level.levelgen.feature.WeightedPlacedFeature;
 import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfiguration;
 import net.minecraft.world.level.levelgen.feature.configurations.OreConfiguration;
 import net.minecraft.world.level.levelgen.feature.configurations.RandomFeatureConfiguration;
-import net.minecraft.world.level.levelgen.placement.CountPlacement;
 import net.minecraft.world.level.levelgen.placement.PlacementModifier;
-import net.minecraft.world.level.levelgen.placement.PlacementModifierType;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
-import net.minecraft.world.level.levelgen.structure.templatesystem.TagMatchTest;
 import net.minecraft.world.level.levelgen.structure.templatesystem.RuleTest;
-import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.common.world.BiomeGenerationSettingsBuilder;
 import net.neoforged.neoforge.common.world.BiomeModifier;
 import net.neoforged.neoforge.common.world.ModifiableBiomeInfo;
@@ -34,11 +30,13 @@ import net.neoforged.neoforge.common.world.ModifiableBiomeInfo;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.IdentityHashMap;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.IntSupplier;
@@ -67,17 +65,26 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
         }
 
         BiomeGenerationSettingsBuilder generation = builder.getGenerationSettings();
-        if (phase == Phase.AFTER_EVERYTHING) {
-            addForcedAlexUraniumDeposits(generation);
-        }
-
         for (GenerationStep.Decoration step : GenerationStep.Decoration.values()) {
             List<Holder<PlacedFeature>> features = generation.getFeatures(step);
             List<Holder<PlacedFeature>> replacements = new ArrayList<>();
+            Map<Object, Replacement> evaluatedSources = new HashMap<>();
             int removed = 0;
 
             for (Holder<PlacedFeature> holder : List.copyOf(features)) {
-                Replacement replacement = replacementFor(holder.value(), biome);
+                Object sourceKey = holder.unwrapKey().<Object>map(key -> key).orElse(holder.value());
+                Replacement replacement = evaluatedSources.get(sourceKey);
+                if (replacement == null) {
+                    replacement = replacementFor(holder.value(), biome, stablePlacedFeatureKey(holder));
+                    evaluatedSources.put(sourceKey, replacement);
+                } else if (replacement != Replacement.KEEP) {
+                    // A biome JSON and an AddFeatures biome modifier may both attach the exact same
+                    // registered PlacedFeature. Remove the duplicate source without installing a second
+                    // replacement chain or recording its frequency again.
+                    features.remove(holder);
+                    removed++;
+                    continue;
+                }
                 if (replacement == Replacement.KEEP) {
                     continue;
                 }
@@ -88,9 +95,10 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
                 }
             }
 
+            coalesceIndependentTierReplacements(replacements);
             features.addAll(replacements);
             if (removed > 0) {
-                FactoryExpansionMod.LOGGER.trace("Ore deposits: replaced {} ore feature(s) in biome {} step {}", removed, biome.unwrapKey(), step);
+                OresAndDrillsMod.LOGGER.trace("Ore deposits: replaced {} ore feature(s) in biome {} step {}", removed, biome.unwrapKey(), step);
             }
         }
     }
@@ -100,13 +108,18 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
         return ModWorldgen.REPLACE_ORE_FEATURES.get();
     }
 
-    private static Replacement replacementFor(PlacedFeature placedFeature, Holder<Biome> biome) {
+    private static Replacement replacementFor(
+            PlacedFeature placedFeature,
+            Holder<Biome> biome,
+            String sourceSignature
+    ) {
         List<PlacedFeature> replacements = new ArrayList<>();
         boolean foundOreFeature = collectOreReplacements(
                 placedFeature.feature().value(),
                 placedFeature.placement(),
                 biome,
                 1.0F,
+                sourceSignature,
                 replacements,
                 Collections.newSetFromMap(new IdentityHashMap<>())
         );
@@ -118,11 +131,55 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
         return replacements.isEmpty() ? Replacement.REMOVE : new Replacement(replacements);
     }
 
+    /** Stable across JVM runs and shared by worldgen rarity scanning and /locate. */
+    static String stablePlacedFeatureKey(Holder<PlacedFeature> holder) {
+        return holder.unwrapKey()
+                .map(key -> "placed:" + key.location())
+                .orElseGet(() -> stablePlacedFeatureKey(holder.value()));
+    }
+
+    private static String stablePlacedFeatureKey(PlacedFeature placedFeature) {
+        ConfiguredFeature<?, ?> configured = placedFeature.feature().value();
+        ResourceLocation featureId = BuiltInRegistries.FEATURE.getKey(configured.feature());
+        OreFeatureData oreData = oreFeatureData(configured.config());
+        String configSignature;
+        if (oreData == null) {
+            configSignature = configured.config().getClass().getName() + ":" + configured.config();
+        } else {
+            configSignature = "size=" + oreData.size()
+                    + ";discard=" + oreData.discardChanceOnAirExposure()
+                    + ";targets=" + oreData.targets().stream()
+                            .map(target -> stableRuleTestKey(target.target) + "->"
+                                    + BuiltInRegistries.BLOCK.getKey(target.state.getBlock()))
+                            .sorted()
+                            .toList();
+        }
+        String placementSignature = placedFeature.placement().stream()
+                .map(modifier -> modifier.getClass().getName() + ":" + modifier)
+                .toList().toString();
+        return "direct:" + Long.toUnsignedString(SeedMixer.hash64(
+                "feature=" + featureId + ";config=" + configSignature + ";placement=" + placementSignature
+        ));
+    }
+
+    static String stableRuleTestKey(RuleTest ruleTest) {
+        TagKey<Block> tag = reflectedFieldValue(ruleTest, TagKey.class);
+        if (tag != null) {
+            return "tag:" + tag.location();
+        }
+        Block block = reflectedFieldValue(ruleTest, Block.class);
+        if (block != null) {
+            return "block:" + BuiltInRegistries.BLOCK.getKey(block);
+        }
+        return ruleTest.getClass().getName() + ":" + ruleTest;
+    }
+
     private static boolean collectOreReplacements(
             ConfiguredFeature<?, ?> configured,
             List<PlacementModifier> placement,
             Holder<Biome> biome,
             float chance,
+            String sourceSignature,
             List<PlacedFeature> replacements,
             Set<ConfiguredFeature<?, ?>> visitedConfiguredFeatures
     ) {
@@ -137,7 +194,7 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
         OreFeatureData oreData = oreFeatureData(configured.config());
         if (oreData != null) {
             boolean result = addOreReplacements(
-                    configured, oreData, placement, biome, chance, replacements
+                    configured, oreData, placement, biome, chance, sourceSignature, replacements
             );
             visitedConfiguredFeatures.remove(configured);
             return result;
@@ -146,7 +203,8 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
         boolean foundOreFeature = false;
         if (configured.config() instanceof RandomFeatureConfiguration randomFeatureConfiguration) {
             float remainingChance = 1.0F;
-            for (WeightedPlacedFeature weightedFeature : randomFeatureConfiguration.features) {
+            for (int branch = 0; branch < randomFeatureConfiguration.features.size(); branch++) {
+                WeightedPlacedFeature weightedFeature = randomFeatureConfiguration.features.get(branch);
                 float weightedChance = chance * remainingChance * weightedFeature.chance;
                 remainingChance *= 1.0F - weightedFeature.chance;
                 foundOreFeature |= collectOreReplacements(
@@ -154,6 +212,7 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
                         mergedPlacement(placement, weightedFeature.feature.value().placement()),
                         biome,
                         weightedChance,
+                        sourceSignature + "/weighted/" + branch,
                         replacements,
                         visitedConfiguredFeatures
                 );
@@ -165,6 +224,7 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
                         mergedPlacement(placement, randomFeatureConfiguration.defaultFeature.value().placement()),
                         biome,
                         chance * remainingChance,
+                        sourceSignature + "/default",
                         replacements,
                         visitedConfiguredFeatures
                 );
@@ -173,8 +233,12 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
             return foundOreFeature;
         }
 
-        for (ConfiguredFeature<?, ?> child : configured.config().getFeatures().toList()) {
-            foundOreFeature |= collectOreReplacements(child, placement, biome, chance, replacements, visitedConfiguredFeatures);
+        List<ConfiguredFeature<?, ?>> children = configured.config().getFeatures().toList();
+        for (int childIndex = 0; childIndex < children.size(); childIndex++) {
+            foundOreFeature |= collectOreReplacements(
+                    children.get(childIndex), placement, biome, chance,
+                    sourceSignature + "/child/" + childIndex, replacements, visitedConfiguredFeatures
+            );
         }
         visitedConfiguredFeatures.remove(configured);
         return foundOreFeature;
@@ -186,6 +250,7 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
             List<PlacementModifier> placement,
             Holder<Biome> biome,
             float chance,
+            String sourceSignature,
             List<PlacedFeature> replacements
     ) {
         // Targets that still become deposit tiers, and targets that keep their original vanilla vein
@@ -203,18 +268,16 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
 
             hasOreTarget = true;
             Block sourceOre = target.state.getBlock();
-            if (isUranium(sourceOre) && !canGenerateUraniumIn(biome)) {
-                continue;
-            }
-
             var canonical = OreUnifier.canonicalFor(sourceOre, classifyTarget(target.target));
             if (canonical.isEmpty()) {
                 continue;
             }
-
             OreSpawnDimensions.record(sourceOre, biome);
             OreSpawnDimensions.record(canonical.get(), biome);
-            OreGenerationWeights.recordObservation(canonical.get(), biome, configured, placement, chance, oreData.size());
+            OreGenerationWeights.recordObservation(
+                    canonical.get(), biome, sourceSignature, configured,
+                    placement, chance, oreData.size(), target.target
+            );
 
             OreConfiguration.TargetBlockState unifiedTarget = OreConfiguration.target(target.target, canonical.get().defaultBlockState());
 
@@ -224,7 +287,7 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
                 // index zero: preserve its normal vein instead, so its texture, drop and /locate material
                 // remain truthful even in a very large modpack.
                 if (canonicalId != null && LOGGED_UNREPRESENTABLE_ORES.add(canonicalId)) {
-                    FactoryExpansionMod.LOGGER.warn(
+                    OresAndDrillsMod.LOGGER.warn(
                             "Ore deposits: {} is outside the {}-entry deposit palette; keeping its original vein",
                             canonicalId, OreDepositOrePalette.MAX_ORES
                     );
@@ -238,7 +301,7 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
             if (isDepositDisabled(sourceOre) || isDepositDisabled(canonical.get())) {
                 ResourceLocation oreId = BuiltInRegistries.BLOCK.getKey(canonical.get());
                 if (oreId != null && LOGGED_DISABLED_ORES.add(oreId)) {
-                    FactoryExpansionMod.LOGGER.info("Ore deposits: {} excluded from deposits by server config; keeping its original vein instead", oreId);
+                    OresAndDrillsMod.LOGGER.info("Ore deposits: {} excluded from deposits by server config; keeping its original vein instead", oreId);
                 }
                 normalVeinTargets.add(unifiedTarget);
                 continue;
@@ -253,6 +316,13 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
 
         if (!hasOreTarget) {
             return false;
+        }
+
+        // A datapack rule owns its ore before any automatic candidate is created. This prevents the
+        // original PlacedFeature and the explicit cell planner from both generating the same material.
+        if (firstCanonicalOre != null
+                && DataDrivenOreDepositBiomeModifier.explicitlyConfigured(biome, firstCanonicalOre)) {
+            return true;
         }
 
         if (!normalVeinTargets.isEmpty()) {
@@ -272,22 +342,12 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
         if (!presetSettings.enabled()) {
             ResourceLocation oreId = BuiltInRegistries.BLOCK.getKey(firstCanonicalOre);
             if (oreId != null && LOGGED_PRESET_DISABLED_ORES.add(oreId)) {
-                FactoryExpansionMod.LOGGER.info(
+                OresAndDrillsMod.LOGGER.info(
                         "Ore deposits: disabled {} by datapack preset {}",
                         oreId,
                         OreSettingsPresetManager.activePresetId()
                 );
             }
-            return true;
-        }
-
-        // addForcedAlexUraniumDeposits installs the only forced feature, once for every biome at
-        // AFTER_EVERYTHING. Re-adding MEDIUM/LARGE copies from Alex's source feature makes generation
-        // order-dependent and wastes two placement attempts per toxic-caves chunk.
-        boolean alexUraniumOnly = ModList.get().isLoaded("alexscaves")
-                && !depositTargets.isEmpty()
-                && depositTargets.stream().allMatch(target -> isUranium(target.state.getBlock()));
-        if (alexUraniumOnly) {
             return true;
         }
 
@@ -299,16 +359,11 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
         float sizeMultiplier = override.size();
         float richnessMultiplier = override.richness();
 
-        int firstTier = isUranium(firstCanonicalOre) && ModList.get().isLoaded("alexscaves")
-                ? OreDepositFeature.TIER_LARGE
-                : OreDepositFeature.TIER_TINY;
-        for (int tier = firstTier; tier < OreDepositFeature.TIER_COUNT; tier++) {
-            // TINY/SMALL retain Minecraft's source placement chain (count/rarity, in-square X/Z and
-            // height distribution), while keeping the mod's own deposit-lens shape. MEDIUM/LARGE own a separate
-            // deterministic region grid, so only they strip source attempt modifiers.
-            List<PlacementModifier> tierPlacement = tier < OreDepositFeature.TIER_MEDIUM
-                    ? placement
-                    : singleDepositAttemptPlacement(placement);
+        for (int tier = OreDepositFeature.TIER_TINY; tier < OreDepositFeature.TIER_COUNT; tier++) {
+            // The original chain is scanned for frequency, height and target metadata only. Candidate
+            // existence itself is owned by OreDepositFeature's seed planner for every tier; retaining a
+            // Count/Rarity/Noise modifier here made /locate unable to reproduce whether this call existed.
+            List<PlacementModifier> tierPlacement = deterministicDepositAttemptPlacement();
             if (tier < OreDepositFeature.TIER_MEDIUM) {
                 // Do not duplicate a placed feature for every whole-number frequency multiplier. With all
                 // ores at 600%, that used to install six TINY and six SMALL feature copies per original
@@ -317,30 +372,16 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
                 // per-chunk workload budget keeps an extreme preset responsive.
                 addTierReplacement(
                         replacements, depositTargets, tier, chance, frequencyMultiplier,
-                        sizeMultiplier, richnessMultiplier, tierPlacement, false
+                        sizeMultiplier, richnessMultiplier, tierPlacement, biome
                 );
             } else {
                 addTierReplacement(
                         replacements, depositTargets, tier, 1.0F, frequencyMultiplier,
-                        sizeMultiplier, richnessMultiplier, tierPlacement, false
+                        sizeMultiplier, richnessMultiplier, tierPlacement, biome
                 );
             }
         }
         return true;
-    }
-
-    private static Block canonicalUraniumOre() {
-        return OreTags.oreBlocks().stream()
-                .filter(ReplaceOreFeaturesBiomeModifier::isUranium)
-                .map(block -> OreUnifier.canonicalFor(block).orElse(null))
-                .filter(Objects::nonNull)
-                .min(Comparator
-                        .comparingInt(OreUnifier::modPriorityRank)
-                        .thenComparing(block -> {
-                            ResourceLocation id = BuiltInRegistries.BLOCK.getKey(block);
-                            return id == null ? "" : id.toString();
-                        }))
-                .orElse(null);
     }
 
     static OreFeatureData oreFeatureData(FeatureConfiguration config) {
@@ -383,7 +424,7 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
         } catch (ReflectiveOperationException exception) {
             String key = config.getClass().getName() + "#" + methodName;
             if (isKnownOreConfig(config) && LOGGED_REFLECTION_FALLBACKS.add(key)) {
-                FactoryExpansionMod.LOGGER.trace(
+                OresAndDrillsMod.LOGGER.trace(
                         "Ore deposits: {}.{}() is unavailable; trying compatible fallbacks",
                         config.getClass().getName(),
                         methodName
@@ -442,7 +483,7 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
             List<OreConfiguration.TargetBlockState> targets,
             Holder<Biome> biome
     ) {
-        if (!FactoryExpansionMod.LOGGER.isTraceEnabled()) {
+        if (!OresAndDrillsMod.LOGGER.isTraceEnabled()) {
             return;
         }
         String targetIds = targets.stream()
@@ -456,7 +497,7 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
             return;
         }
 
-        FactoryExpansionMod.LOGGER.trace(
+        OresAndDrillsMod.LOGGER.trace(
                 "Ore deposits: replacing feature {} config {} for targets [{}] in biome {} (worldgen-frequency weighted deposit tiers)",
                 configured.feature().getClass().getName(),
                 configured.config().getClass().getName(),
@@ -529,99 +570,75 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
             float sizeMultiplier,
             float richnessMultiplier,
             List<PlacementModifier> placement,
-            boolean forcedAlexUranium
+            Holder<Biome> sourceBiome
     ) {
+        Optional<ResourceLocation> sourceBiomeId = sourceBiome.unwrapKey().map(key -> key.location());
         OreDepositFeature.Configuration config = new OreDepositFeature.Configuration(
                 targets, tier, sourceProbability, frequencyMultiplier,
-                sizeMultiplier, richnessMultiplier, forcedAlexUranium
+                sizeMultiplier, richnessMultiplier, sourceBiomeId
         );
         replacements.add(new PlacedFeature(Holder.direct(configuredDeposit(config)), placement));
     }
 
+    /** Candidate existence for every tier is owned by the common immutable cell planner. */
+    private static List<PlacementModifier> deterministicDepositAttemptPlacement() {
+        return List.of();
+    }
+
     /**
-     * MEDIUM/LARGE frequency is an independent rare-event budget calculated inside OreDepositFeature.
-     * Keep spatial, height and biome filters, but strip source count/noise/rarity multipliers for those
-     * tiers only. TINY/SMALL never call this method and retain the complete original placement chain.
+     * MEDIUM/LARGE own one shared material lottery per cell. Several source features of the same unified
+     * material contribute metadata, but must not each launch an independent physical candidate.
      */
-    private static List<PlacementModifier> singleDepositAttemptPlacement(List<PlacementModifier> placement) {
-        return placement.stream()
-                .filter(modifier -> {
-                    PlacementModifierType<?> type = modifier.type();
-                    return type != PlacementModifierType.COUNT
-                            && type != PlacementModifierType.COUNT_ON_EVERY_LAYER
-                            && type != PlacementModifierType.NOISE_BASED_COUNT
-                            && type != PlacementModifierType.NOISE_THRESHOLD_COUNT
-                            && type != PlacementModifierType.RARITY_FILTER;
-                })
-                .toList();
-    }
+    static void coalesceIndependentTierReplacements(List<Holder<PlacedFeature>> replacements) {
+        Map<IndependentTierKey, Integer> firstByKey = new LinkedHashMap<>();
+        List<Holder<PlacedFeature>> result = new ArrayList<>(replacements.size());
+        for (Holder<PlacedFeature> holder : replacements) {
+            PlacedFeature placed = holder.value();
+            ConfiguredFeature<?, ?> configured = placed.feature().value();
+            if (!(configured.feature() instanceof OreDepositFeature)
+                    || !(configured.config() instanceof OreDepositFeature.Configuration config)
+                    || config.sizeTier() < OreDepositFeature.TIER_MEDIUM
+                    || config.targets().isEmpty()) {
+                result.add(holder);
+                continue;
+            }
 
-    private static void addForcedAlexUraniumDeposits(BiomeGenerationSettingsBuilder generation) {
-        if (!ModList.get().isLoaded("alexscaves")) {
-            return;
+            String materialKey = OreUnifier.materialKeyFor(config.targets().getFirst().state.getBlock());
+            IndependentTierKey key = new IndependentTierKey(config.sizeTier(), materialKey, config.sourceBiome());
+            Integer existingIndex = firstByKey.get(key);
+            if (existingIndex == null) {
+                firstByKey.put(key, result.size());
+                result.add(holder);
+                continue;
+            }
+
+            PlacedFeature existing = result.get(existingIndex).value();
+            OreDepositFeature.Configuration existingConfig =
+                    (OreDepositFeature.Configuration) existing.feature().value().config();
+            List<OreConfiguration.TargetBlockState> mergedTargets = new ArrayList<>(existingConfig.targets());
+            for (OreConfiguration.TargetBlockState target : config.targets()) {
+                if (!mergedTargets.contains(target)) {
+                    mergedTargets.add(target);
+                }
+            }
+            OreDepositFeature.Configuration mergedConfig = new OreDepositFeature.Configuration(
+                    List.copyOf(mergedTargets),
+                    existingConfig.sizeTier(),
+                    existingConfig.sourceProbability(),
+                    existingConfig.frequencyMultiplier(),
+                    existingConfig.sizeMultiplier(),
+                    existingConfig.richnessMultiplier(),
+                    existingConfig.sourceBiome()
+            );
+            OreDepositFeature depositFeature = (OreDepositFeature) existing.feature().value().feature();
+            ConfiguredFeature<OreDepositFeature.Configuration, OreDepositFeature> mergedFeature =
+                    new ConfiguredFeature<>(depositFeature, mergedConfig);
+            result.set(existingIndex, Holder.direct(new PlacedFeature(
+                    Holder.direct(mergedFeature), existing.placement()
+            )));
         }
-
-        Block uranium = canonicalUraniumOre();
-        if (uranium == null || isDepositDisabled(uranium)) {
-            return;
-        }
-
-        OreSettingsPresetManager.Settings presetSettings = OreSettingsPresetManager.resolve(uranium);
-        if (!presetSettings.enabled()) {
-            return;
-        }
-
-        OreOverrides.OreOverride override = OreOverrides.lookupConfigured(uranium)
-                .orElseGet(presetSettings::multipliers);
-        List<OreConfiguration.TargetBlockState> uraniumTargets = List.of(
-                OreConfiguration.target(new TagMatchTest(OreDepositStonePalette.STONES), uranium.defaultBlockState())
-        );
-        List<Holder<PlacedFeature>> features = generation.getFeatures(GenerationStep.Decoration.UNDERGROUND_ORES);
-        // One unconditional forced attempt per chunk; OreDepositFeature verifies the 3D Toxic Caves biome.
-        OreDepositFeature.Configuration config = new OreDepositFeature.Configuration(
-                uraniumTargets,
-                OreDepositFeature.TIER_LARGE,
-                1.0F,
-                override.frequency(),
-                override.size(),
-                override.richness(),
-                true
-        );
-        features.add(Holder.direct(new PlacedFeature(
-                Holder.direct(configuredDeposit(config)),
-                List.of(CountPlacement.of(1))
-        )));
-    }
-
-    static boolean canGenerateUraniumIn(Holder<Biome> biome) {
-        if (!ModList.get().isLoaded("alexscaves")) {
-            return true;
-        }
-
-        return isAlexToxicCavesBiome(biome);
-    }
-
-    private static boolean isAlexToxicCavesBiome(Holder<Biome> biome) {
-        if (!ModList.get().isLoaded("alexscaves")) {
-            return false;
-        }
-
-        return biome.unwrapKey()
-                .map(key -> key.location())
-                .filter(location -> location.getNamespace().equals("alexscaves"))
-                .map(ResourceLocation::getPath)
-                .filter(path -> path.equals("toxic_caves") || path.contains("toxic_caves"))
-                .isPresent();
-    }
-
-    static boolean isUranium(Block block) {
-        ResourceLocation id = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block);
-        if (id == null) {
-            return false;
-        }
-
-        String path = id.getPath();
-        return path.contains("uranium") || path.contains("uraninite") || path.contains("uran");
+        replacements.clear();
+        replacements.addAll(result);
     }
 
     static String classifyTarget(RuleTest ruleTest) {
@@ -682,5 +699,8 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
     private record Replacement(List<PlacedFeature> placedFeatures) {
         private static final Replacement KEEP = new Replacement(List.of());
         private static final Replacement REMOVE = new Replacement(List.of());
+    }
+
+    private record IndependentTierKey(int tier, String materialKey, Optional<ResourceLocation> sourceBiome) {
     }
 }

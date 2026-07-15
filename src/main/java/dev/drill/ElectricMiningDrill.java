@@ -1,6 +1,6 @@
 package dev.drill;
 
-import dev.FactoryExpansionMod;
+import dev.OresAndDrillsMod;
 import dev.registry.ModBlockEntities;
 import dev.registry.ModBlocks;
 import dev.registry.ModMenuTypes;
@@ -174,11 +174,11 @@ public final class ElectricMiningDrill {
 
     public static class Screen extends AbstractEnergyDrillScreen {
         private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(
-                FactoryExpansionMod.MOD_ID, "textures/gui/electric_drill_gui_1.png");
+                OresAndDrillsMod.MOD_ID, "textures/gui/electric_drill_gui_1.png");
         private static final ResourceLocation ENERGY_PROGRESS_TEXTURE = ResourceLocation.fromNamespaceAndPath(
-                FactoryExpansionMod.MOD_ID, "textures/gui/energy_bar_1.png");
+                OresAndDrillsMod.MOD_ID, "textures/gui/energy_bar_1.png");
         private static final ResourceLocation MINING_PROGRESS_TEXTURE = ResourceLocation.fromNamespaceAndPath(
-                FactoryExpansionMod.MOD_ID, "textures/gui/progress_1.png");
+                OresAndDrillsMod.MOD_ID, "textures/gui/progress_1.png");
 
         public Screen(AbstractEnergyDrillMenu menu, Inventory playerInventory, Component title) {
             super(menu, playerInventory, title,
@@ -193,17 +193,17 @@ public final class ElectricMiningDrill {
     public static class Model extends GeoModel<BlockEntity> {
         @Override
         public ResourceLocation getModelResource(BlockEntity animatable) {
-            return ResourceLocation.fromNamespaceAndPath(FactoryExpansionMod.MOD_ID, "geo/electric_mining_drill.geo.json");
+            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "geo/electric_mining_drill.geo.json");
         }
 
         @Override
         public ResourceLocation getTextureResource(BlockEntity animatable) {
-            return ResourceLocation.fromNamespaceAndPath(FactoryExpansionMod.MOD_ID, "textures/block/burner_mining_drill.png");
+            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "textures/block/burner_mining_drill.png");
         }
 
         @Override
         public ResourceLocation getAnimationResource(BlockEntity animatable) {
-            return ResourceLocation.fromNamespaceAndPath(FactoryExpansionMod.MOD_ID, "animations/electric_mining_drill.animation.json");
+            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "animations/electric_mining_drill.animation.json");
         }
     }
 
@@ -247,17 +247,17 @@ public final class ElectricMiningDrill {
     public static class ItemModel extends GeoModel<Item> {
         @Override
         public ResourceLocation getModelResource(Item animatable) {
-            return ResourceLocation.fromNamespaceAndPath(FactoryExpansionMod.MOD_ID, "geo/electric_mining_drill.geo.json");
+            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "geo/electric_mining_drill.geo.json");
         }
 
         @Override
         public ResourceLocation getTextureResource(Item animatable) {
-            return ResourceLocation.fromNamespaceAndPath(FactoryExpansionMod.MOD_ID, "textures/block/burner_mining_drill.png");
+            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "textures/block/burner_mining_drill.png");
         }
 
         @Override
         public ResourceLocation getAnimationResource(Item animatable) {
-            return ResourceLocation.fromNamespaceAndPath(FactoryExpansionMod.MOD_ID, "animations/electric_mining_drill.animation.json");
+            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "animations/electric_mining_drill.animation.json");
         }
     }
 

@@ -1,6 +1,6 @@
 package dev.world.level.levelgen;
 
-import dev.FactoryExpansionMod;
+import dev.OresAndDrillsMod;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -20,7 +20,7 @@ import java.util.Set;
 
 /** Keeps block-state palette indices stable for the lifetime of a world. */
 public final class OreDepositPaletteData extends SavedData {
-    private static final String FILE_ID = FactoryExpansionMod.MOD_ID + "_ore_deposit_palette";
+    private static final String FILE_ID = OresAndDrillsMod.MOD_ID + "_ore_deposit_palette";
     private static final String TAG_BASES = "Bases";
     private static final String TAG_ORES = "Ores";
     private static final SavedData.Factory<OreDepositPaletteData> FACTORY =
@@ -69,7 +69,7 @@ public final class OreDepositPaletteData extends SavedData {
         if (changed) {
             rebuildIndices();
             setDirty();
-            FactoryExpansionMod.LOGGER.trace(
+            OresAndDrillsMod.LOGGER.trace(
                     "Ore deposit palette: {} fixed bases and {} fixed ores",
                     bases.size(), ores.size()
             );
@@ -97,7 +97,7 @@ public final class OreDepositPaletteData extends SavedData {
                 continue;
             }
             if (palette.size() >= maximum) {
-                FactoryExpansionMod.LOGGER.warn(
+                OresAndDrillsMod.LOGGER.warn(
                         "Ore deposit palette: cannot append {} {} because the {}-entry limit is full",
                         kind, id, maximum
                 );

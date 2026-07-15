@@ -1,6 +1,6 @@
 package dev.client.ore;
 
-import dev.FactoryExpansionMod;
+import dev.OresAndDrillsMod;
 import dev.mixin.RenderChunkRegionAccessor;
 import dev.world.level.levelgen.OreDepositData;
 import net.minecraft.client.renderer.chunk.RenderChunkRegion;
@@ -54,7 +54,7 @@ public final class OreDepositClientVisuals {
                 sodiumLevelField = field;
             } catch (ReflectiveOperationException exception) {
                 sodiumFieldUnavailable = true;
-                FactoryExpansionMod.LOGGER.warn("Ore deposit: could not access Sodium's LevelSlice#level field for rendering", exception);
+                OresAndDrillsMod.LOGGER.warn("Ore deposit: could not access Sodium's LevelSlice#level field for rendering", exception);
                 return null;
             }
         }

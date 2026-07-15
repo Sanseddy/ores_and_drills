@@ -1,6 +1,6 @@
 package dev.client.ore;
 
-import dev.FactoryExpansionMod;
+import dev.OresAndDrillsMod;
 import dev.world.level.levelgen.OreDepositOrePalette;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -46,6 +46,7 @@ public final class OreDepositOreColors {
     /** Entries at/above this brightness are considered already-light and are skipped by the dark-half contrast boost in {@link #adjustPalette}. */
     private static final int DARK_CONTRAST_THRESHOLD = 170;
     private static final Map<ResourceLocation, int[]> CACHE = new ConcurrentHashMap<>();
+    private static final Map<ResourceLocation, int[]> DROP_CACHE = new ConcurrentHashMap<>();
 
     private OreDepositOreColors() {
     }
@@ -56,6 +57,29 @@ public final class OreDepositOreColors {
 
     static void clearCache() {
         CACHE.clear();
+        DROP_CACHE.clear();
+    }
+
+    /** Resolves colors directly from the item id selected by the server-side loot table. */
+    static int[] paletteForDrop(ResourceManager resourceManager, ResourceLocation dropId) {
+        if (dropId == null) {
+            return FALLBACK_PALETTE;
+        }
+        return DROP_CACHE.computeIfAbsent(dropId, id -> {
+            int[] palette = paletteForItem(resourceManager, id);
+            if (palette == null) {
+                OresAndDrillsMod.LOGGER.warn(
+                        "Ore deposit: no texture found for synchronized drop {} - falling back to flat white tint",
+                        id
+                );
+                return FALLBACK_PALETTE;
+            }
+            return palette;
+        });
+    }
+
+    static int[] fallbackPalette() {
+        return FALLBACK_PALETTE;
     }
 
     private static int[] resolvePalette(ResourceManager resourceManager, ResourceLocation oreBlockId) {
@@ -64,11 +88,17 @@ public final class OreDepositOreColors {
         }
 
         Block ore = BuiltInRegistries.BLOCK.get(oreBlockId);
-        ResourceLocation displayDropId = mostLikelyDropId(resourceManager, ore);
+        ResourceLocation displayDropId = OreDepositOrePalette.dropIdForOre(oreBlockId);
+        ResourceLocation airId = BuiltInRegistries.ITEM.getKey(Items.AIR);
+        if (displayDropId == null || displayDropId.equals(airId)) {
+            // Used only before a world palette arrives. Loot tables are server data and are not normally
+            // visible through the client asset ResourceManager used during atlas stitching.
+            displayDropId = mostLikelyDropId(resourceManager, ore);
+        }
         int[] palette = paletteForItem(resourceManager, displayDropId);
         if (palette == null) {
-            FactoryExpansionMod.LOGGER.warn(
-                    "Ore deposit: no texture found for {} (guessed drop {}) — falling back to flat white tint",
+            OresAndDrillsMod.LOGGER.warn(
+                    "Ore deposit: no texture found for {} (resolved drop {}) — falling back to flat white tint",
                     oreBlockId, displayDropId
             );
             return FALLBACK_PALETTE;
@@ -130,7 +160,7 @@ public final class OreDepositOreColors {
                 String parent = stringProperty(model, "parent");
                 modelId = parent == null ? null : parseLocation(parent, modelId.getNamespace());
             } catch (IOException | RuntimeException exception) {
-                FactoryExpansionMod.LOGGER.warn("Ore deposit: failed to resolve item model {}", modelPath, exception);
+                OresAndDrillsMod.LOGGER.warn("Ore deposit: failed to resolve item model {}", modelPath, exception);
                 break;
             }
         }
@@ -233,7 +263,7 @@ public final class OreDepositOreColors {
             JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
             collectWeightedItems(root, 1, false, weights);
         } catch (RuntimeException | IOException exception) {
-            FactoryExpansionMod.LOGGER.warn("Ore deposit: failed to parse loot table for {}", oreId, exception);
+            OresAndDrillsMod.LOGGER.warn("Ore deposit: failed to parse loot table for {}", oreId, exception);
             return Items.AIR;
         }
 
@@ -427,7 +457,7 @@ public final class OreDepositOreColors {
             }
             return adjustPalette(palette);
         } catch (IOException exception) {
-            FactoryExpansionMod.LOGGER.warn("Ore deposit: failed to read texture {} for tint palette", texturePath, exception);
+            OresAndDrillsMod.LOGGER.warn("Ore deposit: failed to read texture {} for tint palette", texturePath, exception);
             return null;
         }
     }

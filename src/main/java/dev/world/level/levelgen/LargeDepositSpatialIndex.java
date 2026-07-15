@@ -1,6 +1,6 @@
 package dev.world.level.levelgen;
 
-import dev.FactoryExpansionMod;
+import dev.OresAndDrillsMod;
 import dev.config.OreDepositConfig;
 import dev.registry.ModAttachments;
 import dev.registry.ModBlocks;
@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /** Persistent spatial hash shared by MEDIUM and LARGE deposits in one dimension. */
 public final class LargeDepositSpatialIndex extends SavedData {
-    private static final String FILE_ID = FactoryExpansionMod.MOD_ID + "_large_deposit_index";
+    private static final String FILE_ID = OresAndDrillsMod.MOD_ID + "_large_deposit_index";
     private static final String TAG_DEPOSITS = "Deposits";
     private static final String TAG_DATA_VERSION = "DataVersion";
     private static final String TAG_MATERIALS = "Materials";
@@ -573,17 +573,17 @@ public final class LargeDepositSpatialIndex extends SavedData {
             double actualDistance,
             boolean accepted
     ) {
-        if (!FactoryExpansionMod.LOGGER.isDebugEnabled()) {
+        if (!OresAndDrillsMod.LOGGER.isDebugEnabled()) {
             return;
         }
         int logIndex = DEBUG_SPACING_LOGS.getAndIncrement();
         if (logIndex >= MAX_DEBUG_SPACING_LOGS) {
             if (logIndex == MAX_DEBUG_SPACING_LOGS) {
-                FactoryExpansionMod.LOGGER.debug("Ore deposit spacing: further diagnostics suppressed for this session");
+                OresAndDrillsMod.LOGGER.debug("Ore deposit spacing: further diagnostics suppressed for this session");
             }
             return;
         }
-        FactoryExpansionMod.LOGGER.debug(
+        OresAndDrillsMod.LOGGER.debug(
                 "Ore deposit spacing: new tier={} scale={} nearby tier={} scale={} combined={} required={} actual={} result={}",
                 tierName(tier), format(normalizedScale), tierName(nearby.tier()),
                 format(nearby.normalizedScale()), format(combinedScale), format(requiredDistance),

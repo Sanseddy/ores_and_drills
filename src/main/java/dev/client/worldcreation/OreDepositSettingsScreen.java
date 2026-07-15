@@ -1,6 +1,6 @@
 package dev.client.worldcreation;
 
-import dev.FactoryExpansionMod;
+import dev.OresAndDrillsMod;
 import dev.config.OreDepositConfig;
 import dev.config.OreOverrides;
 import dev.config.OreWorldSettingsApplier;
@@ -80,7 +80,7 @@ public final class OreDepositSettingsScreen extends Screen {
         try {
             OreSpawnDimensions.scanOriginalPlacedFeatures(createWorldScreen.getUiState().getSettings().worldgenLoadContext());
         } catch (RuntimeException exception) {
-            FactoryExpansionMod.LOGGER.warn("Ore deposits: failed to scan ore worldgen data for the settings screen", exception);
+            OresAndDrillsMod.LOGGER.warn("Ore deposits: failed to scan ore worldgen data for the settings screen", exception);
         }
     }
 

@@ -1,6 +1,6 @@
 package dev.client;
 
-import dev.FactoryExpansionMod;
+import dev.OresAndDrillsMod;
 import dev.client.ore.OreDepositBakedModel;
 import dev.client.ore.OreTintedTextureSource;
 import dev.drill.AdvancedMiningDrill;
@@ -10,6 +10,7 @@ import dev.drill.UltimateMiningDrill;
 import dev.registry.ModBlockEntities;
 import dev.registry.ModBlocks;
 import dev.registry.ModMenuTypes;
+import dev.world.level.levelgen.OreDepositOrePalette;
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
 import net.minecraft.client.renderer.RenderType;
 import net.neoforged.api.distmarker.Dist;
@@ -17,12 +18,15 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.event.RegisterSpriteSourceTypesEvent;
 import net.neoforged.neoforge.client.event.ModelEvent;
 
-@EventBusSubscriber(modid = FactoryExpansionMod.MOD_ID, value = Dist.CLIENT)
+@EventBusSubscriber(modid = OresAndDrillsMod.MOD_ID, value = Dist.CLIENT)
 public final class ClientEvents {
+    private static volatile int appliedOrePaletteRevision;
+
     private ClientEvents() {
     }
 
@@ -45,7 +49,7 @@ public final class ClientEvents {
     @SubscribeEvent
     public static void registerSpriteSourceTypes(RegisterSpriteSourceTypesEvent event) {
         event.register(OreTintedTextureSource.ID, OreTintedTextureSource.TYPE);
-        FactoryExpansionMod.LOGGER.trace("Ore deposit: registered sprite source type {}", OreTintedTextureSource.ID);
+        OresAndDrillsMod.LOGGER.trace("Ore deposit: registered sprite source type {}", OreTintedTextureSource.ID);
     }
 
     @SubscribeEvent
@@ -56,5 +60,22 @@ public final class ClientEvents {
     @SubscribeEvent
     public static void modifyBakedModels(ModelEvent.ModifyBakingResult event) {
         OreDepositBakedModel.replaceModels(event);
+    }
+
+    /** Recolors pre-stitched ore sprites once the logical server has supplied real loot-table drops. */
+    @SubscribeEvent
+    public static void onClientTick(ClientTickEvent.Post event) {
+        int revision = OreDepositOrePalette.clientRevision();
+        if (revision <= 0 || revision == appliedOrePaletteRevision) {
+            return;
+        }
+
+        if (OreTintedTextureSource.applySyncedPalette()) {
+            appliedOrePaletteRevision = revision;
+            OresAndDrillsMod.LOGGER.debug(
+                    "Ore deposit: applied synchronized loot-drop palette revision {} without a resource reload",
+                    revision
+            );
+        }
     }
 }

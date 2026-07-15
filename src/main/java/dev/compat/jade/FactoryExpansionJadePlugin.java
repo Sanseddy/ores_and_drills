@@ -1,6 +1,6 @@
 package dev.compat.jade;
 
-import dev.FactoryExpansionMod;
+import dev.OresAndDrillsMod;
 import dev.world.block.AbstractDrillBlock;
 import dev.world.block.AbstractDrillPartBlock;
 import dev.world.block.OreDepositBlock;
@@ -10,15 +10,18 @@ import dev.world.block.entity.DrillStatusProvider;
 import dev.world.level.levelgen.OreDepositData;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec2;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IBlockComponentProvider;
 import snownee.jade.api.IServerDataProvider;
@@ -26,15 +29,20 @@ import snownee.jade.api.ITooltip;
 import snownee.jade.api.IWailaClientRegistration;
 import snownee.jade.api.IWailaCommonRegistration;
 import snownee.jade.api.IWailaPlugin;
+import snownee.jade.api.JadeIds;
 import snownee.jade.api.WailaPlugin;
 import snownee.jade.api.config.IPluginConfig;
 import snownee.jade.api.ui.BoxStyle;
+import snownee.jade.api.ui.IElement;
 import snownee.jade.api.ui.IElementHelper;
 
-@WailaPlugin(FactoryExpansionMod.MOD_ID)
+import java.util.ArrayList;
+import java.util.List;
+
+@WailaPlugin(OresAndDrillsMod.MOD_ID)
 public class FactoryExpansionJadePlugin implements IWailaPlugin {
     private static final ResourceLocation UID = ResourceLocation.fromNamespaceAndPath(
-            FactoryExpansionMod.MOD_ID,
+            OresAndDrillsMod.MOD_ID,
             "mining_drill"
     );
     private static final String ACTIVE_KEY = "Active";
@@ -46,7 +54,7 @@ public class FactoryExpansionJadePlugin implements IWailaPlugin {
     private static final String PRODUCTIVITY_PROGRESS_KEY = "ProductivityProgress";
 
     private static final ResourceLocation ORE_DEPOSIT_UID = ResourceLocation.fromNamespaceAndPath(
-            FactoryExpansionMod.MOD_ID,
+            OresAndDrillsMod.MOD_ID,
             "ore_deposit"
     );
     private static final String ORE_BLOCK_KEY = "OreBlock";
@@ -68,6 +76,12 @@ public class FactoryExpansionJadePlugin implements IWailaPlugin {
         registration.registerBlockComponent(PROVIDER, AbstractDrillBlock.class);
         registration.registerBlockComponent(PROVIDER, AbstractDrillPartBlock.class);
         registration.registerBlockComponent(ORE_DEPOSIT_PROVIDER, OreDepositBlock.class);
+        registration.addTooltipCollectedCallback((tooltip, accessor) -> {
+            if (accessor instanceof BlockAccessor blockAccessor
+                    && blockAccessor.getBlock() instanceof OreDepositBlock) {
+                tooltip.setIcon(null);
+            }
+        });
     }
 
     private static class MiningDrillProvider implements IBlockComponentProvider, IServerDataProvider<BlockAccessor> {
@@ -145,6 +159,11 @@ public class FactoryExpansionJadePlugin implements IWailaPlugin {
     private static class OreDepositProvider implements IBlockComponentProvider, IServerDataProvider<BlockAccessor> {
         @Override
         public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
+            // The real harvest requirement belongs to the ore stored in the chunk attachment, not to
+            // the shared ore_deposit block state. Remove Jade's generic (and therefore misleading)
+            // indicator before replacing it with the attachment-aware one below.
+            tooltip.remove(JadeIds.MC_HARVEST_TOOL);
+
             CompoundTag data = accessor.getServerData();
             if (!data.contains(ORE_BLOCK_KEY)) {
                 return;
@@ -177,10 +196,8 @@ public class FactoryExpansionJadePlugin implements IWailaPlugin {
 
             BlockState oreState = oreBlock.defaultBlockState();
             if (oreState.requiresCorrectToolForDrops()) {
-                tooltip.add(Component.translatable(
-                        "tooltip.ores_and_drills.ore_deposit.requires_tool",
-                        requiredToolName(oreState)
-                ));
+                ItemStack requiredTool = minimumTool(oreState);
+                appendHarvestIndicator(tooltip, accessor, oreState, requiredTool);
             }
         }
 
@@ -189,17 +206,50 @@ public class FactoryExpansionJadePlugin implements IWailaPlugin {
          * attachment), so Jade's own generic harvestability indicator can't reflect the real requirement
          * and always shows the loosest tier. This checks the actual stored ore's tags directly instead.
          */
-        private static Component requiredToolName(BlockState oreState) {
+        private static ItemStack minimumTool(BlockState oreState) {
             if (oreState.is(BlockTags.NEEDS_DIAMOND_TOOL)) {
-                return Component.translatable("item.minecraft.diamond_pickaxe");
+                return new ItemStack(Items.DIAMOND_PICKAXE);
             }
             if (oreState.is(BlockTags.NEEDS_IRON_TOOL)) {
-                return Component.translatable("item.minecraft.iron_pickaxe");
+                return new ItemStack(Items.IRON_PICKAXE);
             }
             if (oreState.is(BlockTags.NEEDS_STONE_TOOL)) {
-                return Component.translatable("item.minecraft.stone_pickaxe");
+                return new ItemStack(Items.STONE_PICKAXE);
             }
-            return Component.translatable("tooltip.ores_and_drills.ore_deposit.special_tool");
+            return new ItemStack(Items.WOODEN_PICKAXE);
+        }
+
+        private static void appendHarvestIndicator(
+                ITooltip tooltip,
+                BlockAccessor accessor,
+                BlockState oreState,
+                ItemStack requiredTool
+        ) {
+            IElementHelper helper = IElementHelper.get();
+            List<IElement> indicator = new ArrayList<>();
+            int verticalOffset = -3;
+
+            indicator.add(helper.item(requiredTool, 0.75F)
+                    .translate(new Vec2(-1.0F, verticalOffset))
+                    .size(new Vec2(10.0F, 0.0F))
+                    .message(null));
+
+            boolean canHarvest = oreState.canHarvestBlock(
+                    accessor.getLevel(),
+                    accessor.getPosition(),
+                    accessor.getPlayer()
+            );
+            Component mark = Component.literal(canHarvest ? "\u2714" : "\u2715")
+                    .withStyle(canHarvest ? ChatFormatting.GREEN : ChatFormatting.RED);
+            indicator.add(helper.text(mark)
+                    .scale(0.75F)
+                    .zOffset(800)
+                    .size(Vec2.ZERO)
+                    .translate(new Vec2(-3.0F, 6.25F + verticalOffset))
+                    .message(null));
+
+            indicator.forEach(element -> element.align(IElement.Align.RIGHT));
+            tooltip.append(0, indicator);
         }
 
         @Override

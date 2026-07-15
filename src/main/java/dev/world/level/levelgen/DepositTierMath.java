@@ -186,7 +186,7 @@ final class DepositTierMath {
         return result;
     }
 
-    /** Shared safety math for inherited TINY/SMALL source streams. */
+    /** Shared safety bound for TINY/SMALL candidate attempts. */
     static int smallAttemptBudget(double configuredBudget, int hardMaximum) {
         int safeHardMaximum = Math.max(1, hardMaximum);
         if (!Double.isFinite(configuredBudget)) {
@@ -207,6 +207,26 @@ final class DepositTierMath {
                 ? clamp(frequencyMultiplier, 0.1D, 6.0D)
                 : 1.0D;
         return Math.min(1.0D, source * retention * multiplier);
+    }
+
+    /**
+     * Converts an automatically detected expected frequency per chunk into the single immutable
+     * candidate owned by a tier cell. This removes dependence on the surrounding PlacedFeature random
+     * stream while retaining the same expected frequency until a cell saturates at one candidate.
+     */
+    static double cellCandidateProbability(
+            double expectedAttemptsPerChunk,
+            int cellSizeChunks,
+            double frequencyMultiplier
+    ) {
+        double expected = Double.isFinite(expectedAttemptsPerChunk)
+                ? Math.max(0.0D, expectedAttemptsPerChunk)
+                : 0.0D;
+        int safeCellSize = Math.max(1, cellSizeChunks);
+        double multiplier = Double.isFinite(frequencyMultiplier)
+                ? clamp(frequencyMultiplier, 0.1D, 6.0D)
+                : 1.0D;
+        return clamp(expected * safeCellSize * safeCellSize * multiplier, 0.0D, 1.0D);
     }
 
     static OreRange oreRange(int actualBlockCount, TierProfile profile) {

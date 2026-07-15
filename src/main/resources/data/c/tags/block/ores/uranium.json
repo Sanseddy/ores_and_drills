@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    {
+      "id": "alexscaves:radrock_uranium_ore",
+      "required": false
+    }
+  ]
+}

@@ -1,10 +1,14 @@
 package dev.client.ore;
 
-import dev.FactoryExpansionMod;
+import dev.OresAndDrillsMod;
 import dev.world.level.levelgen.OreDepositOrePalette;
 import com.mojang.blaze3d.platform.NativeImage;
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.serialization.MapCodec;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.SpriteContents;
+import net.minecraft.client.renderer.texture.TextureAtlas;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.renderer.texture.atlas.SpriteSource;
 import net.minecraft.client.renderer.texture.atlas.SpriteSourceType;
 import net.minecraft.client.resources.metadata.animation.FrameSize;
@@ -12,36 +16,38 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.ResourceMetadata;
+import net.minecraft.world.level.block.Block;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.List;
 import java.util.Optional;
 
 /**
- * Bakes a genuinely multi-colored ore-layer overlay per (ore block x richness stage) instead of relying on
+ * Bakes a genuinely multi-colored ore-layer overlay per (palette slot x richness stage) instead of relying on
  * a single flat tintindex color: each grayscale mask pixel is recolored by its own luminance through a
  * gradient built from {@link OreDepositOreColors#paletteForOre}, so darker shading gets the ore's own darker
  * tones and highlights get its own brighter tones, instead of one hue scaled up/down.
  */
 public record OreTintedTextureSource() implements SpriteSource {
     private static final MapCodec<OreTintedTextureSource> CODEC = MapCodec.unit(OreTintedTextureSource::new);
-    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(FactoryExpansionMod.MOD_ID, "ore_tint");
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "ore_tint");
     public static final SpriteSourceType TYPE = new SpriteSourceType(CODEC);
 
-    /** Keyed by the ore's own block id (stable) rather than a per-world index — see the class doc on {@link OreDepositOreColors}. */
-    public static ResourceLocation locationFor(ResourceLocation oreBlockId, int richness) {
+    /** Fixed slots exist before joining a server, so their pixels can be replaced without restitching. */
+    public static ResourceLocation locationForSlot(int oreIndex, int richness) {
         return ResourceLocation.fromNamespaceAndPath(
-                FactoryExpansionMod.MOD_ID,
-                "block/generated/ore_tint/" + oreBlockId.getNamespace() + "/" + oreBlockId.getPath() + "/" + richness
+                OresAndDrillsMod.MOD_ID,
+                "block/generated/ore_tint/slot/" + oreIndex + "/" + richness
         );
     }
 
     @Override
     public void run(ResourceManager resourceManager, Output output) {
         OreDepositOreColors.clearCache();
-        List<ResourceLocation> oreIds = OreDepositOrePalette.availableIds();
-        FactoryExpansionMod.LOGGER.trace("Ore deposit: generating tinted textures for {} ore(s)", oreIds.size());
+        OresAndDrillsMod.LOGGER.trace(
+                "Ore deposit: generating {} pre-stitched tint slots",
+                OreDepositOrePalette.MAX_ORES
+        );
         int generated = 0;
         for (int richness = 0; richness < OreDepositBakedModel.UPPER_TEXTURES.length; richness++) {
             NativeImage mask = readMask(resourceManager, richness);
@@ -50,15 +56,22 @@ public record OreTintedTextureSource() implements SpriteSource {
             }
 
             try {
-                for (ResourceLocation oreId : oreIds) {
-                    addTintedSprite(resourceManager, output, mask, oreId, richness);
+                for (int oreIndex = 0; oreIndex < OreDepositOrePalette.MAX_ORES; oreIndex++) {
+                    Block ore = OreDepositOrePalette.oreAt(oreIndex);
+                    ResourceLocation oreId = ore == null
+                            ? null
+                            : net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(ore);
+                    int[] palette = oreId == null
+                            ? OreDepositOreColors.fallbackPalette()
+                            : OreDepositOreColors.paletteForOre(resourceManager, oreId);
+                    addTintedSprite(output, mask, palette, oreIndex, richness);
                     generated++;
                 }
             } finally {
                 mask.close();
             }
         }
-        FactoryExpansionMod.LOGGER.trace("Ore deposit: generated {} tinted textures", generated);
+        OresAndDrillsMod.LOGGER.trace("Ore deposit: generated {} tinted textures", generated);
     }
 
     private static NativeImage readMask(ResourceManager resourceManager, int richness) {
@@ -66,48 +79,118 @@ public record OreTintedTextureSource() implements SpriteSource {
         ResourceLocation texturePath = ResourceLocation.fromNamespaceAndPath(maskId.getNamespace(), "textures/" + maskId.getPath() + ".png");
         Optional<Resource> resource = resourceManager.getResource(texturePath);
         if (resource.isEmpty()) {
-            FactoryExpansionMod.LOGGER.warn("Ore deposit: missing ore-layer mask {} for tinted texture generation", texturePath);
+            OresAndDrillsMod.LOGGER.warn("Ore deposit: missing ore-layer mask {} for tinted texture generation", texturePath);
             return null;
         }
 
         try (InputStream stream = resource.get().open()) {
             return NativeImage.read(stream);
         } catch (IOException exception) {
-            FactoryExpansionMod.LOGGER.warn("Ore deposit: failed to read ore-layer mask {}", texturePath, exception);
+            OresAndDrillsMod.LOGGER.warn("Ore deposit: failed to read ore-layer mask {}", texturePath, exception);
             return null;
         }
     }
 
-    private static void addTintedSprite(ResourceManager resourceManager, Output output, NativeImage mask, ResourceLocation oreId, int richness) {
+    private static void addTintedSprite(Output output, NativeImage mask, int[] palette, int oreIndex, int richness) {
         try {
-            int[] palette = OreDepositOreColors.paletteForOre(resourceManager, oreId);
-            NativeImage tinted = new NativeImage(mask.getWidth(), mask.getHeight(), false);
-            for (int y = 0; y < mask.getHeight(); y++) {
-                for (int x = 0; x < mask.getWidth(); x++) {
-                    int abgr = mask.getPixelRGBA(x, y);
-                    int alpha = (abgr >> 24) & 0xFF;
-                    if (alpha == 0) {
-                        tinted.setPixelRGBA(x, y, 0);
+            NativeImage tinted = tintedCopy(mask, palette);
+            ResourceLocation location = locationForSlot(oreIndex, richness);
+            output.add(location, loader -> new SpriteContents(location, new FrameSize(tinted.getWidth(), tinted.getHeight()), tinted, ResourceMetadata.EMPTY));
+        } catch (RuntimeException exception) {
+            OresAndDrillsMod.LOGGER.warn("Ore deposit: failed to generate tinted texture for slot {} richness {}", oreIndex, richness, exception);
+        }
+    }
+
+    /**
+     * Applies the server-resolved drop palette directly to existing block-atlas sprites. Returns false when
+     * called before the atlas/render thread is ready so the client tick handler can retry next tick.
+     */
+    public static boolean applySyncedPalette() {
+        if (!RenderSystem.isOnRenderThread()) {
+            return false;
+        }
+
+        Minecraft minecraft = Minecraft.getInstance();
+        TextureAtlas atlas = minecraft.getModelManager().getAtlas(TextureAtlas.LOCATION_BLOCKS);
+        ResourceManager resourceManager = minecraft.getResourceManager();
+        int slotCount = Math.min(OreDepositOrePalette.clientSize(), OreDepositOrePalette.MAX_ORES);
+        if (slotCount == 0) {
+            return true;
+        }
+
+        OreDepositOreColors.clearCache();
+        atlas.bind();
+        int updated = 0;
+        for (int richness = 0; richness < OreDepositBakedModel.UPPER_TEXTURES.length; richness++) {
+            try (NativeImage mask = readMask(resourceManager, richness)) {
+                if (mask == null) {
+                    continue;
+                }
+
+                for (int oreIndex = 0; oreIndex < slotCount; oreIndex++) {
+                    ResourceLocation dropId = OreDepositOrePalette.dropIdAt(oreIndex);
+                    int[] palette = OreDepositOreColors.paletteForDrop(resourceManager, dropId);
+                    TextureAtlasSprite sprite = atlas.getTextures().get(locationForSlot(oreIndex, richness));
+                    if (sprite == null) {
+                        OresAndDrillsMod.LOGGER.warn(
+                                "Ore deposit: missing pre-stitched tint slot {} richness {}",
+                                oreIndex,
+                                richness
+                        );
                         continue;
                     }
 
-                    int red = abgr & 0xFF;
-                    int green = (abgr >> 8) & 0xFF;
-                    int blue = (abgr >> 16) & 0xFF;
-                    int luminance = Math.max(red, Math.max(green, blue));
-                    int color = gradientColor(palette, luminance);
-                    int outRed = (color >> 16) & 0xFF;
-                    int outGreen = (color >> 8) & 0xFF;
-                    int outBlue = color & 0xFF;
-                    tinted.setPixelRGBA(x, y, (alpha << 24) | (outBlue << 16) | (outGreen << 8) | outRed);
+                    try (NativeImage tinted = tintedCopy(mask, palette)) {
+                        replaceSpritePixels(sprite, tinted);
+                        updated++;
+                    }
                 }
             }
-
-            ResourceLocation location = locationFor(oreId, richness);
-            output.add(location, loader -> new SpriteContents(location, new FrameSize(tinted.getWidth(), tinted.getHeight()), tinted, ResourceMetadata.EMPTY));
-        } catch (RuntimeException exception) {
-            FactoryExpansionMod.LOGGER.warn("Ore deposit: failed to generate tinted texture for ore {} richness {}", oreId, richness, exception);
         }
+        OresAndDrillsMod.LOGGER.trace("Ore deposit: recolored {} atlas sprites in place", updated);
+        return true;
+    }
+
+    private static NativeImage tintedCopy(NativeImage mask, int[] palette) {
+        NativeImage tinted = new NativeImage(mask.getWidth(), mask.getHeight(), false);
+        for (int y = 0; y < mask.getHeight(); y++) {
+            for (int x = 0; x < mask.getWidth(); x++) {
+                int abgr = mask.getPixelRGBA(x, y);
+                int alpha = (abgr >> 24) & 0xFF;
+                if (alpha == 0) {
+                    tinted.setPixelRGBA(x, y, 0);
+                    continue;
+                }
+
+                int red = abgr & 0xFF;
+                int green = (abgr >> 8) & 0xFF;
+                int blue = (abgr >> 16) & 0xFF;
+                int luminance = Math.max(red, Math.max(green, blue));
+                int color = gradientColor(palette, luminance);
+                int outRed = (color >> 16) & 0xFF;
+                int outGreen = (color >> 8) & 0xFF;
+                int outBlue = color & 0xFF;
+                tinted.setPixelRGBA(x, y, (alpha << 24) | (outBlue << 16) | (outGreen << 8) | outRed);
+            }
+        }
+        return tinted;
+    }
+
+    private static void replaceSpritePixels(TextureAtlasSprite sprite, NativeImage tinted) {
+        SpriteContents contents = sprite.contents();
+        NativeImage original = contents.getOriginalImage();
+        if (original.getWidth() != tinted.getWidth() || original.getHeight() != tinted.getHeight()) {
+            throw new IllegalArgumentException("Tinted image size does not match pre-stitched sprite size");
+        }
+
+        int mipLevel = contents.byMipLevel.length - 1;
+        for (int index = 1; index < contents.byMipLevel.length; index++) {
+            contents.byMipLevel[index].close();
+        }
+        original.copyFrom(tinted);
+        contents.byMipLevel = new NativeImage[] {original};
+        contents.increaseMipLevel(mipLevel);
+        sprite.uploadFirstFrame();
     }
 
     /** {@code palette} is sorted dark to light; luminance 0 maps to the darkest entry, 255 to the brightest, with linear interpolation in between. */

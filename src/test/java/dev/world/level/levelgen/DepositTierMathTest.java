@@ -107,6 +107,14 @@ class DepositTierMathTest {
     }
 
     @Test
+    void expectedFrequencyBecomesOneSeedCandidatePerTierCell() {
+        assertEquals(0.125D, DepositTierMath.cellCandidateProbability(0.125D, 1, 1.0D), 1.0E-9D);
+        assertEquals(0.5D, DepositTierMath.cellCandidateProbability(0.125D, 2, 1.0D), 1.0E-9D);
+        assertEquals(1.0D, DepositTierMath.cellCandidateProbability(0.5D, 2, 6.0D), 1.0E-9D);
+        assertEquals(0.0D, DepositTierMath.cellCandidateProbability(Double.NaN, 2, 1.0D), 1.0E-9D);
+    }
+
+    @Test
     void smallTierWorkloadBudgetHasAHardMaximum() {
         assertEquals(8, DepositTierMath.smallAttemptBudget(8.0D, 12));
         assertEquals(12, DepositTierMath.smallAttemptBudget(48.0D, 12));

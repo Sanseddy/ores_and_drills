@@ -1,6 +1,22 @@
 {
   "replace": false,
   "values": [
-    "ores_and_drills:ore_deposit"
+    "ores_and_drills:ore_deposit",
+    {
+      "id": "alexscaves:galena_iron_ore",
+      "required": false
+    },
+    {
+      "id": "alexscaves:radrock_uranium_ore",
+      "required": false
+    },
+    {
+      "id": "alexscaves:guanostone_redstone_ore",
+      "required": false
+    },
+    {
+      "id": "alexscaves:coprolith_coal_ore",
+      "required": false
+    }
   ]
 }

@@ -1,6 +1,6 @@
 package dev.world.level.levelgen;
 
-import dev.FactoryExpansionMod;
+import dev.OresAndDrillsMod;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.RegistryAccess;
@@ -109,7 +109,7 @@ public final class OreSpawnDimensions {
         BiomeGenerationSettings generationSettings = simulatedGenerationSettings(biome, biomeModifiers);
         for (HolderSet<PlacedFeature> stepFeatures : generationSettings.features()) {
             for (Holder<PlacedFeature> placedFeature : stepFeatures) {
-                scanPlacedFeatureSafely(placedFeature.value(), biome);
+                scanPlacedFeatureSafely(placedFeature, biome);
             }
         }
     }
@@ -132,7 +132,7 @@ public final class OreSpawnDimensions {
                 try {
                     modifier.modify(biome, phase, builder);
                 } catch (RuntimeException exception) {
-                    FactoryExpansionMod.LOGGER.trace("Ore deposits: skipped a biome modifier while scanning ore dimensions", exception);
+                    OresAndDrillsMod.LOGGER.trace("Ore deposits: skipped a biome modifier while scanning ore dimensions", exception);
                 }
             }
         }
@@ -145,15 +145,25 @@ public final class OreSpawnDimensions {
      * can throw before that config is loaded (this preview scan runs on the create-world screen, before
      * any world/config exists). The scan is best-effort for a GUI hint, so one bad feature shouldn't crash it.
      */
-    private static void scanPlacedFeatureSafely(PlacedFeature placedFeature, Holder<Biome> biome) {
+    private static void scanPlacedFeatureSafely(Holder<PlacedFeature> placedFeature, Holder<Biome> biome) {
         try {
-            scanConfiguredFeature(placedFeature.feature().value(), placedFeature, biome);
+            scanConfiguredFeature(
+                    placedFeature.value().feature().value(),
+                    placedFeature.value(),
+                    ReplaceOreFeaturesBiomeModifier.stablePlacedFeatureKey(placedFeature),
+                    biome
+            );
         } catch (RuntimeException exception) {
-            FactoryExpansionMod.LOGGER.trace("Ore deposits: skipped a feature while scanning ore dimensions", exception);
+            OresAndDrillsMod.LOGGER.trace("Ore deposits: skipped a feature while scanning ore dimensions", exception);
         }
     }
 
-    private static void scanConfiguredFeature(ConfiguredFeature<?, ?> configured, PlacedFeature placedFeature, Holder<Biome> biome) {
+    private static void scanConfiguredFeature(
+            ConfiguredFeature<?, ?> configured,
+            PlacedFeature placedFeature,
+            String sourceSignature,
+            Holder<Biome> biome
+    ) {
         ReplaceOreFeaturesBiomeModifier.OreFeatureData oreData = ReplaceOreFeaturesBiomeModifier.oreFeatureData(configured.config());
         if (oreData == null) {
             return;
@@ -165,11 +175,6 @@ public final class OreSpawnDimensions {
             }
 
             Block sourceOre = target.state.getBlock();
-            if (ReplaceOreFeaturesBiomeModifier.isUranium(sourceOre)
-                    && !ReplaceOreFeaturesBiomeModifier.canGenerateUraniumIn(biome)) {
-                continue;
-            }
-
             OreUnifier.canonicalFor(sourceOre, ReplaceOreFeaturesBiomeModifier.classifyTarget(target.target))
                     .ifPresent(canonical -> {
                         record(sourceOre, biome);
@@ -177,10 +182,12 @@ public final class OreSpawnDimensions {
                         OreGenerationWeights.recordObservation(
                                 canonical,
                                 biome,
+                                sourceSignature,
                                 configured,
                                 placedFeature.placement(),
                                 1.0F,
-                                oreData.size()
+                                oreData.size(),
+                                target.target
                         );
                     });
         }

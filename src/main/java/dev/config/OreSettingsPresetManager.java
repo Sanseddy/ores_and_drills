@@ -1,6 +1,7 @@
 package dev.config;
 
-import dev.FactoryExpansionMod;
+import dev.OresAndDrillsMod;
+import dev.world.level.levelgen.DepositTerrainValidator;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -59,7 +60,7 @@ public final class OreSettingsPresetManager implements ResourceManagerReloadList
             try (Reader reader = entry.getValue().openAsReader()) {
                 loaded.put(presetId, parsePreset(GsonHelper.parse(reader)));
             } catch (IOException | JsonParseException | IllegalArgumentException exception) {
-                FactoryExpansionMod.LOGGER.warn("Ore settings: failed to load preset {} from {}", presetId, file, exception);
+                OresAndDrillsMod.LOGGER.warn("Ore settings: failed to load preset {} from {}", presetId, file, exception);
             }
         }
 
@@ -67,12 +68,12 @@ public final class OreSettingsPresetManager implements ResourceManagerReloadList
         selectActivePreset(configuredPresetId());
 
         if (activePresetId == null) {
-            FactoryExpansionMod.LOGGER.warn(
+            OresAndDrillsMod.LOGGER.warn(
                     "Ore settings: active preset {} was not found; using neutral settings",
                     configuredPresetId()
             );
         } else {
-            FactoryExpansionMod.LOGGER.info("Ore settings: loaded {} datapack preset(s), active preset is {}", loaded.size(), activePresetId);
+            OresAndDrillsMod.LOGGER.info("Ore settings: loaded {} datapack preset(s), active preset is {}", loaded.size(), activePresetId);
         }
     }
 
@@ -92,6 +93,7 @@ public final class OreSettingsPresetManager implements ResourceManagerReloadList
         activePresetId = selected == null ? null : configuredId;
         activePreset = selected == null ? Preset.EMPTY : selected;
         generation++;
+        DepositTerrainValidator.clearCache();
     }
 
     public static Settings resolve(Block block) {

@@ -1,5 +1,6 @@
 package dev.world.level.levelgen;
 
+import dev.registry.ModBlockTags;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
@@ -15,7 +16,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public final class OreDepositStonePalette {
     public static final int MAX_BASES = 256;
-    public static final TagKey<Block> STONES = TagKey.create(Registries.BLOCK, ResourceLocation.fromNamespaceAndPath("c", "stones"));
+    public static final TagKey<Block> STONES = ModBlockTags.STONES;
     private static volatile List<ResourceLocation> availableIdsCache;
     private static volatile List<ResourceLocation> clientIds = List.of();
     private static final AtomicInteger CLIENT_REVISION = new AtomicInteger();

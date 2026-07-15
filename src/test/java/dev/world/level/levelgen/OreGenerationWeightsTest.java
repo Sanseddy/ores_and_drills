@@ -34,4 +34,34 @@ class OreGenerationWeightsTest {
         assertTrue(large.weight() <= maximumOriginalFrequency);
         assertEquals(maximumOriginalFrequency, common.weight(), EPSILON);
     }
+
+    @Test
+    void productionSettingsGiveRareOresAStrongMediumAndLargeBoost() {
+        double maximumOriginalFrequency = 20.0D;
+        double rareOriginalFrequency = 1.0D;
+        DepositTierMath.RarityParameters parameters = OreGenerationWeights.rarityParameters();
+
+        DepositTierMath.RarityWeight medium = DepositTierMath.adaptiveTierOreWeight(
+                DepositTier.MEDIUM, rareOriginalFrequency, maximumOriginalFrequency, parameters);
+        DepositTierMath.RarityWeight large = DepositTierMath.adaptiveTierOreWeight(
+                DepositTier.LARGE, rareOriginalFrequency, maximumOriginalFrequency, parameters);
+
+        assertTrue(medium.weight() >= rareOriginalFrequency * 3.5D);
+        assertTrue(large.weight() >= medium.weight() * 1.9D);
+        assertTrue(large.weight() <= maximumOriginalFrequency);
+    }
+
+    @Test
+    void originalFrequencyUsesAttemptsAndBranchChanceOnly() {
+        assertEquals(30.0D, OreSourceFrequencyMath.originalFrequency(30.0D, 1.0D), EPSILON);
+        assertEquals(7.5D, OreSourceFrequencyMath.originalFrequency(30.0D, 0.25D), EPSILON);
+    }
+
+    @Test
+    void spatialAvailabilityIsNotAnInputToOriginalFrequency() {
+        double sourceAttemptsAfterRarityFilter = 30.0D / 5.0D;
+        assertEquals(6.0D, OreSourceFrequencyMath.originalFrequency(
+                sourceAttemptsAfterRarityFilter, 1.0D
+        ), EPSILON);
+    }
 }

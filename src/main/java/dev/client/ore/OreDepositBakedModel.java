@@ -1,6 +1,6 @@
 package dev.client.ore;
 
-import dev.FactoryExpansionMod;
+import dev.OresAndDrillsMod;
 import dev.registry.ModBlocks;
 import dev.world.level.levelgen.OreDepositData;
 import dev.world.level.levelgen.OreDepositOrePalette;
@@ -19,11 +19,10 @@ import net.minecraft.client.resources.model.Material;
 import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.BlockAndTintGetter;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.client.ChunkRenderTypeSet;
 import net.neoforged.neoforge.client.event.ModelEvent;
@@ -34,7 +33,6 @@ import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -49,43 +47,43 @@ public final class OreDepositBakedModel extends BakedModelWrapper<BakedModel> {
      * Indexed directly by richness (0..7), from depleted to richest.
      */
     static final ResourceLocation[] UPPER_TEXTURES = {
-            ResourceLocation.fromNamespaceAndPath(FactoryExpansionMod.MOD_ID, "block/ore_layer_0"),
-            ResourceLocation.fromNamespaceAndPath(FactoryExpansionMod.MOD_ID, "block/ore_layer_1"),
-            ResourceLocation.fromNamespaceAndPath(FactoryExpansionMod.MOD_ID, "block/ore_layer_2"),
-            ResourceLocation.fromNamespaceAndPath(FactoryExpansionMod.MOD_ID, "block/ore_layer_3"),
-            ResourceLocation.fromNamespaceAndPath(FactoryExpansionMod.MOD_ID, "block/ore_layer_4"),
-            ResourceLocation.fromNamespaceAndPath(FactoryExpansionMod.MOD_ID, "block/ore_layer_5"),
-            ResourceLocation.fromNamespaceAndPath(FactoryExpansionMod.MOD_ID, "block/ore_layer_6"),
-            ResourceLocation.fromNamespaceAndPath(FactoryExpansionMod.MOD_ID, "block/ore_layer_7")
+            ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "block/ore_layer_0"),
+            ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "block/ore_layer_1"),
+            ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "block/ore_layer_2"),
+            ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "block/ore_layer_3"),
+            ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "block/ore_layer_4"),
+            ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "block/ore_layer_5"),
+            ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "block/ore_layer_6"),
+            ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "block/ore_layer_7")
     };
 
     private final TextureAtlasSprite fallbackBaseSprite;
-    /** Keyed by ore block id (stable), not a per-world index — see the class doc on {@link OreDepositOreColors}. */
-    private final Map<ResourceLocation, TextureAtlasSprite[]> upperSpritesByOre;
-    /** Used for an ore that has no baked tinted texture (e.g. only became visible after this bake, see the doc above) — the plain grayscale mask, untinted, rather than a missing texture. */
+    /** Fixed pre-stitched slots are recolored in place when the synchronized server palette changes. */
+    private final TextureAtlasSprite[][] upperSpritesByIndex;
+    /** Used for an invalid palette index: the plain grayscale mask rather than a missing texture. */
     private final TextureAtlasSprite[] fallbackUpperSprites;
     private final Map<BaseKey, TextureAtlasSprite> baseSpriteCache = new ConcurrentHashMap<>();
     private final Map<Key, List<BakedQuad>> cache = new ConcurrentHashMap<>();
 
     private OreDepositBakedModel(
             BakedModel originalModel,
-            Map<ResourceLocation, TextureAtlasSprite[]> upperSpritesByOre,
+            TextureAtlasSprite[][] upperSpritesByIndex,
             TextureAtlasSprite[] fallbackUpperSprites
     ) {
         super(originalModel);
         this.fallbackBaseSprite = originalModel.getParticleIcon();
-        this.upperSpritesByOre = upperSpritesByOre;
+        this.upperSpritesByIndex = upperSpritesByIndex;
         this.fallbackUpperSprites = fallbackUpperSprites;
     }
 
     public static void replaceModels(ModelEvent.ModifyBakingResult event) {
-        Map<ResourceLocation, TextureAtlasSprite[]> upperSpritesByOre = new HashMap<>();
-        for (ResourceLocation oreId : OreDepositOrePalette.availableIds()) {
-            TextureAtlasSprite[] sprites = new TextureAtlasSprite[UPPER_TEXTURES.length];
+        TextureAtlasSprite[][] upperSpritesByIndex = new TextureAtlasSprite[OreDepositOrePalette.MAX_ORES][UPPER_TEXTURES.length];
+        for (int oreIndex = 0; oreIndex < upperSpritesByIndex.length; oreIndex++) {
             for (int richness = 0; richness < UPPER_TEXTURES.length; richness++) {
-                sprites[richness] = event.getTextureGetter().apply(new Material(TextureAtlas.LOCATION_BLOCKS, OreTintedTextureSource.locationFor(oreId, richness)));
+                upperSpritesByIndex[oreIndex][richness] = event.getTextureGetter().apply(
+                        new Material(TextureAtlas.LOCATION_BLOCKS, OreTintedTextureSource.locationForSlot(oreIndex, richness))
+                );
             }
-            upperSpritesByOre.put(oreId, sprites);
         }
 
         TextureAtlasSprite[] fallbackUpperSprites = new TextureAtlasSprite[UPPER_TEXTURES.length];
@@ -102,12 +100,12 @@ public final class OreDepositBakedModel extends BakedModelWrapper<BakedModel> {
             }
 
             if (sharedModel == null) {
-                sharedModel = new OreDepositBakedModel(entry.getValue(), upperSpritesByOre, fallbackUpperSprites);
+                sharedModel = new OreDepositBakedModel(entry.getValue(), upperSpritesByIndex, fallbackUpperSprites);
             }
             entry.setValue(sharedModel);
             replaced++;
         }
-        FactoryExpansionMod.LOGGER.trace("Ore deposit model: replaced {} baked states", replaced);
+        OresAndDrillsMod.LOGGER.trace("Ore deposit model: replaced {} baked states", replaced);
     }
 
     @Override
@@ -149,21 +147,14 @@ public final class OreDepositBakedModel extends BakedModelWrapper<BakedModel> {
         int base = visual != null ? visual.baseIndex() : 0;
         int oreIndex = visual != null ? visual.oreIndex() : -1;
         int richness = visual != null ? visual.richness() : 0;
-        ResourceLocation oreId = resolveOreId(oreIndex);
         Key key = new Key(
                 OreDepositStonePalette.clientRevision(),
                 Math.max(0, base),
-                oreId,
+                oreIndex,
                 Math.max(0, Math.min(UPPER_TEXTURES.length - 1, richness)),
                 side
         );
         return cache.computeIfAbsent(key, this::buildQuads);
-    }
-
-    @Nullable
-    private static ResourceLocation resolveOreId(int oreIndex) {
-        Block ore = OreDepositOrePalette.oreAt(oreIndex);
-        return ore == null ? null : BuiltInRegistries.BLOCK.getKey(ore);
     }
 
     private List<BakedQuad> buildQuads(Key key) {
@@ -172,16 +163,17 @@ public final class OreDepositBakedModel extends BakedModelWrapper<BakedModel> {
         }
 
         TextureAtlasSprite baseSprite = baseSpriteFor(key.base());
-        TextureAtlasSprite upperSprite = upperSpriteFor(key.oreId(), key.richness());
+        TextureAtlasSprite upperSprite = upperSpriteFor(key.oreIndex(), key.richness());
         List<BakedQuad> quads = new ArrayList<>();
         quads.add(bakeFace(key.side(), baseSprite, -1, 0.0F));
         quads.add(bakeFace(key.side(), upperSprite, -1, 0.0F));
         return List.copyOf(quads);
     }
 
-    private TextureAtlasSprite upperSpriteFor(@Nullable ResourceLocation oreId, int richness) {
-        TextureAtlasSprite[] sprites = oreId != null ? upperSpritesByOre.get(oreId) : null;
-        return sprites != null ? sprites[richness] : fallbackUpperSprites[richness];
+    private TextureAtlasSprite upperSpriteFor(int oreIndex, int richness) {
+        return oreIndex >= 0 && oreIndex < upperSpritesByIndex.length
+                ? upperSpritesByIndex[oreIndex][richness]
+                : fallbackUpperSprites[richness];
     }
 
     private TextureAtlasSprite baseSpriteFor(int index) {
@@ -203,11 +195,10 @@ public final class OreDepositBakedModel extends BakedModelWrapper<BakedModel> {
     }
 
     /**
-     * Keyed by the resolved ore block id, not the raw {@code oreIndex} — if a world syncs a different
-     * (already-persisted) index-to-ore mapping after joining, {@link #resolveOreId} simply resolves to a
-     * different id and the cache naturally keys on that, with no separate revision field needed.
+     * The ore index selects a stable atlas slot. If another world assigns a different drop to that index,
+     * the slot pixels change in place and cached quads keep pointing at the same valid sprite region.
      */
-    private record Key(int stonePaletteRevision, int base, @Nullable ResourceLocation oreId, int richness, @Nullable Direction side) {
+    private record Key(int stonePaletteRevision, int base, int oreIndex, int richness, @Nullable Direction side) {
     }
 
     private record BaseKey(int paletteRevision, int index) {

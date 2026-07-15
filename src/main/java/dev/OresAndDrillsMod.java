@@ -2,7 +2,7 @@ package dev;
 
 import dev.config.OreDepositConfig;
 import dev.config.OreWorldSettingsApplier;
-import dev.command.OreLocateCommand;
+import dev.command.OreDepositLocateCommand;
 import dev.config.OreSettingsPresetManager;
 import dev.network.ModNetworking;
 import dev.network.OreDepositPaletteSync;
@@ -12,8 +12,8 @@ import dev.registry.ModBlocks;
 import dev.registry.ModCapabilities;
 import dev.registry.ModMenuTypes;
 import dev.registry.ModWorldgen;
-import dev.world.block.OreDepositBreakHandler;
 import dev.world.block.OreDepositExplosionHandler;
+import dev.world.level.levelgen.DepositTerrainValidator;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
@@ -24,12 +24,12 @@ import net.neoforged.neoforge.common.NeoForge;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@Mod(FactoryExpansionMod.MOD_ID)
-public final class FactoryExpansionMod {
+@Mod(OresAndDrillsMod.MOD_ID)
+public final class OresAndDrillsMod {
     public static final String MOD_ID = "ores_and_drills";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-    public FactoryExpansionMod(IEventBus modEventBus, ModContainer modContainer) {
+    public OresAndDrillsMod(IEventBus modEventBus, ModContainer modContainer) {
         modContainer.registerConfig(ModConfig.Type.COMMON, OreDepositConfig.SPEC);
 
         ModAttachments.ATTACHMENTS.register(modEventBus);
@@ -44,11 +44,11 @@ public final class FactoryExpansionMod {
         modEventBus.addListener(ModCapabilities::register);
         modEventBus.addListener(ModNetworking::register);
         modEventBus.addListener(OreWorldSettingsApplier::onConfigLoading);
-        NeoForge.EVENT_BUS.addListener(OreLocateCommand::register);
+        NeoForge.EVENT_BUS.addListener(OreDepositLocateCommand::register);
         NeoForge.EVENT_BUS.addListener(OreSettingsPresetManager::addReloadListener);
-        NeoForge.EVENT_BUS.addListener(OreDepositBreakHandler::onBreak);
         NeoForge.EVENT_BUS.addListener(OreDepositExplosionHandler::onDetonate);
         NeoForge.EVENT_BUS.addListener(OreDepositPaletteSync::onDatapackSync);
+        NeoForge.EVENT_BUS.addListener(DepositTerrainValidator::onTagsUpdated);
     }
 
     private void addCreativeTabItems(BuildCreativeModeTabContentsEvent event) {

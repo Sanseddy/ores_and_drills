@@ -1,6 +1,6 @@
 package dev.network;
 
-import dev.FactoryExpansionMod;
+import dev.OresAndDrillsMod;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -15,7 +15,7 @@ public record OreDepositPalettePayload(
         List<ResourceLocation> drops
 ) implements CustomPacketPayload {
     public static final Type<OreDepositPalettePayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(FactoryExpansionMod.MOD_ID, "ore_deposit_palette")
+            ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "ore_deposit_palette")
     );
     public static final StreamCodec<RegistryFriendlyByteBuf, OreDepositPalettePayload> STREAM_CODEC = new StreamCodec<>() {
         @Override
