@@ -1,0 +1,8 @@
+{
+  "replace": false,
+  "values": [
+    "ores_and_drills:ore_deposit",
+    "ores_and_drills:burner_mining_drill",
+    "ores_and_drills:burner_mining_drill_part"
+  ]
+}

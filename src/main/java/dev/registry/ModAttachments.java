@@ -1,0 +1,85 @@
+package dev.registry;
+
+import dev.FactoryExpansionMod;
+import dev.world.level.levelgen.OreDepositChunkData;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.neoforged.neoforge.attachment.AttachmentType;
+import net.neoforged.neoforge.attachment.IAttachmentHolder;
+import net.neoforged.neoforge.attachment.IAttachmentSerializer;
+import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.registries.DeferredRegister;
+import net.neoforged.neoforge.registries.NeoForgeRegistries;
+import org.jetbrains.annotations.Nullable;
+
+public final class ModAttachments {
+    private static final String TAG_KEYS = "Keys";
+    private static final String TAG_VALUES = "Values";
+    private static final String TAG_RICHNESS_REFERENCES = "RichnessReferences";
+    private static final StreamCodec<RegistryFriendlyByteBuf, OreDepositChunkData> ORE_DEPOSIT_SYNC_CODEC = new StreamCodec<>() {
+        @Override
+        public OreDepositChunkData decode(RegistryFriendlyByteBuf buffer) {
+            int size = buffer.readVarInt();
+            int[] keys = new int[size];
+            long[] values = new long[size];
+            for (int index = 0; index < size; index++) {
+                keys[index] = buffer.readVarInt();
+                values[index] = buffer.readLong();
+            }
+
+            OreDepositChunkData data = new OreDepositChunkData();
+            data.load(keys, values);
+            return data;
+        }
+
+        @Override
+        public void encode(RegistryFriendlyByteBuf buffer, OreDepositChunkData data) {
+            OreDepositChunkData.Snapshot snapshot = data.snapshot();
+            int[] keys = snapshot.keys();
+            long[] values = snapshot.values();
+            int size = Math.min(keys.length, values.length);
+            buffer.writeVarInt(size);
+            for (int index = 0; index < size; index++) {
+                buffer.writeVarInt(keys[index]);
+                buffer.writeLong(values[index]);
+            }
+        }
+    };
+
+    public static final DeferredRegister<AttachmentType<?>> ATTACHMENTS = DeferredRegister.create(
+            NeoForgeRegistries.Keys.ATTACHMENT_TYPES,
+            FactoryExpansionMod.MOD_ID
+    );
+
+    public static final DeferredHolder<AttachmentType<?>, AttachmentType<OreDepositChunkData>> ORE_DEPOSITS =
+            ATTACHMENTS.register("ore_deposits", () -> AttachmentType.builder(OreDepositChunkData::new)
+                    .serialize(new IAttachmentSerializer<CompoundTag, OreDepositChunkData>() {
+                        @Override
+                        public OreDepositChunkData read(IAttachmentHolder holder, CompoundTag tag, HolderLookup.Provider provider) {
+                            OreDepositChunkData data = new OreDepositChunkData();
+                            data.load(tag.getIntArray(TAG_KEYS), tag.getLongArray(TAG_VALUES), tag.getIntArray(TAG_RICHNESS_REFERENCES));
+                            return data;
+                        }
+
+                        @Nullable
+                        @Override
+                        public CompoundTag write(OreDepositChunkData data, HolderLookup.Provider provider) {
+                            if (data.isEmpty()) {
+                                return null;
+                            }
+
+                            OreDepositChunkData.Snapshot snapshot = data.snapshot();
+                            CompoundTag tag = new CompoundTag();
+                            tag.putIntArray(TAG_KEYS, snapshot.keys());
+                            tag.putLongArray(TAG_VALUES, snapshot.values());
+                            return tag;
+                        }
+                    })
+                    .sync(ORE_DEPOSIT_SYNC_CODEC)
+                    .build());
+
+    private ModAttachments() {
+    }
+}

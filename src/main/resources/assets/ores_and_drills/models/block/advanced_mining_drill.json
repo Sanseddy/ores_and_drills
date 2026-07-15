@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "particle": "ores_and_drills:block/burner_mining_drill"
+  }
+}

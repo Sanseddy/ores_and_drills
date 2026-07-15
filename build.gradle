@@ -1,0 +1,129 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'net.neoforged.moddev' version '2.0.141'
+    id 'idea'
+}
+
+version = mod_version
+group = mod_group_id
+
+base {
+    archivesName = mod_id
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+sourceSets.main.resources {
+    srcDir 'src/generated/resources'
+}
+
+repositories {
+    mavenCentral()
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = 'Modrinth'
+                url = 'https://api.modrinth.com/maven'
+            }
+        }
+        filter {
+            includeGroup 'maven.modrinth'
+        }
+    }
+    maven {
+        name = 'GeckoLib'
+        url = 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
+        content {
+            includeGroup 'software.bernie.geckolib'
+        }
+    }
+}
+
+neoForge {
+    version = project.neo_version
+
+    parchment {
+        mappingsVersion = project.parchment_mappings_version
+        minecraftVersion = project.parchment_minecraft_version
+    }
+
+    runs {
+        client {
+            client()
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        }
+
+        server {
+            server()
+            programArgument '--nogui'
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        }
+
+        data {
+            data()
+            programArguments.addAll '--mod', project.mod_id, '--all',
+                    '--output', file('src/generated/resources/').absolutePath,
+                    '--existing', file('src/main/resources/').absolutePath
+        }
+
+        configureEach {
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+            logLevel = org.slf4j.event.Level.DEBUG
+            jvmArguments.addAll '-Xmx10G', '-Xms2G'
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+configurations {
+    runtimeClasspath.extendsFrom localRuntime
+}
+
+dependencies {
+    implementation "software.bernie.geckolib:geckolib-neoforge-1.21.1:${geckolib_version}"
+    compileOnly "maven.modrinth:jade:15.10.0+neoforge"
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
+}
+
+def generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
+    def replaceProperties = [
+            minecraft_version      : minecraft_version,
+            minecraft_version_range: minecraft_version_range,
+            neo_version            : neo_version,
+            loader_version_range   : loader_version_range,
+            mod_id                 : mod_id,
+            mod_name               : mod_name,
+            mod_license            : mod_license,
+            mod_version            : mod_version,
+            geckolib_version       : geckolib_version
+    ]
+    inputs.properties replaceProperties
+    expand replaceProperties
+    from 'src/main/templates'
+    into 'build/generated/sources/modMetadata'
+}
+
+sourceSets.main.resources.srcDir generateModMetadata
+neoForge.ideSyncTask generateModMetadata
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+idea {
+    module {
+        downloadSources = true
+        downloadJavadoc = true
+    }
+}

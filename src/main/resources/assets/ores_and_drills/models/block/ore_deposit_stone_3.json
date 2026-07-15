@@ -1,0 +1,1 @@
+{ "parent": "ores_and_drills:block/ore_deposit_layered", "textures": { "base": "minecraft:block/stone", "upper": "ores_and_drills:block/upper_ore_layer_1" } }

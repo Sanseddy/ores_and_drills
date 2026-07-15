@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "ores_and_drills:block/electric_mining_drill"
+    },
+    "facing=east": {
+      "model": "ores_and_drills:block/electric_mining_drill",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "ores_and_drills:block/electric_mining_drill",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "ores_and_drills:block/electric_mining_drill",
+      "y": 270
+    }
+  }
+}

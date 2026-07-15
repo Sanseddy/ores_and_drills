@@ -1,0 +1,41 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:stone",
+    "minecraft:deepslate",
+    "minecraft:netherrack",
+    "minecraft:end_stone",
+    "#minecraft:base_stone_overworld",
+    "#minecraft:base_stone_nether",
+    "#minecraft:stone_ore_replaceables",
+    "#minecraft:deepslate_ore_replaceables",
+    {
+      "id": "create:limestone",
+      "required": false
+    },
+    {
+      "id": "create:asurine",
+      "required": false
+    },
+    {
+      "id": "create:scoria",
+      "required": false
+    },
+    {
+      "id": "create:veridium",
+      "required": false
+    },
+    {
+      "id": "create:crimsite",
+      "required": false
+    },
+    {
+      "id": "create:ochrum",
+      "required": false
+    },
+    {
+      "id": "alexscaves:radrock",
+      "required": false
+    }
+  ]
+}

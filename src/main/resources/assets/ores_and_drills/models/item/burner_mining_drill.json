@@ -1,0 +1,44 @@
+{
+  "parent": "builtin/entity",
+  "gui_light": "front",
+  "textures": {
+    "particle": "ores_and_drills:block/burner_mining_drill"
+  },
+  "display": {
+    "gui": {
+      "rotation": [30, 45, 0],
+      "translation": [4, -4.5, 0],
+      "scale": [0.40625, 0.40625, 0.40625]
+    },
+    "ground": {
+      "rotation": [0, 0, 0],
+      "translation": [0.5, 3, 0.5],
+      "scale": [0.108333, 0.108333, 0.108333]
+    },
+    "fixed": {
+      "rotation": [0, 180, 0],
+      "translation": [-2.5, -4, 0],
+      "scale": [0.3, 0.3, 0.3]
+    },
+    "thirdperson_righthand": {
+      "rotation": [75, 45, 0],
+      "translation": [0, 2.5, 0],
+      "scale": [0.1625, 0.1625, 0.1625]
+    },
+    "thirdperson_lefthand": {
+      "rotation": [75, 225, 0],
+      "translation": [0, 2.5, 0],
+      "scale": [0.1625, 0.1625, 0.1625]
+    },
+    "firstperson_righthand": {
+      "rotation": [0, 45, 0],
+      "translation": [0, 0, 0],
+      "scale": [0.173333, 0.173333, 0.173333]
+    },
+    "firstperson_lefthand": {
+      "rotation": [0, 225, 0],
+      "translation": [0, 0, 0],
+      "scale": [0.173333, 0.173333, 0.173333]
+    }
+  }
+}
