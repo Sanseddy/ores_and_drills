@@ -13,7 +13,7 @@ public final class OreDepositConfig {
    
     // EN: Hard upper limit for the distance between large deposits, in blocks.
     // RU: Жёсткая верхняя граница расстояния между крупными залежами, в блоках.
-    public static final int MAX_LARGE_DEPOSIT_SPACING_LIMIT = 750;
+    public static final int MAX_LARGE_DEPOSIT_SPACING_LIMIT = 600;
 
     // EN: Maximum deposit-generation attempts per chunk; prevents lag spikes.
     // RU: Максимальное число попыток генерации залежей на чанк; защита от лагов.
@@ -54,15 +54,15 @@ public final class OreDepositConfig {
 
     // EN: Minimum combined TINY/SMALL frequency share so rare ores never disappear completely.
     // RU: Минимальная суммарная доля частоты для TINY/SMALL, чтобы редкая руда не исчезла полностью.
-    public static final double MIN_SMALL_DEPOSIT_FREQUENCY_SHARE = 0.0125D;
+    public static final double MIN_SMALL_DEPOSIT_FREQUENCY_SHARE = 0.005D;
 
     // EN: Base rare-ore penalty in small deposits; a higher value makes rare ores less common.
     // RU: Базовый штраф редких руд в маленьких залежах: больше число — редкие руды встречаются реже.
-    public static final double SMALL_DEPOSIT_RARITY_PENALTY = 2.5D;
+    public static final double SMALL_DEPOSIT_RARITY_PENALTY = 3.5D;
 
     // EN: Additional penalty for the very rarest ores in small deposits.
     // RU: Дополнительный штраф для самых редких руд в маленьких залежах.
-    public static final double VERY_RARE_ORE_PENALTY = 10.0D;
+    public static final double VERY_RARE_ORE_PENALTY = 15.0D;
 
     // EN: Additional-penalty curve; a higher value targets only the rarest ores more strongly.
     // RU: Кривая дополнительного штрафа: больше число сильнее выделяет только самые редкие руды.

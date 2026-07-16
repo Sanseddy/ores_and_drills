@@ -26,8 +26,8 @@ class DepositTierMathTest {
 
         assertProfileRange(tiny, 1, 2, 1, 4);
         assertProfileRange(small, 2, 6, 8, 16);
-        assertProfileRange(medium, 24, 56, 400, 1_000);
-        assertProfileRange(large, 100, 256, 2_500, 10_000);
+        assertProfileRange(medium, 24, 56, 1_600, 4_000);
+        assertProfileRange(large, 100, 256, 10_000, 40_000);
 
         for (DepositTierMath.TierProfile profile : distribution.profiles()) {
             assertTrue(profile.minimumBlockCount() >= DEFAULTS.minimumPossibleDepositBlocks());
@@ -54,10 +54,10 @@ class DepositTierMathTest {
         DepositTierMath.OreRange minimumSize = DepositTierMath.oreRange(24, medium);
         DepositTierMath.OreRange maximumSize = DepositTierMath.oreRange(56, medium);
 
-        assertEquals(400, minimumSize.minimumTotalOre());
-        assertEquals(1_000, minimumSize.maximumTotalOre());
-        assertEquals(400, maximumSize.minimumTotalOre());
-        assertEquals(1_000, maximumSize.maximumTotalOre());
+        assertEquals(1_600, minimumSize.minimumTotalOre());
+        assertEquals(4_000, minimumSize.maximumTotalOre());
+        assertEquals(1_600, maximumSize.minimumTotalOre());
+        assertEquals(4_000, maximumSize.maximumTotalOre());
         assertTrue(maximumSize.characteristicTotalOre() > minimumSize.characteristicTotalOre());
     }
 

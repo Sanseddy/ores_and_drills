@@ -9,7 +9,7 @@ final class DepositTierMath {
     /*
      * Four monotone curves replace a per-tier range table. Their global endpoints and sigmoid shape were
      * calibrated so the four currently ordered tiers resolve to the requested generation contract:
-     * blocks 1-2, 2-6, 24-56, 100-256 and ore 1-4, 8-16, 400-1000, 2500-10000.
+     * blocks 1-2, 2-6, 24-56, 100-256 and ore 1-4, 8-16, 1600-4000, 10000-40000.
      * A tier is still evaluated only from its normalized ordinal position, so the implementation does not
      * accumulate TINY_MIN_*, SMALL_MAX_* constants and remains well-defined if another tier is inserted.
      */
@@ -18,9 +18,9 @@ final class DepositTierMath {
     private static final RangeCurve MAXIMUM_BLOCK_CURVE =
             new RangeCurve(2.0D, 256.0D, 5.004285221965073D, 0.5523119579472633D);
     private static final RangeCurve MINIMUM_TOTAL_ORE_CURVE =
-            new RangeCurve(1.0D, 2_500.0D, 5.788809757681745D, 0.4837437023881306D);
+            new RangeCurve(1.0D, 10_000.0D, 7.383989677260686D, 0.48858235138048034D);
     private static final RangeCurve MAXIMUM_TOTAL_ORE_CURVE =
-            new RangeCurve(4.0D, 10_000.0D, 6.599956886783624D, 0.5539849271262954D);
+            new RangeCurve(4.0D, 40_000.0D, 8.096885733375872D, 0.5404351532851204D);
 
     private DepositTierMath() {
     }
