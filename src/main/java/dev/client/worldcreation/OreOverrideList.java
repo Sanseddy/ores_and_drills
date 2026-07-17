@@ -24,6 +24,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -618,28 +619,66 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
     }
 
     private static DimensionInfo dimensionInfo(List<ResourceLocation> members) {
-        Set<OreSpawnDimensions.SpawnDimension> keys = dimensionKeys(members);
+        Set<ResourceLocation> keys = dimensionKeys(members);
         List<Component> parts = new ArrayList<>();
-        if (keys.contains(OreSpawnDimensions.SpawnDimension.OVERWORLD)) {
-            parts.add(Component.translatable("dimension.minecraft.overworld"));
-        }
-        if (keys.contains(OreSpawnDimensions.SpawnDimension.NETHER)) {
-            parts.add(Component.translatable("dimension.minecraft.the_nether"));
-        }
-        if (keys.contains(OreSpawnDimensions.SpawnDimension.END)) {
-            parts.add(Component.translatable("dimension.minecraft.the_end"));
-        }
-        if (keys.contains(OreSpawnDimensions.SpawnDimension.UNKNOWN)) {
-            parts.add(Component.literal("?"));
-        }
+        keys.stream()
+                .sorted(Comparator.comparingInt(OreOverrideList::dimensionSortRank)
+                        .thenComparing(ResourceLocation::toString))
+                .map(OreOverrideList::dimensionName)
+                .forEach(parts::add);
         if (parts.isEmpty()) {
             parts.add(Component.literal("-"));
         }
         return new DimensionInfo(List.copyOf(parts));
     }
 
-    private static Set<OreSpawnDimensions.SpawnDimension> dimensionKeys(List<ResourceLocation> members) {
-        return OreSpawnDimensions.dimensionsFor(members);
+    private static Set<ResourceLocation> dimensionKeys(List<ResourceLocation> members) {
+        Set<ResourceLocation> observed = OreSpawnDimensions.dimensionIdsFor(members);
+        if (!observed.isEmpty()) {
+            return observed;
+        }
+
+        Set<ResourceLocation> tagged = new LinkedHashSet<>();
+        for (ResourceLocation member : members) {
+            Block block = BuiltInRegistries.BLOCK.get(member);
+            block.builtInRegistryHolder().tags().forEach(tag ->
+                    dimensionFromGroundTag(tag.location()).ifPresent(tagged::add));
+        }
+        return Set.copyOf(tagged);
+    }
+
+    private static Optional<ResourceLocation> dimensionFromGroundTag(ResourceLocation tagId) {
+        String namespace = tagId.getNamespace();
+        if ((!namespace.equals("c") && !namespace.equals("forge") && !namespace.equals("neoforge"))
+                || !tagId.getPath().startsWith("ores_in_ground/")) {
+            return Optional.empty();
+        }
+
+        String ground = tagId.getPath().substring("ores_in_ground/".length());
+        return switch (ground) {
+            case "stone", "deepslate" -> Optional.of(ResourceLocation.withDefaultNamespace("overworld"));
+            case "netherrack" -> Optional.of(ResourceLocation.withDefaultNamespace("the_nether"));
+            case "end_stone" -> Optional.of(ResourceLocation.withDefaultNamespace("the_end"));
+            default -> Optional.empty();
+        };
+    }
+
+    private static Component dimensionName(ResourceLocation dimensionId) {
+        String translationKey = "dimension." + dimensionId.getNamespace() + "."
+                + dimensionId.getPath().replace('/', '.');
+        return Component.translatableWithFallback(translationKey, dimensionId.toString());
+    }
+
+    private static int dimensionSortRank(ResourceLocation dimensionId) {
+        if (!dimensionId.getNamespace().equals("minecraft")) {
+            return 3;
+        }
+        return switch (dimensionId.getPath()) {
+            case "overworld" -> 0;
+            case "the_nether" -> 1;
+            case "the_end" -> 2;
+            default -> 3;
+        };
     }
 
     private static Component fit(Component component, int maxWidth) {

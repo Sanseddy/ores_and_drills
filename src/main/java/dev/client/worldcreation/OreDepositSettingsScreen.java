@@ -11,6 +11,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.worldselection.CreateWorldScreen;
+import net.minecraft.client.gui.screens.worldselection.WorldCreationContext;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -78,7 +79,11 @@ public final class OreDepositSettingsScreen extends Screen {
         }
 
         try {
-            OreSpawnDimensions.scanOriginalPlacedFeatures(createWorldScreen.getUiState().getSettings().worldgenLoadContext());
+            WorldCreationContext settings = createWorldScreen.getUiState().getSettings();
+            OreSpawnDimensions.scanOriginalPlacedFeatures(
+                    settings.worldgenLoadContext(),
+                    settings.selectedDimensions().bake(settings.datapackDimensions()).dimensions()
+            );
         } catch (RuntimeException exception) {
             OresAndDrillsMod.LOGGER.warn("Ore deposits: failed to scan ore worldgen data for the settings screen", exception);
         }

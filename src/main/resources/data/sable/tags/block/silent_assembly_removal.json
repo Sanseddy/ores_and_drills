@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    "ores_and_drills:burner_mining_drill",
+    "ores_and_drills:electric_mining_drill",
+    "ores_and_drills:advanced_mining_drill",
+    "ores_and_drills:ultimate_mining_drill"
+  ]
+}

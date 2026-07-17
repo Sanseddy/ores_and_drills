@@ -22,8 +22,10 @@ public final class OreDepositChunkData {
     private static final long ORE_MASK = (1L << ORE_BITS) - 1L;
     private static final int BASE_SHIFT = ORE_SHIFT + ORE_BITS;
     private static final long MISSING = Long.MIN_VALUE;
+    private static final Snapshot EMPTY_SNAPSHOT = new Snapshot(new int[0], new long[0]);
 
     private final Int2LongOpenHashMap entries = new Int2LongOpenHashMap();
+    private Snapshot cachedSnapshot;
 
     public OreDepositChunkData() {
         entries.defaultReturnValue(MISSING);
@@ -61,8 +63,27 @@ public final class OreDepositChunkData {
             int richnessReferenceAmount,
             int tier
     ) {
+        putIfChanged(pos, baseIndex, oreIndex, remainingOre, initialOre, initialRichness, richnessReferenceAmount, tier);
+    }
+
+    synchronized boolean putIfChanged(
+            BlockPos pos,
+            int baseIndex,
+            int oreIndex,
+            int remainingOre,
+            int initialOre,
+            int initialRichness,
+            int richnessReferenceAmount,
+            int tier
+    ) {
         int key = localKey(pos);
-        entries.put(key, pack(baseIndex, oreIndex, remainingOre, initialOre, tier));
+        long packed = pack(baseIndex, oreIndex, remainingOre, initialOre, tier);
+        long previous = entries.put(key, packed);
+        if (previous != MISSING && previous == packed) {
+            return false;
+        }
+        cachedSnapshot = null;
+        return true;
     }
 
     /**
@@ -71,19 +92,31 @@ public final class OreDepositChunkData {
      * one of them made that otherwise local operation needlessly expensive on decoration workers.
      */
     public synchronized void putGeneratedBatch(Iterable<OreDepositData.GeneratedDeposit> deposits) {
+        putGeneratedBatchIfChanged(deposits);
+    }
+
+    synchronized boolean putGeneratedBatchIfChanged(Iterable<OreDepositData.GeneratedDeposit> deposits) {
+        boolean changed = false;
         for (OreDepositData.GeneratedDeposit deposit : deposits) {
             BlockPos pos = deposit.pos();
             int amount = Math.max(0, deposit.amount());
-            entries.put(
-                    localKey(pos),
-                    pack(deposit.baseIndex(), deposit.oreIndex(), amount, amount, deposit.tier())
-            );
+            long packed = pack(deposit.baseIndex(), deposit.oreIndex(), amount, amount, deposit.tier());
+            long previous = entries.put(localKey(pos), packed);
+            changed |= previous == MISSING || previous != packed;
         }
+        if (changed) {
+            cachedSnapshot = null;
+        }
+        return changed;
     }
 
     public synchronized boolean remove(BlockPos pos) {
         int key = localKey(pos);
-        return entries.remove(key) != MISSING;
+        if (entries.remove(key) == MISSING) {
+            return false;
+        }
+        cachedSnapshot = null;
+        return true;
     }
 
     public synchronized boolean isEmpty() {
@@ -113,7 +146,19 @@ public final class OreDepositChunkData {
         return new BlockPos((chunkX << 4) + localX, y, (chunkZ << 4) + localZ);
     }
 
+    /**
+     * Returns immutable-by-convention arrays shared by disk serialization and attachment sync.
+     * A new snapshot is materialized only after the map has actually changed.
+     */
     public synchronized Snapshot snapshot() {
+        if (cachedSnapshot != null) {
+            return cachedSnapshot;
+        }
+        if (entries.isEmpty()) {
+            cachedSnapshot = EMPTY_SNAPSHOT;
+            return cachedSnapshot;
+        }
+
         int size = entries.size();
         int[] keys = new int[size];
         long[] values = new long[size];
@@ -123,7 +168,8 @@ public final class OreDepositChunkData {
             values[index] = entry.getLongValue();
             index++;
         }
-        return new Snapshot(keys, values);
+        cachedSnapshot = new Snapshot(keys, values);
+        return cachedSnapshot;
     }
 
     public synchronized void load(int[] keys, long[] values) {
@@ -132,6 +178,7 @@ public final class OreDepositChunkData {
 
     public synchronized void load(int[] keys, long[] values, int[] richnessReferenceValues) {
         entries.clear();
+        cachedSnapshot = null;
         int size = Math.min(keys.length, values.length);
         for (int index = 0; index < size; index++) {
             if (values[index] != MISSING) {

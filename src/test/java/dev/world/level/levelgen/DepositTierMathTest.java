@@ -12,7 +12,7 @@ class DepositTierMathTest {
     private static final double EPSILON = 1.0E-9D;
 
     private static final DepositTierMath.Parameters DEFAULTS = new DepositTierMath.Parameters(
-            1, 360,
+            1, 720,
             3.0D, 0.5D, 0.5D
     );
 
@@ -26,8 +26,8 @@ class DepositTierMathTest {
 
         assertProfileRange(tiny, 1, 2, 1, 4);
         assertProfileRange(small, 2, 6, 8, 16);
-        assertProfileRange(medium, 24, 56, 1_600, 4_000);
-        assertProfileRange(large, 100, 256, 10_000, 40_000);
+        assertProfileRange(medium, 72, 168, 4_000, 10_000);
+        assertProfileRange(large, 320, 720, 40_000, 160_000);
 
         for (DepositTierMath.TierProfile profile : distribution.profiles()) {
             assertTrue(profile.minimumBlockCount() >= DEFAULTS.minimumPossibleDepositBlocks());
@@ -51,13 +51,13 @@ class DepositTierMathTest {
     @Test
     void actualReserveUsesActualBlockCountAndAlwaysFundsEveryBlock() {
         DepositTierMath.TierProfile medium = DepositTierMath.profile(DepositTier.MEDIUM, DEFAULTS);
-        DepositTierMath.OreRange minimumSize = DepositTierMath.oreRange(24, medium);
-        DepositTierMath.OreRange maximumSize = DepositTierMath.oreRange(56, medium);
+        DepositTierMath.OreRange minimumSize = DepositTierMath.oreRange(72, medium);
+        DepositTierMath.OreRange maximumSize = DepositTierMath.oreRange(168, medium);
 
-        assertEquals(1_600, minimumSize.minimumTotalOre());
-        assertEquals(4_000, minimumSize.maximumTotalOre());
-        assertEquals(1_600, maximumSize.minimumTotalOre());
-        assertEquals(4_000, maximumSize.maximumTotalOre());
+        assertEquals(4_000, minimumSize.minimumTotalOre());
+        assertEquals(10_000, minimumSize.maximumTotalOre());
+        assertEquals(4_000, maximumSize.minimumTotalOre());
+        assertEquals(10_000, maximumSize.maximumTotalOre());
         assertTrue(maximumSize.characteristicTotalOre() > minimumSize.characteristicTotalOre());
     }
 

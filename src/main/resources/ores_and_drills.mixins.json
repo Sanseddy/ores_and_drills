@@ -13,7 +13,11 @@
     "LevelMixin",
     "PrimaryLevelDataMixin",
     "NoiseGeneratorSettingsMixin",
-    "NoiseRouterDataMixin"
+    "NoiseRouterDataMixin",
+    "SableAssemblyTransformAccessor",
+    "SableSubLevelAssemblyHelperMixin",
+    "SableSubLevelPlayerChunkSenderMixin",
+    "SimulatedPhysicsAssemblerMixin"
   ],
   "client": [
     "CreateWorldScreenWorldTabMixin",

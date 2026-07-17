@@ -1,5 +1,6 @@
 package dev.world.block;
 
+import dev.compat.sable.SableAssemblyTransfer;
 import dev.world.block.entity.AbstractDrillBlockEntity;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
@@ -16,7 +17,9 @@ import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.RenderShape;
+import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
@@ -37,6 +40,10 @@ public abstract class AbstractDrillBlock extends BaseEntityBlock {
         this.structure = structure;
         this.menuOpener = menuOpener;
         registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH));
+    }
+
+    public DrillStructure structure() {
+        return structure;
     }
 
     @Override
@@ -64,7 +71,7 @@ public abstract class AbstractDrillBlock extends BaseEntityBlock {
 
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
-        if (!state.is(newState.getBlock()) && !level.isClientSide) {
+        if (!state.is(newState.getBlock()) && !level.isClientSide && !SableAssemblyTransfer.isMoving(level, pos)) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof AbstractDrillBlockEntity drillBlockEntity) {
                 Containers.dropContents(level, pos, drillBlockEntity.getInventory());
@@ -72,6 +79,16 @@ public abstract class AbstractDrillBlock extends BaseEntityBlock {
             structure.removeParts(level, pos, state.getValue(FACING));
         }
         super.onRemove(state, level, pos, newState, movedByPiston);
+    }
+
+    @Override
+    protected BlockState rotate(BlockState state, Rotation rotation) {
+        return state.setValue(FACING, rotation.rotate(state.getValue(FACING)));
+    }
+
+    @Override
+    protected BlockState mirror(BlockState state, Mirror mirror) {
+        return rotate(state, mirror.getRotation(state.getValue(FACING)));
     }
 
     @Override

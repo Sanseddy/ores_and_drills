@@ -1,6 +1,7 @@
 package dev.world.block;
 
 import dev.world.level.levelgen.OreDepositData;
+import dev.world.level.levelgen.OreDepositOrePalette;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -18,6 +19,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.material.FluidState;
+import net.minecraft.world.phys.HitResult;
 
 import java.util.function.BiConsumer;
 
@@ -59,6 +61,40 @@ public class OreDepositBlock extends Block {
     @Override
     public SoundType getSoundType(BlockState state, LevelReader level, BlockPos pos, Entity entity) {
         return OreDepositData.baseBlockStateAt(level, pos).getSoundType(level, pos, entity);
+    }
+
+    /**
+     * A deposit is a visual container for one concrete ore stored in its chunk attachment. Returning
+     * that ore here lets Jade/recipe-viewer integrations use the real recipe subject rather than the
+     * technical ore_deposit item.
+     */
+    @Override
+    public ItemStack getCloneItemStack(LevelReader level, BlockPos pos, BlockState state) {
+        return pickedOre(level, pos, super.getCloneItemStack(level, pos, state));
+    }
+
+    @Override
+    public ItemStack getCloneItemStack(
+            BlockState state,
+            HitResult target,
+            LevelReader level,
+            BlockPos pos,
+            Player player
+    ) {
+        return pickedOre(level, pos, super.getCloneItemStack(state, target, level, pos, player));
+    }
+
+    private static ItemStack pickedOre(LevelReader level, BlockPos pos, ItemStack fallback) {
+        if (level instanceof Level concreteLevel) {
+            Block ore = OreDepositData.oreBlockAt(concreteLevel, pos);
+            if (ore != null) {
+                ItemStack stack = new ItemStack(ore.asItem());
+                if (!stack.isEmpty()) {
+                    return stack;
+                }
+            }
+        }
+        return fallback;
     }
 
     @Override

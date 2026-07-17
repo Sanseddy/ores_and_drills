@@ -25,7 +25,7 @@ public final class OreDepositConfig {
   
     // EN: Absolute maximum number of blocks in one deposit; protects chunk data and world generation.
     // RU: Абсолютное максимальное число блоков в залежи; защита данных чанка и генерации.
-    public static final int MAX_DEPOSIT_BLOCKS = 360;
+    public static final int MAX_DEPOSIT_BLOCKS = 720;
 
  
     // EN: How much larger deposit tiers are rarer; a higher value means fewer large deposits.

@@ -25,9 +25,13 @@ import net.minecraft.world.level.LevelReader;
 
 import java.util.List;
 import java.util.ArrayList;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import javax.annotation.Nullable;
 
@@ -38,6 +42,7 @@ public final class OreDepositData {
     private static final int MIN_RICHNESS = 0;
     private static final int MAX_RICHNESS = FILL_STAGE_COUNT - 1;
     private static final int[] LEGACY_RECOVERY_AMOUNTS = {250, 500, 1_000, 2_000, 4_000, 8_000, 12_000, 16_000};
+    private static final ThreadLocal<Deque<PhysicalTransferBatch>> PHYSICAL_TRANSFERS = new ThreadLocal<>();
 
     private OreDepositData() {
     }
@@ -50,9 +55,10 @@ public final class OreDepositData {
         ChunkAccess chunk = level.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         OreDepositChunkData data = chunk.getData(ModAttachments.ORE_DEPOSITS);
         int clampedOre = Math.max(0, remainingOre);
-        data.put(pos, baseIndex, oreIndex, clampedOre, clampedOre, initialRichness, richnessReferenceAmount, tier);
-        chunk.setUnsaved(true);
-        chunk.syncData(ModAttachments.ORE_DEPOSITS);
+        if (data.putIfChanged(pos, baseIndex, oreIndex, clampedOre, clampedOre, initialRichness, richnessReferenceAmount, tier)) {
+            chunk.setUnsaved(true);
+            chunk.syncData(ModAttachments.ORE_DEPOSITS);
+        }
     }
 
     /**
@@ -79,12 +85,17 @@ public final class OreDepositData {
             BlockPos pos = chunkDeposits.getFirst().pos();
             ChunkAccess chunk = level.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
             OreDepositChunkData data = chunk.getData(ModAttachments.ORE_DEPOSITS);
-            data.putGeneratedBatch(chunkDeposits);
-            chunk.setUnsaved(true);
+            if (data.putGeneratedBatchIfChanged(chunkDeposits)) {
+                chunk.setUnsaved(true);
+            }
         }
     }
 
     public static void remove(ServerLevel level, BlockPos pos) {
+        if (isPhysicalTransferSource(level, pos)) {
+            return;
+        }
+
         ChunkAccess chunk = chunk(level, pos);
         OreDepositChunkData data = chunk.getExistingDataOrNull(ModAttachments.ORE_DEPOSITS);
         OreDepositChunkData.Entry entry = data != null ? data.get(pos) : null;
@@ -106,9 +117,134 @@ public final class OreDepositData {
         }
     }
 
+    /**
+     * Captures ore entries before Sable replaces their source blocks with air. Ore data lives in a
+     * position-keyed chunk attachment rather than in the BlockState, so Sable cannot move it as part of
+     * its normal block/block-entity copy pass.
+     */
+    public static void beginPhysicalTransfer(
+            ServerLevel sourceLevel,
+            ServerLevel destinationLevel,
+            Function<BlockPos, BlockPos> positionTransform,
+            Iterable<BlockPos> positions
+    ) {
+        List<PhysicalTransfer> transfers = new ArrayList<>();
+        Set<Long> sourcePositions = new HashSet<>();
+
+        for (BlockPos sourcePos : positions) {
+            if (!sourceLevel.getBlockState(sourcePos).is(ModBlocks.ORE_DEPOSIT.get())) {
+                continue;
+            }
+
+            OreDepositChunkData.Entry entry = entry(sourceLevel, sourcePos, false);
+            if (entry == null) {
+                continue;
+            }
+
+            BlockPos immutableSource = sourcePos.immutable();
+            transfers.add(new PhysicalTransfer(
+                    immutableSource,
+                    positionTransform.apply(immutableSource).immutable(),
+                    entry
+            ));
+            sourcePositions.add(immutableSource.asLong());
+        }
+
+        Deque<PhysicalTransferBatch> batches = PHYSICAL_TRANSFERS.get();
+        if (batches == null) {
+            batches = new ArrayDeque<>();
+            PHYSICAL_TRANSFERS.set(batches);
+        }
+        batches.push(new PhysicalTransferBatch(
+                sourceLevel,
+                destinationLevel,
+                sourcePositions,
+                transfers
+        ));
+    }
+
+    /** Completes the most recent Sable assembly transfer and synchronizes every affected chunk once. */
+    public static void finishPhysicalTransfer() {
+        Deque<PhysicalTransferBatch> batches = PHYSICAL_TRANSFERS.get();
+        if (batches == null || batches.isEmpty()) {
+            return;
+        }
+
+        PhysicalTransferBatch batch = batches.pop();
+        Set<ChunkAccess> changedChunks = new HashSet<>();
+        for (PhysicalTransfer transfer : batch.transfers()) {
+            if (batch.sourceLevel().getBlockState(transfer.sourcePos()).is(ModBlocks.ORE_DEPOSIT.get())
+                    || !batch.destinationLevel().getBlockState(transfer.destinationPos()).is(ModBlocks.ORE_DEPOSIT.get())) {
+                continue;
+            }
+
+            ChunkAccess sourceChunk = chunk(batch.sourceLevel(), transfer.sourcePos());
+            OreDepositChunkData sourceData = sourceChunk.getExistingDataOrNull(ModAttachments.ORE_DEPOSITS);
+            if (sourceData != null && sourceData.remove(transfer.sourcePos())) {
+                sourceChunk.setUnsaved(true);
+                changedChunks.add(sourceChunk);
+            }
+
+            ChunkAccess destinationChunk = chunk(batch.destinationLevel(), transfer.destinationPos());
+            OreDepositChunkData destinationData = destinationChunk.getData(ModAttachments.ORE_DEPOSITS);
+            OreDepositChunkData.Entry entry = transfer.entry();
+            destinationData.put(
+                    transfer.destinationPos(),
+                    entry.baseIndex(),
+                    entry.oreIndex(),
+                    entry.remainingOre(),
+                    entry.initialOre(),
+                    entry.initialRichness(),
+                    entry.richnessReferenceAmount(),
+                    entry.tier()
+            );
+            destinationChunk.setUnsaved(true);
+            changedChunks.add(destinationChunk);
+        }
+
+        for (ChunkAccess changedChunk : changedChunks) {
+            changedChunk.syncData(ModAttachments.ORE_DEPOSITS);
+        }
+        if (batches.isEmpty()) {
+            PHYSICAL_TRANSFERS.remove();
+        }
+    }
+
+    private static boolean isPhysicalTransferSource(ServerLevel level, BlockPos pos) {
+        Deque<PhysicalTransferBatch> batches = PHYSICAL_TRANSFERS.get();
+        if (batches == null) {
+            return false;
+        }
+        for (PhysicalTransferBatch batch : batches) {
+            if (batch.sourceLevel() == level && batch.sourcePositions().contains(pos.asLong())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static ResourceLocation oreBlockIdAt(ServerLevel level, BlockPos pos) {
         OreDepositChunkData.Entry entry = entry(level, pos, true);
         return entry != null ? oreId(level, entry.oreIndex()) : null;
+    }
+
+    /**
+     * Resolves a deposit's real ore on either side. The client uses its synchronized palette because
+     * the per-position attachment is intentionally not encoded into the shared block state.
+     */
+    @Nullable
+    public static Block oreBlockAt(Level level, BlockPos pos) {
+        if (level instanceof ServerLevel serverLevel) {
+            ResourceLocation oreId = oreBlockIdAt(serverLevel, pos);
+            if (oreId == null) {
+                return null;
+            }
+            Block ore = BuiltInRegistries.BLOCK.get(oreId);
+            return ore == Blocks.AIR ? null : ore;
+        }
+
+        Visual visual = visualAt(level, pos);
+        return visual == null ? null : OreDepositOrePalette.oreAt(visual.oreIndex());
     }
 
     public static DepositStats statsAt(ServerLevel level, BlockPos pos) {
@@ -458,6 +594,17 @@ public final class OreDepositData {
     }
 
     public record Visual(int baseIndex, int oreIndex, int richness) {
+    }
+
+    private record PhysicalTransfer(BlockPos sourcePos, BlockPos destinationPos, OreDepositChunkData.Entry entry) {
+    }
+
+    private record PhysicalTransferBatch(
+            ServerLevel sourceLevel,
+            ServerLevel destinationLevel,
+            Set<Long> sourcePositions,
+            List<PhysicalTransfer> transfers
+    ) {
     }
 
     private static int clampRichness(int richness) {

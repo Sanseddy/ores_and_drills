@@ -74,13 +74,13 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
     static final int FEATURE_WRITE_RADIUS_CHUNKS = 1;
     /** A persisted point may lie at either edge of a lens, so its complete footprint can span two radii. */
     public static final int MAX_DEPOSIT_FOOTPRINT_DIAMETER = MAX_UNDERGROUND_RADIUS * 2;
-    private static final int MAX_UNDERGROUND_BLOCKS = 360;
+    private static final int MAX_UNDERGROUND_BLOCKS = 720;
     /**
      * Compatibility guard for extreme per-ore sliders. A single chunk can receive blocks from several
      * neighbouring deposit origins; keeping the attachment payload bounded prevents a maxed-out preset
      * from producing pathological chunk packets (especially with optimized palette implementations).
      */
-    private static final int MAX_DEPOSIT_ENTRIES_PER_CHUNK = 256;
+    private static final int MAX_DEPOSIT_ENTRIES_PER_CHUNK = 360;
     /**
      * TINY/SMALL deposits inherit arbitrary third-party placed-feature counts. Keep the expensive
      * cave-wall search bounded when every ore is set to its maximum frequency. The configurable
@@ -93,6 +93,8 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
     public static final int MAX_UNDERGROUND_DEPTH = 5;
     private static final double CHUNK_CENTER_TO_CORNER_DISTANCE = Math.sqrt(8.0D * 8.0D + 8.0D * 8.0D);
     private static final double EDGE_ORE_FACTOR = 0.2D;
+    private static final AtomicBoolean INVALID_DEPOSIT_STATE_LOGGED = new AtomicBoolean();
+    private static volatile Boolean cachedDepositStatesRegistered;
     /**
      * Minimum clearance (in blocks) an ore position must keep above the dimension's actual floor
      * ({@link net.minecraft.world.level.LevelHeightAccessor#getMinBuildHeight()}, read per-dimension rather
@@ -986,11 +988,38 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
         return false;
     }
 
+    private static boolean depositStatesRegistered() {
+        Boolean cached = cachedDepositStatesRegistered;
+        if (cached != null) {
+            return cached;
+        }
+
+        Block depositBlock = ModBlocks.ORE_DEPOSIT.get();
+        boolean registered = depositBlock.getStateDefinition().getPossibleStates().stream()
+                .allMatch(state -> Block.BLOCK_STATE_REGISTRY.getId(state) >= 0);
+        cachedDepositStatesRegistered = registered;
+        return registered;
+    }
+
     @Override
     public boolean place(FeaturePlaceContext<Configuration> context) {
         WorldGenLevel level = context.level();
         RandomSource random = context.random();
         Configuration config = context.config();
+
+        // A local palette serializes each state through Block.BLOCK_STATE_REGISTRY. An id of -1 is
+        // written verbatim and disconnects the client while it reads the chunk. This should never be
+        // possible after normal registry setup, but checking both refresh variants keeps a broken
+        // optional compatibility mixin (notably a chunk-container replacement) from poisoning a save.
+        if (!depositStatesRegistered()) {
+            if (INVALID_DEPOSIT_STATE_LOGGED.compareAndSet(false, true)) {
+                OresAndDrillsMod.LOGGER.error(
+                        "Ore deposit generation disabled: {} contains a block state without a network registry id",
+                        ModBlocks.ORE_DEPOSIT.getId()
+                );
+            }
+            return false;
+        }
 
         BlockPos origin = context.origin();
         int chunkX = origin.getX() >> 4;
@@ -1907,11 +1936,7 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
             double tierPosition,
             RandomSource random
     ) {
-        int depth = Mth.clamp(
-                1 + (int) Math.round(Math.pow(tierPosition, 1.3D) * (MAX_UNDERGROUND_DEPTH - 1)),
-                1,
-                MAX_UNDERGROUND_DEPTH
-        );
+        int depth = DepositTierMath.verticalLayersForTier(tier, tierPosition, MAX_UNDERGROUND_DEPTH);
         double baseRadius = Math.sqrt(Math.max(1, blockCount) / (Math.PI * depth * 0.55D)) + 1.0D;
         double anisotropy = 0.85D + random.nextDouble() * 0.30D;
         int tierMaximumRadius = DepositLayouts.forTier(
@@ -1921,6 +1946,7 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
         int radiusZ = Mth.clamp(Mth.ceil(baseRadius / anisotropy), 1, tierMaximumRadius);
         return new ShapeDimensions(radiusX, radiusZ, depth);
     }
+
 
     /**
      * Resolves an eligible attempt for the configured tier. TINY/SMALL thin this material's own original

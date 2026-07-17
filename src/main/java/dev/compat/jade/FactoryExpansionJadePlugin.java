@@ -1,6 +1,7 @@
 package dev.compat.jade;
 
 import dev.OresAndDrillsMod;
+import dev.registry.ModBlocks;
 import dev.world.block.AbstractDrillBlock;
 import dev.world.block.AbstractDrillPartBlock;
 import dev.world.block.OreDepositBlock;
@@ -23,6 +24,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec2;
 import snownee.jade.api.BlockAccessor;
+import snownee.jade.api.Accessor;
 import snownee.jade.api.IBlockComponentProvider;
 import snownee.jade.api.IServerDataProvider;
 import snownee.jade.api.ITooltip;
@@ -32,9 +34,12 @@ import snownee.jade.api.IWailaPlugin;
 import snownee.jade.api.JadeIds;
 import snownee.jade.api.WailaPlugin;
 import snownee.jade.api.config.IPluginConfig;
-import snownee.jade.api.ui.BoxStyle;
 import snownee.jade.api.ui.IElement;
 import snownee.jade.api.ui.IElementHelper;
+import snownee.jade.api.view.EnergyView;
+import snownee.jade.api.view.IServerExtensionProvider;
+import snownee.jade.api.view.ViewGroup;
+import snownee.jade.util.JadeForgeUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -48,8 +53,6 @@ public class FactoryExpansionJadePlugin implements IWailaPlugin {
     private static final String ACTIVE_KEY = "Active";
     private static final String MINING_PROGRESS_KEY = "MiningProgress";
     private static final String MINING_DURATION_KEY = "MiningDuration";
-    private static final String ENERGY_STORED_KEY = "EnergyStored";
-    private static final String ENERGY_CAPACITY_KEY = "EnergyCapacity";
     private static final String PRODUCTIVITY_PERCENT_KEY = "ProductivityPercent";
     private static final String PRODUCTIVITY_PROGRESS_KEY = "ProductivityProgress";
 
@@ -63,11 +66,15 @@ public class FactoryExpansionJadePlugin implements IWailaPlugin {
 
     private static final MiningDrillProvider PROVIDER = new MiningDrillProvider();
     private static final OreDepositProvider ORE_DEPOSIT_PROVIDER = new OreDepositProvider();
+    private static final DrillPartEnergyProvider DRILL_PART_ENERGY_PROVIDER = new DrillPartEnergyProvider();
+    private static final DrillPartFluidProvider DRILL_PART_FLUID_PROVIDER = new DrillPartFluidProvider();
 
     @Override
     public void register(IWailaCommonRegistration registration) {
         registration.registerBlockDataProvider(PROVIDER, AbstractDrillBlock.class);
         registration.registerBlockDataProvider(PROVIDER, AbstractDrillPartBlock.class);
+        registration.registerEnergyStorage(DRILL_PART_ENERGY_PROVIDER, AbstractDrillPartBlock.class);
+        registration.registerFluidStorage(DRILL_PART_FLUID_PROVIDER, AbstractDrillPartBlock.class);
         registration.registerBlockDataProvider(ORE_DEPOSIT_PROVIDER, OreDepositBlock.class);
     }
 
@@ -75,16 +82,20 @@ public class FactoryExpansionJadePlugin implements IWailaPlugin {
     public void registerClient(IWailaClientRegistration registration) {
         registration.registerBlockComponent(PROVIDER, AbstractDrillBlock.class);
         registration.registerBlockComponent(PROVIDER, AbstractDrillPartBlock.class);
+        registration.registerBlockIcon(PROVIDER, AbstractDrillPartBlock.class);
         registration.registerBlockComponent(ORE_DEPOSIT_PROVIDER, OreDepositBlock.class);
-        registration.addTooltipCollectedCallback((tooltip, accessor) -> {
-            if (accessor instanceof BlockAccessor blockAccessor
-                    && blockAccessor.getBlock() instanceof OreDepositBlock) {
-                tooltip.setIcon(null);
-            }
-        });
+        registration.usePickedResult(ModBlocks.ORE_DEPOSIT.get());
     }
 
     private static class MiningDrillProvider implements IBlockComponentProvider, IServerDataProvider<BlockAccessor> {
+        @Override
+        public IElement getIcon(BlockAccessor accessor, IPluginConfig config, IElement currentIcon) {
+            if (accessor.getBlock() instanceof AbstractDrillPartBlock drillPart) {
+                return IElementHelper.get().item(drillPart.structure().cloneItemStack());
+            }
+            return currentIcon;
+        }
+
         @Override
         public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
             CompoundTag data = accessor.getServerData();
@@ -107,21 +118,6 @@ public class FactoryExpansionJadePlugin implements IWailaPlugin {
                     miningDuration > 0 ? miningProgress * 100 / miningDuration : 0
             ));
 
-            if (accessor.getBlockState().getBlock() instanceof AbstractDrillPartBlock && data.contains(ENERGY_CAPACITY_KEY)) {
-                int energyStored = data.getInt(ENERGY_STORED_KEY);
-                int energyCapacity = data.getInt(ENERGY_CAPACITY_KEY);
-                if (energyCapacity > 0) {
-                    IElementHelper helper = IElementHelper.get();
-                    tooltip.add(helper.progress(
-                            Math.min(1.0F, (float) energyStored / energyCapacity),
-                            Component.translatable("tooltip.ores_and_drills.mining_drill.energy", energyStored, energyCapacity),
-                            helper.progressStyle().color(0xFFFF0000, 0xFF330000).textColor(0xFFFFFFFF),
-                            BoxStyle.getNestedBox(),
-                            true
-                    ));
-                }
-            }
-
             if (data.getInt(PRODUCTIVITY_PERCENT_KEY) > 0) {
                 tooltip.add(Component.translatable(
                         "tooltip.ores_and_drills.mining_drill.productivity",
@@ -143,8 +139,6 @@ public class FactoryExpansionJadePlugin implements IWailaPlugin {
             tag.putInt(MINING_DURATION_KEY, status.getMiningDuration());
 
             if (origin instanceof AbstractEnergyDrillBlockEntity energyDrill) {
-                tag.putInt(ENERGY_STORED_KEY, energyDrill.getEnergyStored());
-                tag.putInt(ENERGY_CAPACITY_KEY, energyDrill.getEnergyCapacity());
                 tag.putInt(PRODUCTIVITY_PERCENT_KEY, energyDrill.getProductivityPercent());
                 tag.putInt(PRODUCTIVITY_PROGRESS_KEY, energyDrill.getVisibleProductivityProgress());
             }
@@ -180,8 +174,6 @@ public class FactoryExpansionJadePlugin implements IWailaPlugin {
                 return;
             }
 
-            IElementHelper helper = IElementHelper.get();
-            tooltip.add(helper.item(stack));
             tooltip.append(stack.getHoverName());
 
             int remainingOre = data.getInt(ORE_REMAINING_KEY);
@@ -276,14 +268,81 @@ public class FactoryExpansionJadePlugin implements IWailaPlugin {
         }
     }
 
+    /**
+     * A drill part has no block entity of its own, while Jade's built-in providers inspect the block
+     * currently under the crosshair. Forward the controller's storage through the exact data format
+     * consumed by Jade's normal universal energy widget instead of maintaining a second FE tooltip.
+     */
+    private static class DrillPartEnergyProvider implements IServerExtensionProvider<CompoundTag> {
+        @Override
+        public List<ViewGroup<CompoundTag>> getGroups(Accessor<?> accessor) {
+            AbstractEnergyDrillBlockEntity drill = resolveEnergyDrill(accessor);
+            if (drill == null) {
+                return List.of();
+            }
+
+            ViewGroup<CompoundTag> group = new ViewGroup<>(List.of(EnergyView.of(
+                    drill.getEnergyStorage().getEnergyStored(),
+                    drill.getEnergyStorage().getMaxEnergyStored()
+            )));
+            group.getExtraData().putString("Unit", "FE");
+            return List.of(group);
+        }
+
+        @Override
+        public boolean shouldRequestData(Accessor<?> accessor) {
+            return resolveEnergyDrill(accessor) != null;
+        }
+
+        @Override
+        public ResourceLocation getUid() {
+            return JadeIds.UNIVERSAL_ENERGY_STORAGE_DEFAULT;
+        }
+    }
+
+    /**
+     * Uses Jade's own fluid serializer, so all standard Jade settings and rendering stay intact while
+     * the data source is the controller rather than the part that was targeted.
+     */
+    private static class DrillPartFluidProvider implements IServerExtensionProvider<CompoundTag> {
+        @Override
+        public List<ViewGroup<CompoundTag>> getGroups(Accessor<?> accessor) {
+            AbstractEnergyDrillBlockEntity drill = resolveEnergyDrill(accessor);
+            return drill == null ? List.of() : JadeForgeUtils.fromFluidHandler(drill.getFluidHandler());
+        }
+
+        @Override
+        public boolean shouldRequestData(Accessor<?> accessor) {
+            return resolveEnergyDrill(accessor) != null;
+        }
+
+        @Override
+        public ResourceLocation getUid() {
+            return JadeIds.UNIVERSAL_FLUID_STORAGE_DEFAULT;
+        }
+    }
+
+    private static AbstractEnergyDrillBlockEntity resolveEnergyDrill(Accessor<?> accessor) {
+        return accessor instanceof BlockAccessor blockAccessor
+                && resolveOrigin(blockAccessor) instanceof AbstractEnergyDrillBlockEntity drill
+                ? drill
+                : null;
+    }
+
     private static BlockEntity resolveOrigin(BlockAccessor accessor) {
         BlockEntity blockEntity = accessor.getBlockEntity();
         if (blockEntity instanceof AbstractDrillBlockEntity) {
             return blockEntity;
         }
 
-        if (accessor.getBlockState().getBlock() instanceof AbstractDrillPartBlock part) {
-            return accessor.getLevel().getBlockEntity(part.structure().originFromPart(accessor.getPosition(), accessor.getBlockState()));
+        BlockState state = accessor.getBlockState();
+        if (state.getBlock() instanceof AbstractDrillPartBlock drillPart
+                && state.hasProperty(AbstractDrillBlock.FACING)) {
+            var origin = drillPart.structure().originFromPart(accessor.getPosition(), state);
+            BlockState originState = accessor.getLevel().getBlockState(origin);
+            if (drillPart.structure().isMainBlock(originState)) {
+                return accessor.getLevel().getBlockEntity(origin);
+            }
         }
 
         return null;

@@ -9,14 +9,15 @@ final class DepositTierMath {
     /*
      * Four monotone curves replace a per-tier range table. Their global endpoints and sigmoid shape were
      * calibrated so the four currently ordered tiers resolve to the requested generation contract:
-     * blocks 1-2, 2-6, 24-56, 100-256 and ore 1-4, 8-16, 1600-4000, 10000-40000.
+     * blocks 1-2, 2-6, 72-168, 320-720 and ore 1-4, 8-16, 4000-10000, 40000-160000.
+     * The larger MEDIUM/LARGE block budgets expand their derived radii on X/Z while tier depth stays fixed.
      * A tier is still evaluated only from its normalized ordinal position, so the implementation does not
      * accumulate TINY_MIN_*, SMALL_MAX_* constants and remains well-defined if another tier is inserted.
      */
     private static final RangeCurve MINIMUM_BLOCK_CURVE =
-            new RangeCurve(1.0D, 100.0D, 7.04635905875494D, 0.5701611307530895D);
+            new RangeCurve(1.0D, 160.0D, 8.72D, 0.54D);
     private static final RangeCurve MAXIMUM_BLOCK_CURVE =
-            new RangeCurve(2.0D, 256.0D, 5.004285221965073D, 0.5523119579472633D);
+            new RangeCurve(2.0D, 360.0D, 7.13D, 0.506D);
     private static final RangeCurve MINIMUM_TOTAL_ORE_CURVE =
             new RangeCurve(1.0D, 10_000.0D, 7.383989677260686D, 0.48858235138048034D);
     private static final RangeCurve MAXIMUM_TOTAL_ORE_CURVE =
@@ -27,13 +28,14 @@ final class DepositTierMath {
 
     static TierProfile profile(DepositTier tier, Parameters parameters) {
         double tierPosition = tier.normalizedPosition();
-        int minimumBlockCount = Math.max(
+        double footprintScale = rareTierScale(tier, tierPosition, 1.5D, 2.0D);
+        int minimumBlockCount = Math.min(parameters.maximumSafeDepositBlocks(), Math.max(
                 parameters.minimumPossibleDepositBlocks(),
-                (int) sampleRangeCurve(MINIMUM_BLOCK_CURVE, tierPosition)
-        );
+                (int) Math.round(sampleRangeCurve(MINIMUM_BLOCK_CURVE, tierPosition) * footprintScale)
+        ));
         int maximumBlockCount = Math.min(
                 parameters.maximumSafeDepositBlocks(),
-                (int) sampleRangeCurve(MAXIMUM_BLOCK_CURVE, tierPosition)
+                (int) Math.round(sampleRangeCurve(MAXIMUM_BLOCK_CURVE, tierPosition) * footprintScale)
         );
         maximumBlockCount = Math.max(minimumBlockCount, maximumBlockCount);
         double characteristicBlockCount = Math.sqrt((double) minimumBlockCount * maximumBlockCount);
@@ -44,9 +46,10 @@ final class DepositTierMath {
                 Math.sqrt(MINIMUM_BLOCK_CURVE.maximum() * MAXIMUM_BLOCK_CURVE.maximum())
         );
 
-        long minimumTotalOre = sampleRangeCurve(MINIMUM_TOTAL_ORE_CURVE, tierPosition);
+        double reserveScale = rareTierScale(tier, tierPosition, 2.5D, 4.0D);
+        long minimumTotalOre = Math.round(sampleRangeCurve(MINIMUM_TOTAL_ORE_CURVE, tierPosition) * reserveScale);
         long maximumTotalOre = Math.max(
-                minimumTotalOre, sampleRangeCurve(MAXIMUM_TOTAL_ORE_CURVE, tierPosition)
+                minimumTotalOre, Math.round(sampleRangeCurve(MAXIMUM_TOTAL_ORE_CURVE, tierPosition) * reserveScale)
         );
         double characteristicTotalOre = Math.sqrt((double) minimumTotalOre * maximumTotalOre);
         double characteristicOreDensity = characteristicTotalOre / characteristicBlockCount;
@@ -381,6 +384,33 @@ final class DepositTierMath {
             return 0.0D;
         }
         return clamp((Math.log(value) - Math.log(minimum)) / (Math.log(maximum) - Math.log(minimum)), 0.0D, 1.0D);
+    }
+
+    /**
+     * MEDIUM/LARGE deposits deliberately stay shallow: their extra blocks expand the X/Z footprint rather
+     * than turning the deposit into a vertical column.
+     */
+    static int verticalLayersForTier(int tier, double tierPosition, int maximumDepth) {
+        int safeMaximumDepth = Math.max(1, maximumDepth);
+        if (tier >= DepositTier.MEDIUM.ordinal()) {
+            return Math.min(2, safeMaximumDepth);
+        }
+        int depth = 1 + (int) Math.round(Math.pow(tierPosition, 1.3D) * (safeMaximumDepth - 1));
+        return Math.max(1, Math.min(safeMaximumDepth, depth));
+    }
+
+    private static double rareTierScale(
+            DepositTier tier,
+            double tierPosition,
+            double mediumScale,
+            double largeScale
+    ) {
+        if (tier.ordinal() < DepositTier.MEDIUM.ordinal()) {
+            return 1.0D;
+        }
+        double mediumPosition = DepositTier.MEDIUM.normalizedPosition();
+        double rareTierPosition = (tierPosition - mediumPosition) / (1.0D - mediumPosition);
+        return interpolate(mediumScale, largeScale, rareTierPosition);
     }
 
     private static long sampleRangeCurve(RangeCurve curve, double position) {

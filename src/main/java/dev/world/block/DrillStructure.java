@@ -17,6 +17,8 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Supplier;
 
 public final class DrillStructure {
@@ -35,10 +37,10 @@ public final class DrillStructure {
     private final VoxelShape[][][][] structureShapes;
 
     public DrillStructure(int size, int mainOffsetX, int mainOffsetY, int mainOffsetZ,
-                           Supplier<? extends Block> mainBlock,
-                           Supplier<? extends Block> partBlock,
-                           Supplier<? extends Item> partCloneItem,
-                           IntegerProperty offsetXProperty, IntegerProperty offsetYProperty, IntegerProperty offsetZProperty) {
+                          Supplier<? extends Block> mainBlock,
+                          Supplier<? extends Block> partBlock,
+                          Supplier<? extends Item> partCloneItem,
+                          IntegerProperty offsetXProperty, IntegerProperty offsetYProperty, IntegerProperty offsetZProperty) {
         this.size = size;
         this.mainOffsetX = mainOffsetX;
         this.mainOffsetY = mainOffsetY;
@@ -175,6 +177,18 @@ public final class DrillStructure {
         return true;
     }
 
+    public List<BlockPos> positions(BlockPos origin, Direction facing) {
+        List<BlockPos> positions = new ArrayList<>(size * size * size);
+        for (int offsetX = 0; offsetX < size; offsetX++) {
+            for (int offsetY = 0; offsetY < size; offsetY++) {
+                for (int offsetZ = 0; offsetZ < size; offsetZ++) {
+                    positions.add(offset(origin, facing, offsetX, offsetY, offsetZ));
+                }
+            }
+        }
+        return positions;
+    }
+
     public VoxelShape mainCollisionShape(Direction facing) {
         return collisionShapeForOffset(facing, mainOffsetX, mainOffsetY, mainOffsetZ);
     }
@@ -258,22 +272,8 @@ public final class DrillStructure {
     }
 
     private VoxelShape createStructureShape(Direction facing, int currentOffsetX, int currentOffsetY, int currentOffsetZ) {
-        VoxelShape shape = Shapes.empty();
-        BlockPos currentPos = offset(BlockPos.ZERO, facing, currentOffsetX, currentOffsetY, currentOffsetZ);
-
-        for (int offsetX = 0; offsetX < size; offsetX++) {
-            for (int offsetY = 0; offsetY < size; offsetY++) {
-                for (int offsetZ = 0; offsetZ < size; offsetZ++) {
-                    BlockPos cellPos = offset(BlockPos.ZERO, facing, offsetX, offsetY, offsetZ);
-                    BlockPos delta = cellPos.subtract(currentPos);
-                    shape = Shapes.or(
-                            shape,
-                            Shapes.box(delta.getX(), delta.getY(), delta.getZ(), delta.getX() + 1.0D, delta.getY() + 1.0D, delta.getZ() + 1.0D)
-                    );
-                }
-            }
-        }
-
-        return shape.optimize();
+        // Collision queries only consider blocks around the entity. Each real part
+        // must therefore contribute its local cell; their union is the full drill.
+        return Shapes.block();
     }
 }

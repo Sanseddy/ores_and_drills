@@ -1,5 +1,6 @@
 package dev.world.block;
 
+import dev.compat.sable.SableAssemblyTransfer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
@@ -12,12 +13,15 @@ import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.RenderShape;
+import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 public abstract class AbstractDrillPartBlock extends Block {
@@ -39,7 +43,7 @@ public abstract class AbstractDrillPartBlock extends Block {
         return structure;
     }
 
-    // Block's constructor calls this from within super(properties), before `structure` is assigned — subclasses must use their own static offset fields here, not `structure`.
+    // Block's constructor calls this before structure is assigned; subclasses use their static offset fields.
     @Override
     protected abstract void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder);
 
@@ -60,17 +64,28 @@ public abstract class AbstractDrillPartBlock extends Block {
 
     @Override
     protected VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-        return collisionShape(state);
+        return Shapes.block();
     }
 
     @Override
     protected VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-        return collisionShape(state);
+        return Shapes.block();
     }
 
     @Override
     protected VoxelShape getInteractionShape(BlockState state, BlockGetter level, BlockPos pos) {
-        return collisionShape(state);
+        return Shapes.block();
+    }
+
+    @Override
+    protected BlockState rotate(BlockState state, Rotation rotation) {
+        return state.setValue(AbstractDrillBlock.FACING,
+                rotation.rotate(state.getValue(AbstractDrillBlock.FACING)));
+    }
+
+    @Override
+    protected BlockState mirror(BlockState state, Mirror mirror) {
+        return rotate(state, mirror.getRotation(state.getValue(AbstractDrillBlock.FACING)));
     }
 
     @Override
@@ -134,22 +149,15 @@ public abstract class AbstractDrillPartBlock extends Block {
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
         if (!state.is(newState.getBlock()) && !level.isClientSide) {
             level.invalidateCapabilities(pos);
-            BlockPos origin = structure.originFromPart(pos, state);
-            BlockState originState = level.getBlockState(origin);
-            if (structure.isMainBlock(originState)) {
-                level.destroyBlock(origin, true);
+            if (!SableAssemblyTransfer.isMoving(level, pos)) {
+                BlockPos origin = structure.originFromPart(pos, state);
+                BlockState originState = level.getBlockState(origin);
+                if (structure.isMainBlock(originState)) {
+                    level.destroyBlock(origin, true);
+                }
             }
         }
         super.onRemove(state, level, pos, newState, movedByPiston);
-    }
-
-    private VoxelShape collisionShape(BlockState state) {
-        return structure.collisionShapeForOffset(
-                state.getValue(AbstractDrillBlock.FACING),
-                state.getValue(structure.offsetXProperty()),
-                state.getValue(structure.offsetYProperty()),
-                state.getValue(structure.offsetZProperty())
-        );
     }
 
     private boolean isFluidPort(BlockState state) {

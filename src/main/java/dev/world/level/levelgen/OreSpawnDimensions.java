@@ -3,14 +3,17 @@ package dev.world.level.levelgen;
 import dev.OresAndDrillsMod;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
+import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.BiomeTags;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeGenerationSettings;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.dimension.LevelStem;
 import net.minecraft.world.level.levelgen.feature.ConfiguredFeature;
 import net.minecraft.world.level.levelgen.feature.configurations.OreConfiguration;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
@@ -20,13 +23,17 @@ import net.neoforged.neoforge.registries.NeoForgeRegistries;
 
 import java.util.Collection;
 import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 public final class OreSpawnDimensions {
     private static final ConcurrentMap<ResourceLocation, EnumSet<SpawnDimension>> DIMENSIONS_BY_ORE = new ConcurrentHashMap<>();
+    private static final ConcurrentMap<ResourceLocation, Set<ResourceLocation>> DIMENSION_IDS_BY_ORE = new ConcurrentHashMap<>();
 
     private OreSpawnDimensions() {
     }
@@ -46,11 +53,41 @@ public final class OreSpawnDimensions {
     }
 
     public static void scanOriginalPlacedFeatures(RegistryAccess registryAccess) {
+        Map<ResourceKey<LevelStem>, LevelStem> dimensions = registryAccess.registry(Registries.LEVEL_STEM)
+                .map(registry -> Map.copyOf(registry.entrySet().stream()
+                        .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))))
+                .orElseGet(Map::of);
+        scanOriginalPlacedFeatures(registryAccess, dimensions);
+    }
+
+    public static void scanOriginalPlacedFeatures(
+            RegistryAccess registryAccess,
+            Registry<LevelStem> dimensions
+    ) {
+        scanOriginalPlacedFeatures(
+                registryAccess,
+                Map.copyOf(dimensions.entrySet().stream()
+                        .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)))
+        );
+    }
+
+    private static void scanOriginalPlacedFeatures(
+            RegistryAccess registryAccess,
+            Map<ResourceKey<LevelStem>, LevelStem> dimensions
+    ) {
         DIMENSIONS_BY_ORE.clear();
+        DIMENSION_IDS_BY_ORE.clear();
         OreGenerationWeights.clear();
         List<BiomeModifier> biomeModifiers = biomeModifiersExcludingOwn(registryAccess);
+        Map<ResourceLocation, Set<ResourceLocation>> dimensionIdsByBiome = dimensionIdsByBiome(dimensions);
         registryAccess.registry(Registries.BIOME).ifPresent(registry ->
-                registry.holders().forEach(biomeHolder -> scanBiome(biomeHolder, biomeModifiers)));
+                registry.holders().forEach(biomeHolder -> scanBiome(
+                        biomeHolder,
+                        biomeModifiers,
+                        biomeHolder.unwrapKey()
+                                .map(key -> dimensionIdsByBiome.getOrDefault(key.location(), Set.of()))
+                                .orElseGet(Set::of)
+                )));
     }
 
     /**
@@ -105,11 +142,72 @@ public final class OreSpawnDimensions {
         return Set.copyOf(result);
     }
 
-    private static void scanBiome(Holder<Biome> biome, List<BiomeModifier> biomeModifiers) {
+    public static Set<ResourceLocation> dimensionIdsFor(Collection<ResourceLocation> oreIds) {
+        Set<ResourceLocation> result = new LinkedHashSet<>();
+        for (ResourceLocation oreId : oreIds) {
+            Set<ResourceLocation> dimensions = DIMENSION_IDS_BY_ORE.get(oreId);
+            if (dimensions != null) {
+                result.addAll(dimensions);
+            }
+        }
+        return Set.copyOf(result);
+    }
+
+    private static Map<ResourceLocation, Set<ResourceLocation>> dimensionIdsByBiome(
+            Map<ResourceKey<LevelStem>, LevelStem> dimensions
+    ) {
+        Map<ResourceLocation, Set<ResourceLocation>> mutable = new HashMap<>();
+        for (Map.Entry<ResourceKey<LevelStem>, LevelStem> entry : dimensions.entrySet()) {
+            ResourceLocation dimensionId = entry.getKey().location();
+            try {
+                for (Holder<Biome> biome : entry.getValue().generator().getBiomeSource().possibleBiomes()) {
+                    biome.unwrapKey().ifPresent(key -> mutable
+                            .computeIfAbsent(key.location(), ignored -> new LinkedHashSet<>())
+                            .add(dimensionId));
+                }
+            } catch (RuntimeException exception) {
+                OresAndDrillsMod.LOGGER.trace(
+                        "Ore deposits: skipped dimension {} while mapping ore biomes",
+                        dimensionId,
+                        exception
+                );
+            }
+        }
+
+        Map<ResourceLocation, Set<ResourceLocation>> result = new HashMap<>();
+        mutable.forEach((biomeId, dimensionIds) -> result.put(biomeId, Set.copyOf(dimensionIds)));
+        return Map.copyOf(result);
+    }
+
+    private static void recordDimensionIds(Block ore, Collection<ResourceLocation> dimensionIds) {
+        if (dimensionIds.isEmpty()) {
+            return;
+        }
+
+        ResourceLocation oreId = BuiltInRegistries.BLOCK.getKey(ore);
+        if (oreId == null) {
+            return;
+        }
+
+        DIMENSION_IDS_BY_ORE.compute(oreId, (ignored, existing) -> {
+            Set<ResourceLocation> merged = new LinkedHashSet<>();
+            if (existing != null) {
+                merged.addAll(existing);
+            }
+            merged.addAll(dimensionIds);
+            return Set.copyOf(merged);
+        });
+    }
+
+    private static void scanBiome(
+            Holder<Biome> biome,
+            List<BiomeModifier> biomeModifiers,
+            Set<ResourceLocation> dimensionIds
+    ) {
         BiomeGenerationSettings generationSettings = simulatedGenerationSettings(biome, biomeModifiers);
         for (HolderSet<PlacedFeature> stepFeatures : generationSettings.features()) {
             for (Holder<PlacedFeature> placedFeature : stepFeatures) {
-                scanPlacedFeatureSafely(placedFeature, biome);
+                scanPlacedFeatureSafely(placedFeature, biome, dimensionIds);
             }
         }
     }
@@ -145,13 +243,18 @@ public final class OreSpawnDimensions {
      * can throw before that config is loaded (this preview scan runs on the create-world screen, before
      * any world/config exists). The scan is best-effort for a GUI hint, so one bad feature shouldn't crash it.
      */
-    private static void scanPlacedFeatureSafely(Holder<PlacedFeature> placedFeature, Holder<Biome> biome) {
+    private static void scanPlacedFeatureSafely(
+            Holder<PlacedFeature> placedFeature,
+            Holder<Biome> biome,
+            Set<ResourceLocation> dimensionIds
+    ) {
         try {
             scanConfiguredFeature(
                     placedFeature.value().feature().value(),
                     placedFeature.value(),
                     ReplaceOreFeaturesBiomeModifier.stablePlacedFeatureKey(placedFeature),
-                    biome
+                    biome,
+                    dimensionIds
             );
         } catch (RuntimeException exception) {
             OresAndDrillsMod.LOGGER.trace("Ore deposits: skipped a feature while scanning ore dimensions", exception);
@@ -162,7 +265,8 @@ public final class OreSpawnDimensions {
             ConfiguredFeature<?, ?> configured,
             PlacedFeature placedFeature,
             String sourceSignature,
-            Holder<Biome> biome
+            Holder<Biome> biome,
+            Set<ResourceLocation> dimensionIds
     ) {
         ReplaceOreFeaturesBiomeModifier.OreFeatureData oreData = ReplaceOreFeaturesBiomeModifier.oreFeatureData(configured.config());
         if (oreData == null) {
@@ -179,6 +283,8 @@ public final class OreSpawnDimensions {
                     .ifPresent(canonical -> {
                         record(sourceOre, biome);
                         record(canonical, biome);
+                        recordDimensionIds(sourceOre, dimensionIds);
+                        recordDimensionIds(canonical, dimensionIds);
                         OreGenerationWeights.recordObservation(
                                 canonical,
                                 biome,
