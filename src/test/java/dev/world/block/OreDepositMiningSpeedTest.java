@@ -6,28 +6,22 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OreDepositMiningSpeedTest {
-    private static final int FILL_STAGE_COUNT = 8;
-
     @Test
-    void richestDepositTakesFourTimesAsLongAsNearlyEmptyDeposit() {
-        assertEquals(1.0F, OreDepositMiningSpeed.progressMultiplier(0, FILL_STAGE_COUNT));
-        assertEquals(0.25F, OreDepositMiningSpeed.progressMultiplier(7, FILL_STAGE_COUNT));
+    void oneRemainingOreUsesOrdinaryOreSpeed() {
+        assertEquals(1.0F, OreDepositMiningSpeed.progressMultiplier(1));
     }
 
     @Test
-    void miningProgressSlowsDownAtEveryRicherStage() {
-        float previous = OreDepositMiningSpeed.progressMultiplier(0, FILL_STAGE_COUNT);
-        for (int richness = 1; richness < FILL_STAGE_COUNT; richness++) {
-            float current = OreDepositMiningSpeed.progressMultiplier(richness, FILL_STAGE_COUNT);
-            assertTrue(current < previous);
-            previous = current;
-        }
+    void multipleRemainingOresUseHalfTheirAmountAsDurationMultiplier() {
+        assertEquals(1.0F / 50.0F, OreDepositMiningSpeed.progressMultiplier(100), 0.000001F);
+        assertEquals(1.0F / 49.5F, OreDepositMiningSpeed.progressMultiplier(99), 0.000001F);
+        assertEquals(1.0F, OreDepositMiningSpeed.progressMultiplier(2), 0.000001F);
+        assertTrue(OreDepositMiningSpeed.progressMultiplier(99) > OreDepositMiningSpeed.progressMultiplier(100));
     }
 
     @Test
-    void invalidRichnessValuesAreClamped() {
-        assertEquals(1.0F, OreDepositMiningSpeed.progressMultiplier(-10, FILL_STAGE_COUNT));
-        assertEquals(0.25F, OreDepositMiningSpeed.progressMultiplier(100, FILL_STAGE_COUNT));
-        assertEquals(1.0F, OreDepositMiningSpeed.progressMultiplier(5, 1));
+    void invalidRemainingAmountsUseSingleOreSpeed() {
+        assertEquals(1.0F, OreDepositMiningSpeed.progressMultiplier(0));
+        assertEquals(1.0F, OreDepositMiningSpeed.progressMultiplier(-10));
     }
 }

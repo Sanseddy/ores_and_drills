@@ -28,7 +28,7 @@ public final class OreWorldSettingsApplier {
         OreDepositConfig.SPEC.save();
         DepositTerrainValidator.clearCache();
 
-        OresAndDrillsMod.LOGGER.info("Ore deposits: applied ore settings from the Ore Settings screen");
+        OresAndDrillsMod.LOGGER.debug("Ore deposits: applied ore settings from the Ore Settings screen");
     }
 
     /** Keeps the active datapack preset selection in sync whenever the common config (re)loads. */

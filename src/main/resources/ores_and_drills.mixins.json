@@ -21,7 +21,10 @@
   ],
   "client": [
     "CreateWorldScreenWorldTabMixin",
-    "RenderChunkRegionAccessor"
+    "DrillBlockGetterMixin",
+    "DrillLevelRendererMixin",
+    "RenderChunkRegionAccessor",
+    "SableSubLevelRenderPlatformMixin"
   ],
   "injectors": {
     "defaultRequire": 1

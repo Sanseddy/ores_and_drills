@@ -2,6 +2,7 @@ package dev.registry;
 
 import dev.OresAndDrillsMod;
 import dev.world.level.levelgen.OreDepositChunkData;
+import dev.world.level.levelgen.OreDepositData;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -9,6 +10,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.server.level.ServerLevel;
 import net.neoforged.neoforge.attachment.AttachmentType;
 import net.neoforged.neoforge.attachment.IAttachmentHolder;
 import net.neoforged.neoforge.attachment.IAttachmentSerializer;
@@ -98,6 +100,9 @@ public final class ModAttachments {
      */
     @Nullable
     public static Packet<? super ClientGamePacketListener> initialOreDepositSyncPacket(LevelChunk chunk) {
+        if (chunk.getLevel() instanceof ServerLevel serverLevel) {
+            OreDepositData.restorePhysicalChunkEntries(serverLevel, chunk);
+        }
         OreDepositChunkData data = chunk.getExistingDataOrNull(ORE_DEPOSITS);
         if (data == null) {
             return null;

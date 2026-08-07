@@ -44,7 +44,7 @@ public record OreTintedTextureSource() implements SpriteSource {
     @Override
     public void run(ResourceManager resourceManager, Output output) {
         OreDepositOreColors.clearCache();
-        OresAndDrillsMod.LOGGER.trace(
+        OresAndDrillsMod.LOGGER.debug(
                 "Ore deposit: generating {} pre-stitched tint slots",
                 OreDepositOrePalette.MAX_ORES
         );
@@ -71,7 +71,7 @@ public record OreTintedTextureSource() implements SpriteSource {
                 mask.close();
             }
         }
-        OresAndDrillsMod.LOGGER.trace("Ore deposit: generated {} tinted textures", generated);
+        OresAndDrillsMod.LOGGER.debug("Ore deposit: generated {} tinted textures", generated);
     }
 
     private static NativeImage readMask(ResourceManager resourceManager, int richness) {
@@ -79,14 +79,14 @@ public record OreTintedTextureSource() implements SpriteSource {
         ResourceLocation texturePath = ResourceLocation.fromNamespaceAndPath(maskId.getNamespace(), "textures/" + maskId.getPath() + ".png");
         Optional<Resource> resource = resourceManager.getResource(texturePath);
         if (resource.isEmpty()) {
-            OresAndDrillsMod.LOGGER.warn("Ore deposit: missing ore-layer mask {} for tinted texture generation", texturePath);
+            OresAndDrillsMod.LOGGER.debug("Ore deposit: missing ore-layer mask {} for tinted texture generation", texturePath);
             return null;
         }
 
         try (InputStream stream = resource.get().open()) {
             return NativeImage.read(stream);
         } catch (IOException exception) {
-            OresAndDrillsMod.LOGGER.warn("Ore deposit: failed to read ore-layer mask {}", texturePath, exception);
+            OresAndDrillsMod.LOGGER.debug("Ore deposit: failed to read ore-layer mask {}", texturePath, exception);
             return null;
         }
     }
@@ -97,7 +97,7 @@ public record OreTintedTextureSource() implements SpriteSource {
             ResourceLocation location = locationForSlot(oreIndex, richness);
             output.add(location, loader -> new SpriteContents(location, new FrameSize(tinted.getWidth(), tinted.getHeight()), tinted, ResourceMetadata.EMPTY));
         } catch (RuntimeException exception) {
-            OresAndDrillsMod.LOGGER.warn("Ore deposit: failed to generate tinted texture for slot {} richness {}", oreIndex, richness, exception);
+            OresAndDrillsMod.LOGGER.debug("Ore deposit: failed to generate tinted texture for slot {} richness {}", oreIndex, richness, exception);
         }
     }
 
@@ -132,7 +132,7 @@ public record OreTintedTextureSource() implements SpriteSource {
                     int[] palette = OreDepositOreColors.paletteForDrop(resourceManager, dropId);
                     TextureAtlasSprite sprite = atlas.getTextures().get(locationForSlot(oreIndex, richness));
                     if (sprite == null) {
-                        OresAndDrillsMod.LOGGER.warn(
+                        OresAndDrillsMod.LOGGER.debug(
                                 "Ore deposit: missing pre-stitched tint slot {} richness {}",
                                 oreIndex,
                                 richness
@@ -147,7 +147,7 @@ public record OreTintedTextureSource() implements SpriteSource {
                 }
             }
         }
-        OresAndDrillsMod.LOGGER.trace("Ore deposit: recolored {} atlas sprites in place", updated);
+        OresAndDrillsMod.LOGGER.debug("Ore deposit: recolored {} atlas sprites in place", updated);
         return true;
     }
 

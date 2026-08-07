@@ -1,26 +1,38 @@
 package dev.world.block;
 
-/** Pure mining-speed scaling shared by the client and server block-breaking paths. */
-final class OreDepositMiningSpeed {
-    static final float MAXIMUM_DURATION_MULTIPLIER = 4.0F;
+import dev.registry.ModBlocks;
+import dev.world.level.levelgen.OreDepositData;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 
+/** Pure mining-speed scaling shared by the client and server block-breaking paths. */
+public final class OreDepositMiningSpeed {
     private OreDepositMiningSpeed() {
     }
 
     /**
-     * Converts the synchronized logarithmic richness stage into a destroy-progress multiplier.
-     * Stage zero keeps the normal block speed; the richest stage takes four times as long.
+     * Deposits with more than one unit take {@code remainingOre * 0.5} times as long to break as
+     * one ordinary ore block. The final unit keeps the ordinary ore block duration.
      */
-    static float progressMultiplier(int visualRichness, int fillStageCount) {
-        int maximumVisualRichness = Math.max(0, fillStageCount - 1);
-        if (maximumVisualRichness == 0) {
-            return 1.0F;
+    static float progressMultiplier(int remainingOre) {
+        return remainingOre > 1 ? 1.0F / (remainingOre * 0.5F) : 1.0F;
+    }
+
+    public static void onBreakSpeed(PlayerEvent.BreakSpeed event) {
+        BlockPos pos = event.getPosition().orElse(null);
+        if (pos == null) {
+            return;
         }
 
-        int clampedRichness = Math.max(0, Math.min(maximumVisualRichness, visualRichness));
-        float normalizedRichness = clampedRichness / (float) maximumVisualRichness;
-        float durationMultiplier = 1.0F
-                + normalizedRichness * (MAXIMUM_DURATION_MULTIPLIER - 1.0F);
-        return 1.0F / durationMultiplier;
+        Level level = event.getEntity().level();
+        if (!level.getBlockState(pos).is(ModBlocks.ORE_DEPOSIT.get())) {
+            return;
+        }
+
+        int remainingOre = OreDepositData.remainingOreAt(level, pos);
+        if (remainingOre > 1) {
+            event.setNewSpeed(event.getNewSpeed() * progressMultiplier(remainingOre));
+        }
     }
 }

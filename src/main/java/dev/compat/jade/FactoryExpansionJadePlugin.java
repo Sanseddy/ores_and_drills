@@ -62,7 +62,6 @@ public class FactoryExpansionJadePlugin implements IWailaPlugin {
     );
     private static final String ORE_BLOCK_KEY = "OreBlock";
     private static final String ORE_REMAINING_KEY = "OreRemaining";
-    private static final String ORE_INITIAL_KEY = "OreInitial";
 
     private static final MiningDrillProvider PROVIDER = new MiningDrillProvider();
     private static final OreDepositProvider ORE_DEPOSIT_PROVIDER = new OreDepositProvider();
@@ -85,6 +84,7 @@ public class FactoryExpansionJadePlugin implements IWailaPlugin {
         registration.registerBlockIcon(PROVIDER, AbstractDrillPartBlock.class);
         registration.registerBlockComponent(ORE_DEPOSIT_PROVIDER, OreDepositBlock.class);
         registration.usePickedResult(ModBlocks.ORE_DEPOSIT.get());
+        registration.usePickedResult(ModBlocks.EXHAUSTED_ORE_DEPOSIT.get());
     }
 
     private static class MiningDrillProvider implements IBlockComponentProvider, IServerDataProvider<BlockAccessor> {
@@ -174,15 +174,20 @@ public class FactoryExpansionJadePlugin implements IWailaPlugin {
                 return;
             }
 
-            tooltip.append(stack.getHoverName());
+            // registerClient() already asks Jade to use OreDepositBlock#getCloneItemStack, which
+            // supplies this same ore stack as the header. Appending its name here duplicated it.
 
-            int remainingOre = data.getInt(ORE_REMAINING_KEY);
-            int initialOre = data.getInt(ORE_INITIAL_KEY);
-            if (remainingOre > 0 && initialOre > 0) {
+            // The lightweight remaining-ore payload keeps the client attachment current even while
+            // Jade is reusing server data for the same targeted block. Prefer that exact value so the
+            // amount line also remains visible when the deposit reaches its final unit.
+            int clientRemainingOre = OreDepositData.remainingOreAt(accessor.getLevel(), accessor.getPosition());
+            int remainingOre = clientRemainingOre > 0
+                    ? clientRemainingOre
+                    : data.getInt(ORE_REMAINING_KEY);
+            if (remainingOre > 1) {
                 tooltip.add(Component.translatable(
                         "tooltip.ores_and_drills.ore_deposit.amount",
-                        remainingOre,
-                        initialOre
+                        remainingOre
                 ));
             }
 
@@ -258,7 +263,6 @@ public class FactoryExpansionJadePlugin implements IWailaPlugin {
             OreDepositData.DepositStats stats = OreDepositData.statsAt(serverLevel, accessor.getPosition());
             if (!stats.isEmpty()) {
                 tag.putInt(ORE_REMAINING_KEY, stats.remainingOre());
-                tag.putInt(ORE_INITIAL_KEY, stats.initialOre());
             }
         }
 

@@ -958,7 +958,7 @@ public final class OreGenerationWeights {
             if (tier < DepositTier.MEDIUM.ordinal()
                     && rarity.relativeFrequency() < 0.01D
                     && chancePercent > 5.0D) {
-                OresAndDrillsMod.LOGGER.warn(
+                OresAndDrillsMod.LOGGER.debug(
                         "Ore deposits: unusually high {} selection chance for very rare {} in {}: {}%",
                         tierName, entry.oreId(), biomeId, String.format(Locale.ROOT, "%.4f", chancePercent)
                 );

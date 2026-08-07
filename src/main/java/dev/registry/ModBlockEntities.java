@@ -5,6 +5,7 @@ import dev.drill.AdvancedMiningDrill;
 import dev.drill.BurnerMiningDrill;
 import dev.drill.ElectricMiningDrill;
 import dev.drill.UltimateMiningDrill;
+import dev.world.block.entity.DrillPartBlockEntity;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.neoforge.registries.DeferredHolder;
@@ -38,6 +39,15 @@ public final class ModBlockEntities {
             BLOCK_ENTITY_TYPES.register("ultimate_mining_drill", () -> BlockEntityType.Builder.of(
                     UltimateMiningDrill.BlockEntity::new,
                     ModBlocks.ULTIMATE_MINING_DRILL.get()
+            ).build(null));
+
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<DrillPartBlockEntity>> DRILL_PART =
+            BLOCK_ENTITY_TYPES.register("drill_part", () -> BlockEntityType.Builder.of(
+                    DrillPartBlockEntity::new,
+                    ModBlocks.BURNER_MINING_DRILL_PART.get(),
+                    ModBlocks.ELECTRIC_MINING_DRILL_PART.get(),
+                    ModBlocks.ADVANCED_MINING_DRILL_PART.get(),
+                    ModBlocks.ULTIMATE_MINING_DRILL_PART.get()
             ).build(null));
 
     private ModBlockEntities() {

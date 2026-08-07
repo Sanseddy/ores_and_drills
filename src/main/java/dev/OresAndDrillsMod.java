@@ -13,9 +13,11 @@ import dev.registry.ModCapabilities;
 import dev.registry.ModMenuTypes;
 import dev.registry.ModWorldgen;
 import dev.world.block.OreDepositExplosionHandler;
+import dev.world.block.OreDepositMiningSpeed;
 import dev.world.level.levelgen.DepositTerrainValidator;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
@@ -47,6 +49,7 @@ public final class OresAndDrillsMod {
         NeoForge.EVENT_BUS.addListener(OreDepositLocateCommand::register);
         NeoForge.EVENT_BUS.addListener(OreSettingsPresetManager::addReloadListener);
         NeoForge.EVENT_BUS.addListener(OreDepositExplosionHandler::onDetonate);
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, OreDepositMiningSpeed::onBreakSpeed);
         NeoForge.EVENT_BUS.addListener(OreDepositPaletteSync::onDatapackSync);
         NeoForge.EVENT_BUS.addListener(DepositTerrainValidator::onTagsUpdated);
     }

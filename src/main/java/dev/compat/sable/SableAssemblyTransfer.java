@@ -94,7 +94,7 @@ public final class SableAssemblyTransfer {
                     movedDrill.destinationOrigin(),
                     movedDrill.destinationFacing()
             )) {
-                OresAndDrillsMod.LOGGER.error(
+                OresAndDrillsMod.LOGGER.debug(
                         "Sable moved an incomplete drill structure to {} in {}",
                         movedDrill.destinationOrigin(),
                         batch.destinationLevel().dimension().location()

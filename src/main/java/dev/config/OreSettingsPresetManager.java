@@ -60,7 +60,7 @@ public final class OreSettingsPresetManager implements ResourceManagerReloadList
             try (Reader reader = entry.getValue().openAsReader()) {
                 loaded.put(presetId, parsePreset(GsonHelper.parse(reader)));
             } catch (IOException | JsonParseException | IllegalArgumentException exception) {
-                OresAndDrillsMod.LOGGER.warn("Ore settings: failed to load preset {} from {}", presetId, file, exception);
+                OresAndDrillsMod.LOGGER.debug("Ore settings: failed to load preset {} from {}", presetId, file, exception);
             }
         }
 
@@ -68,12 +68,12 @@ public final class OreSettingsPresetManager implements ResourceManagerReloadList
         selectActivePreset(configuredPresetId());
 
         if (activePresetId == null) {
-            OresAndDrillsMod.LOGGER.warn(
+            OresAndDrillsMod.LOGGER.debug(
                     "Ore settings: active preset {} was not found; using neutral settings",
                     configuredPresetId()
             );
         } else {
-            OresAndDrillsMod.LOGGER.info("Ore settings: loaded {} datapack preset(s), active preset is {}", loaded.size(), activePresetId);
+            OresAndDrillsMod.LOGGER.debug("Ore settings: loaded {} datapack preset(s), active preset is {}", loaded.size(), activePresetId);
         }
     }
 

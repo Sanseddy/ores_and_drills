@@ -1013,7 +1013,7 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
         // optional compatibility mixin (notably a chunk-container replacement) from poisoning a save.
         if (!depositStatesRegistered()) {
             if (INVALID_DEPOSIT_STATE_LOGGED.compareAndSet(false, true)) {
-                OresAndDrillsMod.LOGGER.error(
+                OresAndDrillsMod.LOGGER.debug(
                         "Ore deposit generation disabled: {} contains a block state without a network registry id",
                         ModBlocks.ORE_DEPOSIT.getId()
                 );
@@ -1493,7 +1493,7 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
         }
 
         if (skipped > 0) {
-            OresAndDrillsMod.LOGGER.trace(
+            OresAndDrillsMod.LOGGER.debug(
                     "Ore deposits: trimmed {} blocks from a chunk-safe placement budget of {} entries",
                     skipped, MAX_DEPOSIT_ENTRIES_PER_CHUNK
             );
@@ -2375,7 +2375,7 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
 
         double minimumRetention = OreDepositConfig.MIN_SMALL_DEPOSIT_FREQUENCY_SHARE;
         if (plan.retainedFraction() + 1.0E-9D < minimumRetention) {
-            OresAndDrillsMod.LOGGER.warn(
+            OresAndDrillsMod.LOGGER.debug(
                     "Ore deposits: TINY+SMALL retain only {}% of original frequency for {} in {} (configured minimum {}%)",
                     formatDiagnostic(plan.retainedFraction() * 100.0D), oreId, biomeName,
                     formatDiagnostic(minimumRetention * 100.0D)
@@ -2448,7 +2448,7 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
                 launched, successful, formatDiagnostic(successRate * 100.0D), reasons
         );
         if (launched >= 16L && successRate < 0.25D && stats.lowSuccessWarning.compareAndSet(false, true)) {
-            OresAndDrillsMod.LOGGER.warn(
+            OresAndDrillsMod.LOGGER.debug(
                     "Ore deposits: most {} attempts for {} are rejected by placement conditions (success rate {}%, reasons: [{}])",
                     DepositTier.byIndex(key.tier()).serializedName(), key.oreId(),
                     formatDiagnostic(successRate * 100.0D), reasons

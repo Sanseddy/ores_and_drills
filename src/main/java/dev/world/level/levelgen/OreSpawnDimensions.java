@@ -166,7 +166,7 @@ public final class OreSpawnDimensions {
                             .add(dimensionId));
                 }
             } catch (RuntimeException exception) {
-                OresAndDrillsMod.LOGGER.trace(
+                OresAndDrillsMod.LOGGER.debug(
                         "Ore deposits: skipped dimension {} while mapping ore biomes",
                         dimensionId,
                         exception
@@ -230,7 +230,7 @@ public final class OreSpawnDimensions {
                 try {
                     modifier.modify(biome, phase, builder);
                 } catch (RuntimeException exception) {
-                    OresAndDrillsMod.LOGGER.trace("Ore deposits: skipped a biome modifier while scanning ore dimensions", exception);
+                    OresAndDrillsMod.LOGGER.debug("Ore deposits: skipped a biome modifier while scanning ore dimensions", exception);
                 }
             }
         }
@@ -257,7 +257,7 @@ public final class OreSpawnDimensions {
                     dimensionIds
             );
         } catch (RuntimeException exception) {
-            OresAndDrillsMod.LOGGER.trace("Ore deposits: skipped a feature while scanning ore dimensions", exception);
+            OresAndDrillsMod.LOGGER.debug("Ore deposits: skipped a feature while scanning ore dimensions", exception);
         }
     }
 

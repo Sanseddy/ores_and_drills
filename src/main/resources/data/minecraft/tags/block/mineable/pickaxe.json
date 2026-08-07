@@ -2,7 +2,14 @@
   "replace": false,
   "values": [
     "ores_and_drills:ore_deposit",
+    "ores_and_drills:exhausted_ore_deposit",
     "ores_and_drills:burner_mining_drill",
-    "ores_and_drills:burner_mining_drill_part"
+    "ores_and_drills:burner_mining_drill_part",
+    "ores_and_drills:electric_mining_drill",
+    "ores_and_drills:electric_mining_drill_part",
+    "ores_and_drills:advanced_mining_drill",
+    "ores_and_drills:advanced_mining_drill_part",
+    "ores_and_drills:ultimate_mining_drill",
+    "ores_and_drills:ultimate_mining_drill_part"
   ]
 }

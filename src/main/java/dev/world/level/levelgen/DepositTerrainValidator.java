@@ -105,7 +105,7 @@ public final class DepositTerrainValidator {
             );
             return center == null ? null : candidate.withUndergroundCenter(center);
         } catch (RuntimeException exception) {
-            OresAndDrillsMod.LOGGER.warn(
+            OresAndDrillsMod.LOGGER.debug(
                     "Could not resolve underground fallback for ore-deposit candidate {} in {}",
                     candidate.depositId(), level.dimension().location(), exception
             );
@@ -231,7 +231,7 @@ public final class DepositTerrainValidator {
                 sideCoverage[side(candidate, sample)] = true;
             }
         } catch (RuntimeException exception) {
-            OresAndDrillsMod.LOGGER.warn(
+            OresAndDrillsMod.LOGGER.debug(
                     "Could not predict terrain for ore-deposit candidate {} in {}",
                     candidate.depositId(), level.dimension().location(), exception
             );

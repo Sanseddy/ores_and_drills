@@ -85,7 +85,7 @@ public final class OreDepositSettingsScreen extends Screen {
                     settings.selectedDimensions().bake(settings.datapackDimensions()).dimensions()
             );
         } catch (RuntimeException exception) {
-            OresAndDrillsMod.LOGGER.warn("Ore deposits: failed to scan ore worldgen data for the settings screen", exception);
+            OresAndDrillsMod.LOGGER.debug("Ore deposits: failed to scan ore worldgen data for the settings screen", exception);
         }
     }
 

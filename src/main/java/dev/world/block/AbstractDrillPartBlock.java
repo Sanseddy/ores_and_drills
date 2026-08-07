@@ -1,6 +1,7 @@
 package dev.world.block;
 
 import dev.compat.sable.SableAssemblyTransfer;
+import dev.world.block.entity.DrillPartBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
@@ -13,18 +14,19 @@ import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
-import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-public abstract class AbstractDrillPartBlock extends Block {
+public abstract class AbstractDrillPartBlock extends Block implements EntityBlock {
     protected final DrillStructure structure;
     protected final DrillMenuOpener menuOpener;
 
@@ -43,6 +45,11 @@ public abstract class AbstractDrillPartBlock extends Block {
         return structure;
     }
 
+    @Override
+    public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
+        return new DrillPartBlockEntity(pos, state);
+    }
+
     // Block's constructor calls this before structure is assigned; subclasses use their static offset fields.
     @Override
     protected abstract void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder);
@@ -54,7 +61,9 @@ public abstract class AbstractDrillPartBlock extends Block {
 
     @Override
     public RenderShape getRenderShape(BlockState state) {
-        return RenderShape.INVISIBLE;
+        // Keeps the part out of chunk-model rendering while allowing vanilla terrain
+        // hit particles, which are suppressed only for RenderShape.INVISIBLE.
+        return RenderShape.ENTITYBLOCK_ANIMATED;
     }
 
     @Override
@@ -64,17 +73,17 @@ public abstract class AbstractDrillPartBlock extends Block {
 
     @Override
     protected VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-        return Shapes.block();
+        return shapeForState(state);
     }
 
     @Override
     protected VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-        return Shapes.block();
+        return shapeForState(state);
     }
 
     @Override
     protected VoxelShape getInteractionShape(BlockState state, BlockGetter level, BlockPos pos) {
-        return Shapes.block();
+        return shapeForState(state);
     }
 
     @Override
@@ -171,5 +180,14 @@ public abstract class AbstractDrillPartBlock extends Block {
         }
 
         return offsetX == 0 || offsetX == size - 1;
+    }
+
+    private VoxelShape shapeForState(BlockState state) {
+        return structure.collisionShapeForOffset(
+                state.getValue(AbstractDrillBlock.FACING),
+                state.getValue(structure.offsetXProperty()),
+                state.getValue(structure.offsetYProperty()),
+                state.getValue(structure.offsetZProperty())
+        );
     }
 }

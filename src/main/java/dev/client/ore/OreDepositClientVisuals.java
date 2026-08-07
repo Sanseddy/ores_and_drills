@@ -54,7 +54,7 @@ public final class OreDepositClientVisuals {
                 sodiumLevelField = field;
             } catch (ReflectiveOperationException exception) {
                 sodiumFieldUnavailable = true;
-                OresAndDrillsMod.LOGGER.warn("Ore deposit: could not access Sodium's LevelSlice#level field for rendering", exception);
+                OresAndDrillsMod.LOGGER.debug("Ore deposit: could not access Sodium's LevelSlice#level field for rendering", exception);
                 return null;
             }
         }

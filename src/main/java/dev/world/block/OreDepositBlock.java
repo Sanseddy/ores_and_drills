@@ -1,5 +1,6 @@
 package dev.world.block;
 
+import dev.registry.ModBlocks;
 import dev.world.level.levelgen.OreDepositData;
 import dev.world.level.levelgen.OreDepositOrePalette;
 import com.mojang.serialization.MapCodec;
@@ -27,13 +28,8 @@ public class OreDepositBlock extends Block {
     public static final MapCodec<OreDepositBlock> CODEC = simpleCodec(OreDepositBlock::new);
 
     /**
-     * Carries no meaning of its own — it exists purely so re-broadcasting this block's state after a
-     * richness change is a REAL state transition. {@code LevelChunk#setBlockState} skips all client
-     * render-invalidation ({@code if (blockstate == state) return null;}) when the "new" state is
-     * reference-equal to what's already there, which it always is for a property-less block (its
-     * {@code defaultBlockState()} is a single cached singleton) — so resending the identical state to
-     * force a re-render silently does nothing, on vanilla and Sodium alike. Toggling this property
-     * defeats that fast path without giving the block any real per-position blockstate data again.
+     * Kept for serialized-state compatibility. Visual refreshes now use a client render notification;
+     * toggling a real state here can make Sable replace a plot block with the backing-world block.
      */
     public static final BooleanProperty REFRESH = BooleanProperty.create("refresh");
 
@@ -99,20 +95,19 @@ public class OreDepositBlock extends Block {
 
     @Override
     protected float getDestroyProgress(BlockState state, Player player, BlockGetter level, BlockPos pos) {
-        float baseProgress = super.getDestroyProgress(state, player, level, pos);
-        if (baseProgress <= 0.0F || !(level instanceof Level concreteLevel)) {
-            return baseProgress;
+        if (!(level instanceof Level concreteLevel)) {
+            return super.getDestroyProgress(state, player, level, pos);
         }
 
-        OreDepositData.Visual visual = OreDepositData.visualAt(concreteLevel, pos);
-        if (visual == null) {
-            return baseProgress;
+        Block oreBlock = OreDepositData.oreBlockAt(concreteLevel, pos);
+        if (oreBlock == null || oreBlock == this) {
+            return super.getDestroyProgress(state, player, level, pos);
         }
 
-        return baseProgress * OreDepositMiningSpeed.progressMultiplier(
-                visual.richness(),
-                OreDepositData.FILL_STAGE_COUNT
-        );
+        float singleOreProgress = oreBlock.defaultBlockState().getDestroyProgress(player, level, pos);
+        // The remaining-ore multiplier is applied through PlayerEvent.BreakSpeed so it
+        // composes with tool/enchantment and other-mod speed modifiers on both sides.
+        return singleOreProgress;
     }
 
     /**
@@ -162,7 +157,9 @@ public class OreDepositBlock extends Block {
 
     @Override
     protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
-        if (!state.is(newState.getBlock()) && level instanceof ServerLevel serverLevel) {
+        if (!state.is(newState.getBlock())
+                && !newState.is(ModBlocks.EXHAUSTED_ORE_DEPOSIT.get())
+                && level instanceof ServerLevel serverLevel) {
             OreDepositData.remove(serverLevel, pos);
         }
         super.onRemove(state, level, pos, newState, movedByPiston);

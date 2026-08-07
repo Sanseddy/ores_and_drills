@@ -120,7 +120,7 @@ public final class OreDepositLocateCommand {
                     DepositLocator.SEARCH_RADIUS
             ).orElse(null);
         } catch (RuntimeException exception) {
-            OresAndDrillsMod.LOGGER.error(
+            OresAndDrillsMod.LOGGER.debug(
                     "Ore-deposit locate failed for {} tier {} in {}",
                     requestedSelection + " -> " + requestedOre,
                     requestedTier.serializedName(),

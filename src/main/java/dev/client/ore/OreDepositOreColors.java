@@ -68,7 +68,7 @@ public final class OreDepositOreColors {
         return DROP_CACHE.computeIfAbsent(dropId, id -> {
             int[] palette = paletteForItem(resourceManager, id);
             if (palette == null) {
-                OresAndDrillsMod.LOGGER.warn(
+                OresAndDrillsMod.LOGGER.debug(
                         "Ore deposit: no texture found for synchronized drop {} - falling back to flat white tint",
                         id
                 );
@@ -97,7 +97,7 @@ public final class OreDepositOreColors {
         }
         int[] palette = paletteForItem(resourceManager, displayDropId);
         if (palette == null) {
-            OresAndDrillsMod.LOGGER.warn(
+            OresAndDrillsMod.LOGGER.debug(
                     "Ore deposit: no texture found for {} (resolved drop {}) — falling back to flat white tint",
                     oreBlockId, displayDropId
             );
@@ -160,7 +160,7 @@ public final class OreDepositOreColors {
                 String parent = stringProperty(model, "parent");
                 modelId = parent == null ? null : parseLocation(parent, modelId.getNamespace());
             } catch (IOException | RuntimeException exception) {
-                OresAndDrillsMod.LOGGER.warn("Ore deposit: failed to resolve item model {}", modelPath, exception);
+                OresAndDrillsMod.LOGGER.debug("Ore deposit: failed to resolve item model {}", modelPath, exception);
                 break;
             }
         }
@@ -263,7 +263,7 @@ public final class OreDepositOreColors {
             JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
             collectWeightedItems(root, 1, false, weights);
         } catch (RuntimeException | IOException exception) {
-            OresAndDrillsMod.LOGGER.warn("Ore deposit: failed to parse loot table for {}", oreId, exception);
+            OresAndDrillsMod.LOGGER.debug("Ore deposit: failed to parse loot table for {}", oreId, exception);
             return Items.AIR;
         }
 
@@ -457,7 +457,7 @@ public final class OreDepositOreColors {
             }
             return adjustPalette(palette);
         } catch (IOException exception) {
-            OresAndDrillsMod.LOGGER.warn("Ore deposit: failed to read texture {} for tint palette", texturePath, exception);
+            OresAndDrillsMod.LOGGER.debug("Ore deposit: failed to read texture {} for tint palette", texturePath, exception);
             return null;
         }
     }

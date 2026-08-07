@@ -47,6 +47,7 @@ import software.bernie.geckolib.renderer.GeoItemRenderer;
 
 public final class UltimateMiningDrill {
     public static final MiningDrillTier TIER = new MiningDrillTier(7, 40, 64, new ItemStack(Items.NETHERITE_PICKAXE));
+    public static final int STRUCTURE_HEIGHT = 9;
     public static final EnergyProfile ENERGY = new EnergyProfile(128_000, 80);
 
     private static final Component MENU_TITLE = Component.translatable("container.ores_and_drills.ultimate_mining_drill");
@@ -103,7 +104,7 @@ public final class UltimateMiningDrill {
 
     public static class PartBlock extends AbstractDrillPartBlock {
         public static final IntegerProperty OFFSET_X = IntegerProperty.create("offset_x", 0, TIER.size() - 1);
-        public static final IntegerProperty OFFSET_Y = IntegerProperty.create("offset_y", 0, TIER.size() - 1);
+        public static final IntegerProperty OFFSET_Y = IntegerProperty.create("offset_y", 0, STRUCTURE_HEIGHT - 1);
         public static final IntegerProperty OFFSET_Z = IntegerProperty.create("offset_z", 0, TIER.size() - 1);
 
         public PartBlock(Properties properties) {
@@ -202,7 +203,7 @@ public final class UltimateMiningDrill {
 
         @Override
         public ResourceLocation getTextureResource(BlockEntity animatable) {
-            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "textures/block/burner_mining_drill.png");
+            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "textures/block/ultimate_mining_drill.png");
         }
 
         @Override
@@ -212,7 +213,7 @@ public final class UltimateMiningDrill {
     }
 
     public static class Renderer extends GeoBlockRenderer<BlockEntity> {
-        private static final double CENTER_FORWARD_OFFSET = 0D;
+        private static final double CENTER_FORWARD_OFFSET = 3.0D;
         private static final double CENTER_LEFT_OFFSET = 0D;
         private static final float MODEL_YAW_DEGREES = 180.0F;
 
@@ -256,7 +257,7 @@ public final class UltimateMiningDrill {
 
         @Override
         public ResourceLocation getTextureResource(Item animatable) {
-            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "textures/block/burner_mining_drill.png");
+            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "textures/block/ultimate_mining_drill.png");
         }
 
         @Override

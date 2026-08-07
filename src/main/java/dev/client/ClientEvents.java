@@ -49,12 +49,17 @@ public final class ClientEvents {
     @SubscribeEvent
     public static void registerSpriteSourceTypes(RegisterSpriteSourceTypesEvent event) {
         event.register(OreTintedTextureSource.ID, OreTintedTextureSource.TYPE);
-        OresAndDrillsMod.LOGGER.trace("Ore deposit: registered sprite source type {}", OreTintedTextureSource.ID);
+        OresAndDrillsMod.LOGGER.debug("Ore deposit: registered sprite source type {}", OreTintedTextureSource.ID);
     }
 
     @SubscribeEvent
     public static void clientSetup(FMLClientSetupEvent event) {
-        event.enqueueWork(() -> ItemBlockRenderTypes.setRenderLayer(ModBlocks.ORE_DEPOSIT.get(), RenderType.cutout()));
+        event.enqueueWork(() -> {
+            // Fallback for renderers that consult the legacy block-layer table. The baked model also
+            // supplies a translucent composite pass, while this opaque pass keeps depth/selection sane.
+            ItemBlockRenderTypes.setRenderLayer(ModBlocks.ORE_DEPOSIT.get(), RenderType.solid());
+            ItemBlockRenderTypes.setRenderLayer(ModBlocks.EXHAUSTED_ORE_DEPOSIT.get(), RenderType.solid());
+        });
     }
 
     @SubscribeEvent

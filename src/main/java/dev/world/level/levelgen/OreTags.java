@@ -44,8 +44,8 @@ public final class OreTags {
                 addExternalBlock(result, holder.value());
             }
         });
-        OresAndDrillsMod.LOGGER.trace("Ore deposits: found {} ore block(s)", result.size());
-        OresAndDrillsMod.LOGGER.trace(
+        OresAndDrillsMod.LOGGER.debug("Ore deposits: found {} ore block(s)", result.size());
+        OresAndDrillsMod.LOGGER.debug(
                 "Ore deposits: ore blocks are {}",
                 result.stream()
                         .map(BuiltInRegistries.BLOCK::getKey)

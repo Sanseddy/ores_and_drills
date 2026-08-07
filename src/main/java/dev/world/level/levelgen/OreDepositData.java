@@ -2,6 +2,7 @@ package dev.world.level.levelgen;
 
 import dev.registry.ModAttachments;
 import dev.registry.ModBlocks;
+import dev.network.OreDepositRemainingPayload;
 import dev.world.block.OreDepositBlock;
 import dev.world.block.entity.deposit.OreDepositDrops;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
@@ -22,15 +23,20 @@ import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelReader;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.List;
 import java.util.ArrayList;
 import java.util.ArrayDeque;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import javax.annotation.Nullable;
@@ -38,11 +44,14 @@ import javax.annotation.Nullable;
 public final class OreDepositData {
     public static final int MINIMUM_ORE_AMOUNT = 1;
     public static final int MAXIMUM_ORE_AMOUNT = 5_000;
-    public static final int FILL_STAGE_COUNT = 8;
+    public static final int FILL_STAGE_COUNT = 4;
     private static final int MIN_RICHNESS = 0;
     private static final int MAX_RICHNESS = FILL_STAGE_COUNT - 1;
     private static final int[] LEGACY_RECOVERY_AMOUNTS = {250, 500, 1_000, 2_000, 4_000, 8_000, 12_000, 16_000};
     private static final ThreadLocal<Deque<PhysicalTransferBatch>> PHYSICAL_TRANSFERS = new ThreadLocal<>();
+    /** Last complete client entries, retained across Sable plot-chunk replacement during block updates. */
+    private static final Map<Level, ConcurrentMap<Long, OreDepositChunkData.Entry>> CLIENT_ENTRY_CACHE =
+            Collections.synchronizedMap(new WeakHashMap<>());
 
     private OreDepositData() {
     }
@@ -97,20 +106,12 @@ public final class OreDepositData {
         }
 
         ChunkAccess chunk = chunk(level, pos);
+        OreDepositChunkData.Entry entry = entry(level, pos, false);
+        PhysicalOreDepositSavedData.get(level).remove(pos);
         OreDepositChunkData data = chunk.getExistingDataOrNull(ModAttachments.ORE_DEPOSITS);
-        OreDepositChunkData.Entry entry = data != null ? data.get(pos) : null;
         if (entry != null && data.remove(pos)) {
-            ResourceLocation oreId = oreId(level, entry.oreIndex());
-            if (oreId != null) {
-                ConfirmedDepositIndex.get(level).markBlockDepleted(pos, oreId);
-            }
-            if (entry.tier() >= OreDepositFeature.TIER_MEDIUM) {
-                Block ore = oreId == null ? null : BuiltInRegistries.BLOCK.get(oreId);
-                if (ore != null) {
-                    LargeDepositSpatialIndex.get(level).markBlockDepleted(
-                            pos, entry.tier(), OreUnifier.materialKeyFor(ore)
-                    );
-                }
+            if (entry.remainingOre() > 0) {
+                markIndexesDepleted(level, pos, entry);
             }
             chunk.setUnsaved(true);
             chunk.syncData(ModAttachments.ORE_DEPOSITS);
@@ -118,9 +119,10 @@ public final class OreDepositData {
     }
 
     /**
-     * Captures ore entries before Sable replaces their source blocks with air. Ore data lives in a
-     * position-keyed chunk attachment rather than in the BlockState, so Sable cannot move it as part of
-     * its normal block/block-entity copy pass.
+     * Captures active and exhausted ore entries before Sable replaces their source blocks with air.
+     * Both blocks need the position-keyed attachment: active ore uses the ore/amount fields, while an
+     * exhausted block still needs {@code baseIndex} for its texture, hardness and drops. Sable cannot
+     * move that attachment as part of its normal block/block-entity copy pass.
      */
     public static void beginPhysicalTransfer(
             ServerLevel sourceLevel,
@@ -132,7 +134,7 @@ public final class OreDepositData {
         Set<Long> sourcePositions = new HashSet<>();
 
         for (BlockPos sourcePos : positions) {
-            if (!sourceLevel.getBlockState(sourcePos).is(ModBlocks.ORE_DEPOSIT.get())) {
+            if (!isDepositState(sourceLevel.getBlockState(sourcePos))) {
                 continue;
             }
 
@@ -173,8 +175,8 @@ public final class OreDepositData {
         PhysicalTransferBatch batch = batches.pop();
         Set<ChunkAccess> changedChunks = new HashSet<>();
         for (PhysicalTransfer transfer : batch.transfers()) {
-            if (batch.sourceLevel().getBlockState(transfer.sourcePos()).is(ModBlocks.ORE_DEPOSIT.get())
-                    || !batch.destinationLevel().getBlockState(transfer.destinationPos()).is(ModBlocks.ORE_DEPOSIT.get())) {
+            if (isDepositState(batch.sourceLevel().getBlockState(transfer.sourcePos()))
+                    || !isDepositState(batch.destinationLevel().getBlockState(transfer.destinationPos()))) {
                 continue;
             }
 
@@ -198,6 +200,8 @@ public final class OreDepositData {
                     entry.richnessReferenceAmount(),
                     entry.tier()
             );
+            PhysicalOreDepositSavedData.get(batch.sourceLevel()).remove(transfer.sourcePos());
+            PhysicalOreDepositSavedData.get(batch.destinationLevel()).put(transfer.destinationPos(), entry);
             destinationChunk.setUnsaved(true);
             changedChunks.add(destinationChunk);
         }
@@ -221,6 +225,10 @@ public final class OreDepositData {
             }
         }
         return false;
+    }
+
+    private static boolean isDepositState(BlockState state) {
+        return state.is(ModBlocks.ORE_DEPOSIT.get()) || state.is(ModBlocks.EXHAUSTED_ORE_DEPOSIT.get());
     }
 
     public static ResourceLocation oreBlockIdAt(ServerLevel level, BlockPos pos) {
@@ -255,11 +263,49 @@ public final class OreDepositData {
         return new DepositStats(entry.remainingOre(), entry.initialOre());
     }
 
+    public static int remainingOreAt(Level level, BlockPos pos) {
+        OreDepositChunkData.Entry entry = entryForRead(level, pos);
+        return entry == null ? 0 : Math.max(0, entry.remainingOre());
+    }
+
+    public static void applyClientEntry(
+            Level level,
+            BlockPos pos,
+            int baseIndex,
+            int oreIndex,
+            int remainingOre,
+            int initialOre,
+            int initialRichness,
+            int richnessReferenceAmount,
+            int tier
+    ) {
+        if (!level.isClientSide) {
+            return;
+        }
+
+        ChunkAccess chunk = chunk(level, pos);
+        OreDepositChunkData data = chunk.getData(ModAttachments.ORE_DEPOSITS);
+        data.put(
+                pos,
+                baseIndex,
+                oreIndex,
+                Math.max(0, remainingOre),
+                Math.max(0, initialOre),
+                initialRichness,
+                richnessReferenceAmount,
+                tier
+        );
+        cacheClientEntry(level, pos, data.get(pos));
+        // Sable observes this client-side notification and dirties the owning sub-level render section.
+        // Do not change a real block-state property: its plot update can resolve against the backing world
+        // and replace the client ore state while the authoritative server state remains intact.
+        BlockState state = level.getBlockState(pos);
+        level.sendBlockUpdated(pos, state, state, Block.UPDATE_CLIENTS);
+    }
+
     @Nullable
     public static Visual visualAt(Level level, BlockPos pos) {
-        ChunkAccess chunk = chunk(level, pos);
-        OreDepositChunkData data = chunk.getExistingDataOrNull(ModAttachments.ORE_DEPOSITS);
-        OreDepositChunkData.Entry entry = data != null ? data.get(pos) : null;
+        OreDepositChunkData.Entry entry = entryForRead(level, pos);
         if (entry == null) {
             return null;
         }
@@ -267,8 +313,46 @@ public final class OreDepositData {
         return new Visual(
                 entry.baseIndex(),
                 entry.oreIndex(),
-                Math.max(0, calculateFillStage(entry.remainingOre(), MINIMUM_ORE_AMOUNT, MAXIMUM_ORE_AMOUNT, FILL_STAGE_COUNT) - 1)
+                visualRichness(entry.remainingOre(), entry.initialOre()),
+                visualRichness(entry.initialOre(), entry.initialOre()),
+                entry.remainingOre() < entry.initialOre()
         );
+    }
+
+    @Nullable
+    private static OreDepositChunkData.Entry entryForRead(Level level, BlockPos pos) {
+        if (level instanceof ServerLevel serverLevel) {
+            return entry(serverLevel, pos, false);
+        }
+
+        ChunkAccess chunk = chunk(level, pos);
+        OreDepositChunkData data = chunk.getExistingDataOrNull(ModAttachments.ORE_DEPOSITS);
+        OreDepositChunkData.Entry entry = data != null ? data.get(pos) : null;
+        if (entry != null) {
+            cacheClientEntry(level, pos, entry);
+            return entry;
+        }
+
+        ConcurrentMap<Long, OreDepositChunkData.Entry> cache = clientCache(level);
+        long key = pos.asLong();
+        BlockState state = level.getBlockState(pos);
+        if (!state.is(ModBlocks.ORE_DEPOSIT.get()) && !state.is(ModBlocks.EXHAUSTED_ORE_DEPOSIT.get())) {
+            cache.remove(key);
+            return null;
+        }
+        return cache.get(key);
+    }
+
+    private static void cacheClientEntry(Level level, BlockPos pos, @Nullable OreDepositChunkData.Entry entry) {
+        if (level.isClientSide && entry != null) {
+            clientCache(level).put(pos.asLong(), entry);
+        }
+    }
+
+    private static ConcurrentMap<Long, OreDepositChunkData.Entry> clientCache(Level level) {
+        synchronized (CLIENT_ENTRY_CACHE) {
+            return CLIENT_ENTRY_CACHE.computeIfAbsent(level, ignored -> new ConcurrentHashMap<>());
+        }
     }
 
     public static BlockState baseBlockStateAt(LevelReader level, BlockPos pos) {
@@ -395,12 +479,8 @@ public final class OreDepositData {
             Predicate<ItemStack> canAccept
     ) {
         ChunkAccess chunk = chunk(level, pos);
+        OreDepositChunkData.Entry entry = entry(level, pos, true);
         OreDepositChunkData data = chunk.getExistingDataOrNull(ModAttachments.ORE_DEPOSITS);
-        OreDepositChunkData.Entry entry = data != null ? data.get(pos) : null;
-        if (entry == null) {
-            entry = recoverLegacyEntry(level, chunk, pos);
-            data = chunk.getExistingDataOrNull(ModAttachments.ORE_DEPOSITS);
-        }
         if (entry == null || data == null || entry.remainingOre() <= 0) {
             return ItemStack.EMPTY;
         }
@@ -434,12 +514,8 @@ public final class OreDepositData {
     /** Wastes one unit of the vein with no drop and no XP, matching vanilla's "wrong tool" harvest semantics. */
     private static void depleteWithoutDrop(ServerLevel level, BlockPos pos) {
         ChunkAccess chunk = chunk(level, pos);
+        OreDepositChunkData.Entry entry = entry(level, pos, true);
         OreDepositChunkData data = chunk.getExistingDataOrNull(ModAttachments.ORE_DEPOSITS);
-        OreDepositChunkData.Entry entry = data != null ? data.get(pos) : null;
-        if (entry == null) {
-            entry = recoverLegacyEntry(level, chunk, pos);
-            data = chunk.getExistingDataOrNull(ModAttachments.ORE_DEPOSITS);
-        }
         if (entry == null || data == null || entry.remainingOre() <= 0) {
             return;
         }
@@ -450,22 +526,51 @@ public final class OreDepositData {
     private static void deplete(ServerLevel level, ChunkAccess chunk, OreDepositChunkData data, BlockPos pos, OreDepositChunkData.Entry entry) {
         playVirtualBreakEffect(level, pos);
         int remaining = entry.remainingOre() - 1;
+        data.put(pos, entry.baseIndex(), entry.oreIndex(), Math.max(0, remaining), entry.initialOre(), entry.initialRichness(), entry.richnessReferenceAmount(), entry.tier());
+        OreDepositChunkData.Entry updatedEntry = data.get(pos);
+        PhysicalOreDepositSavedData.get(level).updateIfTracked(pos, updatedEntry);
+        PacketDistributor.sendToPlayersTrackingChunk(
+                level,
+                chunk.getPos(),
+                new OreDepositRemainingPayload(
+                        pos,
+                        updatedEntry.baseIndex(),
+                        updatedEntry.oreIndex(),
+                        updatedEntry.remainingOre(),
+                        updatedEntry.initialOre(),
+                        updatedEntry.initialRichness(),
+                        updatedEntry.richnessReferenceAmount(),
+                        updatedEntry.tier()
+                )
+        );
         if (remaining <= 0) {
-            level.setBlock(pos, baseState(level, entry.baseIndex()), Block.UPDATE_ALL);
-        } else {
-            int oldStage = calculateFillStage(entry.remainingOre(), MINIMUM_ORE_AMOUNT, MAXIMUM_ORE_AMOUNT, FILL_STAGE_COUNT);
-            int newStage = calculateFillStage(remaining, MINIMUM_ORE_AMOUNT, MAXIMUM_ORE_AMOUNT, FILL_STAGE_COUNT);
-            data.put(pos, entry.baseIndex(), entry.oreIndex(), remaining, entry.initialOre(), entry.initialRichness(), entry.richnessReferenceAmount(), entry.tier());
-            if (oldStage != newStage) {
-                chunk.syncData(ModAttachments.ORE_DEPOSITS);
-                updateVisual(level, pos);
-            }
+            markIndexesDepleted(level, pos, entry);
+            level.setBlock(pos, ModBlocks.EXHAUSTED_ORE_DEPOSIT.get().defaultBlockState(), Block.UPDATE_ALL);
         }
         chunk.setUnsaved(true);
     }
 
+    private static void markIndexesDepleted(ServerLevel level, BlockPos pos, OreDepositChunkData.Entry entry) {
+        ResourceLocation oreId = oreId(level, entry.oreIndex());
+        if (oreId != null) {
+            ConfirmedDepositIndex.get(level).markBlockDepleted(pos, oreId);
+        }
+        if (entry.tier() >= OreDepositFeature.TIER_MEDIUM) {
+            Block ore = oreId == null ? null : BuiltInRegistries.BLOCK.get(oreId);
+            if (ore != null) {
+                LargeDepositSpatialIndex.get(level).markBlockDepleted(
+                        pos, entry.tier(), OreUnifier.materialKeyFor(ore)
+                );
+            }
+        }
+    }
+
     private static OreDepositChunkData.Entry entry(ServerLevel level, BlockPos pos, boolean recoverLegacy) {
         ChunkAccess chunk = chunk(level, pos);
+        OreDepositChunkData.Entry persisted = PhysicalOreDepositSavedData.get(level).restoreEntry(level, chunk, pos);
+        if (persisted != null) {
+            return persisted;
+        }
         OreDepositChunkData data = chunk.getExistingDataOrNull(ModAttachments.ORE_DEPOSITS);
         OreDepositChunkData.Entry entry = data != null ? data.get(pos) : null;
         return entry == null && recoverLegacy ? recoverLegacyEntry(level, chunk, pos) : entry;
@@ -485,21 +590,18 @@ public final class OreDepositData {
         data.put(pos, baseIndex, oreIndex, amount, amount, richness, Math.max(1, (int)Math.ceil(amount * 0.5D)));
         chunk.setUnsaved(true);
         chunk.syncData(ModAttachments.ORE_DEPOSITS);
-        return data.get(pos);
+        OreDepositChunkData.Entry recovered = data.get(pos);
+        PhysicalOreDepositSavedData.get(level).put(pos, recovered);
+        return recovered;
     }
 
-    /** Re-broadcasts a real state transition only when the attachment's logarithmic stage changed. */
-    private static void updateVisual(ServerLevel level, BlockPos pos) {
-        BlockState state = level.getBlockState(pos);
-        if (!state.is(ModBlocks.ORE_DEPOSIT.get())) {
-            return;
-        }
-
-        level.setBlock(pos, state.cycle(OreDepositBlock.REFRESH), Block.UPDATE_ALL);
+    /** Restores Sable plot metadata before its custom chunk sender builds the initial sync packet. */
+    public static void restorePhysicalChunkEntries(ServerLevel level, ChunkAccess chunk) {
+        PhysicalOreDepositSavedData.get(level).restoreChunk(level, chunk);
     }
 
     public static int visualRichness(int remainingOre, int initialOre) {
-        return calculateFillStage(remainingOre, MINIMUM_ORE_AMOUNT, MAXIMUM_ORE_AMOUNT, FILL_STAGE_COUNT) - 1;
+        return Math.max(0, calculateFillStage(remainingOre, MINIMUM_ORE_AMOUNT, MAXIMUM_ORE_AMOUNT, FILL_STAGE_COUNT) - 1);
     }
 
     public static int visualRichness(int remainingOre, int initialOre, int initialRichness) {
@@ -511,7 +613,7 @@ public final class OreDepositData {
     }
 
     /**
-     * Maps an absolute amount in the global 1..5000 range onto eight logarithmic fill stages.
+     * Maps an absolute amount in the global 1..5000 range onto four logarithmic fill stages.
      * Deposit tier, ore type and a block's original amount deliberately do not take part here.
      */
     public static int calculateFillStage(int remainingOre, int minimumOre, int maximumOre, int stageCount) {
@@ -593,7 +695,7 @@ public final class OreDepositData {
     public record GeneratedDeposit(BlockPos pos, int baseIndex, int oreIndex, int amount, int tier) {
     }
 
-    public record Visual(int baseIndex, int oreIndex, int richness) {
+    public record Visual(int baseIndex, int oreIndex, int richness, int depletionRichness, boolean depletionVisible) {
     }
 
     private record PhysicalTransfer(BlockPos sourcePos, BlockPos destinationPos, OreDepositChunkData.Entry entry) {

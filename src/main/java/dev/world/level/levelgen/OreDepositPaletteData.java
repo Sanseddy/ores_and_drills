@@ -69,7 +69,7 @@ public final class OreDepositPaletteData extends SavedData {
         if (changed) {
             rebuildIndices();
             setDirty();
-            OresAndDrillsMod.LOGGER.trace(
+            OresAndDrillsMod.LOGGER.debug(
                     "Ore deposit palette: {} fixed bases and {} fixed ores",
                     bases.size(), ores.size()
             );
@@ -97,7 +97,7 @@ public final class OreDepositPaletteData extends SavedData {
                 continue;
             }
             if (palette.size() >= maximum) {
-                OresAndDrillsMod.LOGGER.warn(
+                OresAndDrillsMod.LOGGER.debug(
                         "Ore deposit palette: cannot append {} {} because the {}-entry limit is full",
                         kind, id, maximum
                 );

@@ -19,14 +19,16 @@ public final class DrillMenuValidity {
                 return false;
             }
 
-            // A Sable sub-level stores blocks at its plot coordinates, far away from the
-            // overworld coordinates of the player. Entity#distanceToSqr is patched by
-            // Sable to project either endpoint out of a sub-level; AABB#distanceToSqr is
-            // not. Keep the centre-based check so ordinary large drills retain the same
-            // interaction radius while moved drills remain usable.
-            var bounds = structure.bounds(origin, state.getValue(BlockStateProperties.HORIZONTAL_FACING));
-            var centre = bounds.getCenter();
-            return player.distanceToSqr(centre) <= MAX_DISTANCE_SQUARED;
+            // The inventory lives in the main block entity, but the player may have
+            // opened it from any part of a large drill. Keep the menu valid while the
+            // player is within vanilla's eight-block range of at least one structure
+            // cell. Entity#distanceToSqr also preserves Sable's sub-level projection.
+            return structure.isWithinInteractionDistance(
+                    player,
+                    origin,
+                    state.getValue(BlockStateProperties.HORIZONTAL_FACING),
+                    MAX_DISTANCE_SQUARED
+            );
         }, true);
     }
 }

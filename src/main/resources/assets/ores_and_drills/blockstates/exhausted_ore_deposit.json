@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "ores_and_drills:block/exhausted_ore_deposit_dynamic"
+    }
+  }
+}

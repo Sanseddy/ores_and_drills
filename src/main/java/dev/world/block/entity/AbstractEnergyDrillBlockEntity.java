@@ -53,7 +53,7 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
                                               int productivityPercent, int fluidCapacity) {
         super(type, pos, state, tier, structure, 2, OUTPUT_SLOT);
         this.energyProfile = energyProfile;
-        this.energyBuffer = new EnergyBuffer(energyProfile.capacity(), energyProfile.capacity());
+        this.energyBuffer = new EnergyBuffer(energyProfile.capacity(), energyProfile.capacity(), this::setChanged);
         this.productivityPercent = productivityPercent;
         this.fluidTanks = fluidCapacity > 0 ? new FluidTank[]{new InputFluidTank(fluidCapacity), new InputFluidTank(fluidCapacity)} : new FluidTank[0];
         this.fluidHandler = fluidCapacity > 0 ? new RoutedFluidHandler(false) : null;

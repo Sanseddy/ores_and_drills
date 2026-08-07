@@ -202,7 +202,7 @@ public final class AdvancedMiningDrill {
 
         @Override
         public ResourceLocation getTextureResource(BlockEntity animatable) {
-            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "textures/block/burner_mining_drill.png");
+            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "textures/block/advanced_mining_drill.png");
         }
 
         @Override
@@ -212,7 +212,7 @@ public final class AdvancedMiningDrill {
     }
 
     public static class Renderer extends GeoBlockRenderer<BlockEntity> {
-        private static final double CENTER_FORWARD_OFFSET = 0D;
+        private static final double CENTER_FORWARD_OFFSET = 2.0D;
         private static final double CENTER_LEFT_OFFSET = 0D;
         private static final float MODEL_YAW_DEGREES = 180.0F;
 
@@ -256,7 +256,7 @@ public final class AdvancedMiningDrill {
 
         @Override
         public ResourceLocation getTextureResource(Item animatable) {
-            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "textures/block/burner_mining_drill.png");
+            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "textures/block/advanced_mining_drill.png");
         }
 
         @Override

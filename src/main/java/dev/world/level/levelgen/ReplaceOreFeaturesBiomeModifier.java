@@ -98,7 +98,7 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
             coalesceIndependentTierReplacements(replacements);
             features.addAll(replacements);
             if (removed > 0) {
-                OresAndDrillsMod.LOGGER.trace("Ore deposits: replaced {} ore feature(s) in biome {} step {}", removed, biome.unwrapKey(), step);
+                OresAndDrillsMod.LOGGER.debug("Ore deposits: replaced {} ore feature(s) in biome {} step {}", removed, biome.unwrapKey(), step);
             }
         }
     }
@@ -287,7 +287,7 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
                 // index zero: preserve its normal vein instead, so its texture, drop and /locate material
                 // remain truthful even in a very large modpack.
                 if (canonicalId != null && LOGGED_UNREPRESENTABLE_ORES.add(canonicalId)) {
-                    OresAndDrillsMod.LOGGER.warn(
+                    OresAndDrillsMod.LOGGER.debug(
                             "Ore deposits: {} is outside the {}-entry deposit palette; keeping its original vein",
                             canonicalId, OreDepositOrePalette.MAX_ORES
                     );
@@ -301,7 +301,7 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
             if (isDepositDisabled(sourceOre) || isDepositDisabled(canonical.get())) {
                 ResourceLocation oreId = BuiltInRegistries.BLOCK.getKey(canonical.get());
                 if (oreId != null && LOGGED_DISABLED_ORES.add(oreId)) {
-                    OresAndDrillsMod.LOGGER.info("Ore deposits: {} excluded from deposits by server config; keeping its original vein instead", oreId);
+                    OresAndDrillsMod.LOGGER.debug("Ore deposits: {} excluded from deposits by server config; keeping its original vein instead", oreId);
                 }
                 normalVeinTargets.add(unifiedTarget);
                 continue;
@@ -342,7 +342,7 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
         if (!presetSettings.enabled()) {
             ResourceLocation oreId = BuiltInRegistries.BLOCK.getKey(firstCanonicalOre);
             if (oreId != null && LOGGED_PRESET_DISABLED_ORES.add(oreId)) {
-                OresAndDrillsMod.LOGGER.info(
+                OresAndDrillsMod.LOGGER.debug(
                         "Ore deposits: disabled {} by datapack preset {}",
                         oreId,
                         OreSettingsPresetManager.activePresetId()
@@ -424,7 +424,7 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
         } catch (ReflectiveOperationException exception) {
             String key = config.getClass().getName() + "#" + methodName;
             if (isKnownOreConfig(config) && LOGGED_REFLECTION_FALLBACKS.add(key)) {
-                OresAndDrillsMod.LOGGER.trace(
+                OresAndDrillsMod.LOGGER.debug(
                         "Ore deposits: {}.{}() is unavailable; trying compatible fallbacks",
                         config.getClass().getName(),
                         methodName
@@ -497,7 +497,7 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
             return;
         }
 
-        OresAndDrillsMod.LOGGER.trace(
+        OresAndDrillsMod.LOGGER.debug(
                 "Ore deposits: replacing feature {} config {} for targets [{}] in biome {} (worldgen-frequency weighted deposit tiers)",
                 configured.feature().getClass().getName(),
                 configured.config().getClass().getName(),

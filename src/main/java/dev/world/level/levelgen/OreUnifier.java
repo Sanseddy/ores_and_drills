@@ -151,7 +151,7 @@ public final class OreUnifier {
             result.put(entry.getKey(), new MaterialGroup(entry.getValue()));
         }
 
-        OresAndDrillsMod.LOGGER.trace("Ore deposits: built ore unification groups for {} materials", result.size());
+        OresAndDrillsMod.LOGGER.debug("Ore deposits: built ore unification groups for {} materials", result.size());
         return Map.copyOf(result);
     }
 
@@ -168,10 +168,10 @@ public final class OreUnifier {
                             priorities.add(element.getAsString());
                         }
                     }
-                    OresAndDrillsMod.LOGGER.info("Ore deposits: loaded Almost Unified mod_priorities from {}", almostUnifiedConfig);
+                    OresAndDrillsMod.LOGGER.debug("Ore deposits: loaded Almost Unified mod_priorities from {}", almostUnifiedConfig);
                 }
             } catch (RuntimeException | IOException exception) {
-                OresAndDrillsMod.LOGGER.warn("Ore deposits: failed to read Almost Unified priorities from {}", almostUnifiedConfig, exception);
+                OresAndDrillsMod.LOGGER.debug("Ore deposits: failed to read Almost Unified priorities from {}", almostUnifiedConfig, exception);
             }
         }
 

@@ -241,7 +241,7 @@ public final class DepositLocator {
                 ChunkStatus status = ChunkStatus.byName(root.getString("Status"));
                 return status != null && status.isOrAfter(ChunkStatus.FEATURES);
             } catch (RuntimeException exception) {
-                OresAndDrillsMod.LOGGER.warn(
+                OresAndDrillsMod.LOGGER.debug(
                         "Could not inspect saved status of ore-deposit source chunk [{}, {}] in {}",
                         candidate.sourceChunkX(), candidate.sourceChunkZ(), level.dimension().location(), exception
                 );
