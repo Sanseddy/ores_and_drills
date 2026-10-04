@@ -313,8 +313,8 @@ public final class OreDepositData {
         return new Visual(
                 entry.baseIndex(),
                 entry.oreIndex(),
-                visualRichness(entry.remainingOre(), entry.initialOre()),
-                visualRichness(entry.initialOre(), entry.initialOre()),
+                OreVisualStages.stageFor(entry.remainingOre()),
+                OreVisualStages.stageFor(entry.initialOre()),
                 entry.remainingOre() < entry.initialOre()
         );
     }
@@ -600,18 +600,6 @@ public final class OreDepositData {
         PhysicalOreDepositSavedData.get(level).restoreChunk(level, chunk);
     }
 
-    public static int visualRichness(int remainingOre, int initialOre) {
-        return Math.max(0, calculateFillStage(remainingOre, MINIMUM_ORE_AMOUNT, MAXIMUM_ORE_AMOUNT, FILL_STAGE_COUNT) - 1);
-    }
-
-    public static int visualRichness(int remainingOre, int initialOre, int initialRichness) {
-        return visualRichness(remainingOre, initialOre);
-    }
-
-    public static int visualRichness(int remainingOre, int initialOre, int initialRichness, int richnessReferenceAmount) {
-        return visualRichness(remainingOre, initialOre);
-    }
-
     /**
      * Maps an absolute amount in the global 1..5000 range onto four logarithmic fill stages.
      * Deposit tier, ore type and a block's original amount deliberately do not take part here.
@@ -695,7 +683,12 @@ public final class OreDepositData {
     public record GeneratedDeposit(BlockPos pos, int baseIndex, int oreIndex, int amount, int tier) {
     }
 
-    public record Visual(int baseIndex, int oreIndex, int richness, int depletionRichness, boolean depletionVisible) {
+    /**
+     * @param stage        visual stage of the remaining ore, see {@link OreVisualStages}
+     * @param initialStage visual stage the block was generated with; drawn as a faint trace once mined
+     * @param depleted     whether some ore has been taken, i.e. the trace of the initial stage is visible
+     */
+    public record Visual(int baseIndex, int oreIndex, int stage, int initialStage, boolean depleted) {
     }
 
     private record PhysicalTransfer(BlockPos sourcePos, BlockPos destinationPos, OreDepositChunkData.Entry entry) {

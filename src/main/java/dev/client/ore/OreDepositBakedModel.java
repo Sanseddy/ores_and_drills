@@ -2,10 +2,12 @@ package dev.client.ore;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import dev.OresAndDrillsMod;
+import dev.client.ore.speck.OreSpeckLayout;
 import dev.registry.ModBlocks;
 import dev.world.level.levelgen.OreDepositData;
 import dev.world.level.levelgen.OreDepositOrePalette;
 import dev.world.level.levelgen.OreDepositStonePalette;
+import dev.world.level.levelgen.OreVisualStages;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.block.model.BakedQuad;
@@ -38,27 +40,20 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class OreDepositBakedModel extends BakedModelWrapper<BakedModel> {
     private static final ModelProperty<OreDepositData.Visual> VISUAL_PROPERTY = new ModelProperty<>();
+    /** Packed block position, choosing which speck arrangement each face shows. */
+    private static final ModelProperty<Long> POSITION_PROPERTY = new ModelProperty<>();
     private static final float OVERLAY_OFFSET = 1.0F / 2048.0F;
-    /** Indexed directly by richness (0..3), from depleted to richest. */
-    static final ResourceLocation[] UPPER_TEXTURES = {
-            ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "block/ore_layer_0"),
-            ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "block/ore_layer_1"),
-            ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "block/ore_layer_2"),
-            ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "block/ore_layer_3")
-    };
-    static final ResourceLocation[] DEPLETION_TEXTURES = {
-            ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "block/depletion_layer_0"),
-            ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "block/depletion_layer_1"),
-            ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "block/depletion_layer_2"),
-            ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "block/depletion_layer_3")
-    };
-
+    /**
+     * Vertex color of the trace of the initial specks: darkens the black-and-white trace sprite down to empty
+     * sockets. Grey times grey stays grey, so the trace keeps zero saturation. Its alpha comes from
+     * {@link DepletionOpacity}.
+     */
+    private static final int TRACE_TINT = 0x66;
     private final TextureAtlasSprite fallbackBaseSprite;
-    /** Fixed pre-stitched slots are recolored in place when the synchronized server palette changes. */
-    private final TextureAtlasSprite[][] upperSpritesByIndex;
-    /** Used for an invalid palette index: the plain grayscale mask rather than a missing texture. */
-    private final TextureAtlasSprite[] fallbackUpperSprites;
-    private final TextureAtlasSprite[] depletionSprites;
+    /** [ore slot][arrangement variant][stage]; fixed slots regenerated in place when the server palette changes. */
+    private final TextureAtlasSprite[][][] oreSprites;
+    /** Same layout as {@link #oreSprites}, desaturated. */
+    private final TextureAtlasSprite[][][] traceSprites;
     private final boolean exhausted;
     private final Map<BaseKey, BakedModel> baseModelCache = new ConcurrentHashMap<>();
     private final Map<TextureAtlasSprite, Integer> spriteBrightnessCache = new ConcurrentHashMap<>();
@@ -66,37 +61,33 @@ public final class OreDepositBakedModel extends BakedModelWrapper<BakedModel> {
 
     private OreDepositBakedModel(
             BakedModel originalModel,
-            TextureAtlasSprite[][] upperSpritesByIndex,
-            TextureAtlasSprite[] fallbackUpperSprites,
-            TextureAtlasSprite[] depletionSprites,
+            TextureAtlasSprite[][][] oreSprites,
+            TextureAtlasSprite[][][] traceSprites,
             boolean exhausted
     ) {
         super(originalModel);
         this.fallbackBaseSprite = originalModel.getParticleIcon();
-        this.upperSpritesByIndex = upperSpritesByIndex;
-        this.fallbackUpperSprites = fallbackUpperSprites;
-        this.depletionSprites = depletionSprites;
+        this.oreSprites = oreSprites;
+        this.traceSprites = traceSprites;
         this.exhausted = exhausted;
     }
 
     public static void replaceModels(ModelEvent.ModifyBakingResult event) {
-        TextureAtlasSprite[][] upperSpritesByIndex = new TextureAtlasSprite[OreDepositOrePalette.MAX_ORES][UPPER_TEXTURES.length];
-        for (int oreIndex = 0; oreIndex < upperSpritesByIndex.length; oreIndex++) {
-            for (int richness = 0; richness < UPPER_TEXTURES.length; richness++) {
-                upperSpritesByIndex[oreIndex][richness] = event.getTextureGetter().apply(
-                        new Material(TextureAtlas.LOCATION_BLOCKS, OreTintedTextureSource.locationForSlot(oreIndex, richness))
-                );
+        TextureAtlasSprite[][][] oreSprites =
+                new TextureAtlasSprite[OreDepositOrePalette.MAX_ORES][OreSpeckTextureSource.VARIANTS][OreVisualStages.COUNT];
+        TextureAtlasSprite[][][] traceSprites =
+                new TextureAtlasSprite[OreDepositOrePalette.MAX_ORES][OreSpeckTextureSource.VARIANTS][OreVisualStages.COUNT];
+        for (int oreIndex = 0; oreIndex < OreDepositOrePalette.MAX_ORES; oreIndex++) {
+            for (int variant = 0; variant < OreSpeckTextureSource.VARIANTS; variant++) {
+                for (int stage = 0; stage < OreVisualStages.COUNT; stage++) {
+                    oreSprites[oreIndex][variant][stage] = event.getTextureGetter().apply(new Material(
+                            TextureAtlas.LOCATION_BLOCKS, OreSpeckTextureSource.oreLocation(oreIndex, variant, stage)
+                    ));
+                    traceSprites[oreIndex][variant][stage] = event.getTextureGetter().apply(new Material(
+                            TextureAtlas.LOCATION_BLOCKS, OreSpeckTextureSource.traceLocation(oreIndex, variant, stage)
+                    ));
+                }
             }
-        }
-
-        TextureAtlasSprite[] fallbackUpperSprites = new TextureAtlasSprite[UPPER_TEXTURES.length];
-        for (int richness = 0; richness < UPPER_TEXTURES.length; richness++) {
-            fallbackUpperSprites[richness] = event.getTextureGetter().apply(new Material(TextureAtlas.LOCATION_BLOCKS, UPPER_TEXTURES[richness]));
-        }
-
-        TextureAtlasSprite[] depletionSprites = new TextureAtlasSprite[DEPLETION_TEXTURES.length];
-        for (int richness = 0; richness < DEPLETION_TEXTURES.length; richness++) {
-            depletionSprites[richness] = event.getTextureGetter().apply(new Material(TextureAtlas.LOCATION_BLOCKS, DEPLETION_TEXTURES[richness]));
         }
 
         int replaced = 0;
@@ -107,17 +98,13 @@ public final class OreDepositBakedModel extends BakedModelWrapper<BakedModel> {
         for (Map.Entry<ModelResourceLocation, BakedModel> entry : event.getModels().entrySet()) {
             if (entry.getKey().id().equals(oreDepositId)) {
                 if (sharedDepositModel == null) {
-                    sharedDepositModel = new OreDepositBakedModel(
-                            entry.getValue(), upperSpritesByIndex, fallbackUpperSprites, depletionSprites, false
-                    );
+                    sharedDepositModel = new OreDepositBakedModel(entry.getValue(), oreSprites, traceSprites, false);
                 }
                 entry.setValue(sharedDepositModel);
                 replaced++;
             } else if (entry.getKey().id().equals(exhaustedDepositId)) {
                 if (sharedExhaustedModel == null) {
-                    sharedExhaustedModel = new OreDepositBakedModel(
-                            entry.getValue(), upperSpritesByIndex, fallbackUpperSprites, depletionSprites, true
-                    );
+                    sharedExhaustedModel = new OreDepositBakedModel(entry.getValue(), oreSprites, traceSprites, true);
                 }
                 entry.setValue(sharedExhaustedModel);
                 replaced++;
@@ -128,12 +115,13 @@ public final class OreDepositBakedModel extends BakedModelWrapper<BakedModel> {
 
     @Override
     public List<BakedQuad> getQuads(@Nullable BlockState state, @Nullable Direction side, RandomSource rand) {
-        return quadsFor(state, side, null, LayerPass.ALL);
+        return quadsFor(state, side, null, 0L, LayerPass.ALL);
     }
 
     @Override
     public List<BakedQuad> getQuads(@Nullable BlockState state, @Nullable Direction side, RandomSource rand, ModelData extraData, @Nullable RenderType renderType) {
-        return quadsFor(state, side, extraData.get(VISUAL_PROPERTY), passFor(renderType));
+        Long packedPos = extraData.get(POSITION_PROPERTY);
+        return quadsFor(state, side, extraData.get(VISUAL_PROPERTY), packedPos == null ? 0L : packedPos, passFor(renderType));
     }
 
     @Override
@@ -150,7 +138,27 @@ public final class OreDepositBakedModel extends BakedModelWrapper<BakedModel> {
     @Override
     public ModelData getModelData(BlockAndTintGetter level, BlockPos pos, BlockState state, ModelData modelData) {
         OreDepositData.Visual visual = OreDepositClientVisuals.visualAt(level, pos);
-        return visual == null ? modelData : ModelData.builder().with(VISUAL_PROPERTY, visual).build();
+        if (visual == null) {
+            return modelData;
+        }
+        return ModelData.builder()
+                .with(VISUAL_PROPERTY, visual)
+                .with(POSITION_PROPERTY, pos.asLong())
+                .build();
+    }
+
+    /**
+     * Picks one of the speck arrangements per block and face, so neighboring deposits (and the faces of one
+     * deposit) show different layouts. Depends only on the position, so a block keeps its look as it depletes.
+     */
+    private static int variantFor(long packedPos, @Nullable Direction side) {
+        return OreSpeckLayout.variantFor(
+                BlockPos.getX(packedPos),
+                BlockPos.getY(packedPos),
+                BlockPos.getZ(packedPos),
+                side == null ? 0 : side.ordinal() + 1,
+                OreSpeckTextureSource.VARIANTS
+        );
     }
 
     @Override
@@ -158,7 +166,7 @@ public final class OreDepositBakedModel extends BakedModelWrapper<BakedModel> {
         // The solid base is a depth pre-pass: selection outlines and other depth-tested effects must see
         // an ordinary opaque cube instead of treating Sable's physical block like x-ray glass. The full
         // visual is still submitted atomically through one translucent buffer in strict inner-to-outer
-        // order (base, semi-transparent depletion, ore), so losing the pre-pass cannot make a visual
+        // order (base, semi-transparent trace, ore specks), so losing the pre-pass cannot make a visual
         // layer disappear. Both are vanilla chunk layers and therefore remain compatible with Sodium.
         return ChunkRenderTypeSet.of(RenderType.solid(), RenderType.translucent());
     }
@@ -188,6 +196,7 @@ public final class OreDepositBakedModel extends BakedModelWrapper<BakedModel> {
             @Nullable BlockState state,
             @Nullable Direction side,
             @Nullable OreDepositData.Visual visual,
+            long packedPos,
             LayerPass pass
     ) {
         Block renderedBlock = exhausted ? ModBlocks.EXHAUSTED_ORE_DEPOSIT.get() : ModBlocks.ORE_DEPOSIT.get();
@@ -198,16 +207,14 @@ public final class OreDepositBakedModel extends BakedModelWrapper<BakedModel> {
             return List.of();
         }
 
-        int base = visual != null ? visual.baseIndex() : 0;
-        int oreIndex = visual != null ? visual.oreIndex() : -1;
-        int richness = visual != null ? visual.richness() : 0;
         Key key = new Key(
                 OreDepositStonePalette.clientRevision(),
-                Math.max(0, base),
-                oreIndex,
-                Math.max(0, Math.min(UPPER_TEXTURES.length - 1, richness)),
-                visual != null ? Math.max(0, Math.min(DEPLETION_TEXTURES.length - 1, visual.depletionRichness())) : 0,
-                exhausted || visual != null && visual.depletionVisible(),
+                visual != null ? Math.max(0, visual.baseIndex()) : 0,
+                visual != null ? visual.oreIndex() : -1,
+                variantFor(packedPos, side),
+                visual != null ? OreVisualStages.clamp(visual.stage()) : OreVisualStages.NORMAL_STAGE,
+                visual != null ? OreVisualStages.clamp(visual.initialStage()) : OreVisualStages.NORMAL_STAGE,
+                exhausted || visual != null && visual.depleted(),
                 pass,
                 side
         );
@@ -236,52 +243,29 @@ public final class OreDepositBakedModel extends BakedModelWrapper<BakedModel> {
             return List.copyOf(baseQuads);
         }
 
-        if (exhausted) {
-            if (key.pass() == LayerPass.MAIN) {
-                if (!key.depletionVisible()) {
-                    return List.copyOf(baseQuads);
-                }
-                List<BakedQuad> quads = new ArrayList<>(baseQuads.size() * 2);
-                quads.addAll(baseQuads);
-                quads.addAll(depletionOverlayQuads(baseQuads, depletionSprites[key.depletionRichness()]));
-                return List.copyOf(quads);
-            }
-            if (!key.depletionVisible()) {
-                return List.copyOf(baseQuads);
-            }
-
-            List<BakedQuad> quads = new ArrayList<>(baseQuads.size() * 2);
-            quads.addAll(baseQuads);
-            quads.addAll(depletionOverlayQuads(baseQuads, depletionSprites[key.depletionRichness()]));
-            return List.copyOf(quads);
-        }
-
-        TextureAtlasSprite upperSprite = upperSpriteFor(key.oreIndex(), key.richness());
-        if (key.pass() == LayerPass.MAIN) {
-            List<BakedQuad> quads = new ArrayList<>(baseQuads.size() * (key.depletionVisible() ? 3 : 2));
-            quads.addAll(baseQuads);
-            if (key.depletionVisible()) {
-                quads.addAll(depletionOverlayQuads(baseQuads, depletionSprites[key.depletionRichness()]));
-            }
-            quads.addAll(overlayQuads(baseQuads, upperSprite, key.depletionVisible() ? 2 : 1));
-            return List.copyOf(quads);
-        }
-
-        List<BakedQuad> quads = new ArrayList<>(baseQuads.size() * (key.depletionVisible() ? 3 : 2));
+        // Strict inner-to-outer order inside one buffer: base rock, the semi-transparent trace of the block's
+        // initial specks, then the specks that remain. Both come from the same arrangement variant and speck
+        // layouts are nested, so every remaining speck sits exactly on top of its own trace.
+        boolean validOre = key.oreIndex() >= 0 && key.oreIndex() < oreSprites.length;
+        List<BakedQuad> quads = new ArrayList<>(baseQuads.size() * 3);
         quads.addAll(baseQuads);
-        if (key.depletionVisible()) {
-            quads.addAll(depletionOverlayQuads(baseQuads, depletionSprites[key.depletionRichness()]));
+        int layer = 1;
+        if (validOre && key.depleted()) {
+            quads.addAll(traceOverlayQuads(baseQuads, traceSprites[key.oreIndex()][key.variant()][key.initialStage()]));
+            layer++;
         }
-        quads.addAll(overlayQuads(baseQuads, upperSprite, key.depletionVisible() ? 2 : 1));
+        if (validOre && !exhausted) {
+            quads.addAll(overlayQuads(baseQuads, oreSprites[key.oreIndex()][key.variant()][key.stage()], layer, 0xFF, 0xFF));
+        }
         return List.copyOf(quads);
     }
 
-    private List<BakedQuad> depletionOverlayQuads(List<BakedQuad> baseQuads, TextureAtlasSprite sprite) {
+    private List<BakedQuad> traceOverlayQuads(List<BakedQuad> baseQuads, TextureAtlasSprite sprite) {
         int averageBrightness = Math.round((float)baseQuads.stream()
                 .mapToInt(quad -> spriteBrightnessCache.computeIfAbsent(quad.getSprite(), OreDepositBakedModel::averageBrightness))
                 .average()
                 .orElse(128.0D));
-        return overlayQuads(baseQuads, sprite, 1, DepletionOpacity.vertexAlpha(averageBrightness));
+        return overlayQuads(baseQuads, sprite, 1, TRACE_TINT, DepletionOpacity.vertexAlpha(averageBrightness));
     }
 
     private static int averageBrightness(TextureAtlasSprite sprite) {
@@ -307,19 +291,17 @@ public final class OreDepositBakedModel extends BakedModelWrapper<BakedModel> {
         return alphaWeight == 0L ? 128 : (int)((weightedBrightness + alphaWeight / 2L) / alphaWeight);
     }
 
-    private static List<BakedQuad> overlayQuads(List<BakedQuad> baseQuads, TextureAtlasSprite sprite, int layer) {
-        return overlayQuads(baseQuads, sprite, layer, 255);
-    }
-
+    /** {@code tint} is a grey level multiplied into the sprite colors; {@code vertexAlpha} scales its opacity. */
     private static List<BakedQuad> overlayQuads(
             List<BakedQuad> baseQuads,
             TextureAtlasSprite sprite,
             int layer,
+            int tint,
             int vertexAlpha
     ) {
         List<BakedQuad> quads = new ArrayList<>(baseQuads.size());
         for (BakedQuad baseQuad : baseQuads) {
-            quads.add(overlayQuad(baseQuad, sprite, layer, vertexAlpha));
+            quads.add(overlayQuad(baseQuad, sprite, layer, tint, vertexAlpha));
         }
         return List.copyOf(quads);
     }
@@ -344,12 +326,6 @@ public final class OreDepositBakedModel extends BakedModelWrapper<BakedModel> {
         return List.copyOf(quads);
     }
 
-    private TextureAtlasSprite upperSpriteFor(int oreIndex, int richness) {
-        return oreIndex >= 0 && oreIndex < upperSpritesByIndex.length
-                ? upperSpritesByIndex[oreIndex][richness]
-                : fallbackUpperSprites[richness];
-    }
-
     private BakedModel baseModelFor(int index) {
         BaseKey key = new BaseKey(OreDepositStonePalette.clientRevision(), index);
         return baseModelCache.computeIfAbsent(key, this::resolveBaseModel);
@@ -363,14 +339,11 @@ public final class OreDepositBakedModel extends BakedModelWrapper<BakedModel> {
         return Minecraft.getInstance().getBlockRenderer().getBlockModel(stone.defaultBlockState());
     }
 
-    static BakedQuad overlayQuad(BakedQuad baseQuad, TextureAtlasSprite overlaySprite, int layer) {
-        return overlayQuad(baseQuad, overlaySprite, layer, 255);
-    }
-
     private static BakedQuad overlayQuad(
             BakedQuad baseQuad,
             TextureAtlasSprite overlaySprite,
             int layer,
+            int tint,
             int vertexAlpha
     ) {
         int[] vertices = Arrays.copyOf(baseQuad.getVertices(), baseQuad.getVertices().length);
@@ -380,7 +353,7 @@ public final class OreDepositBakedModel extends BakedModelWrapper<BakedModel> {
         for (int vertex = 0; vertex < 4; vertex++) {
             int offset = vertex * IQuadTransformer.STRIDE;
             remapUv(vertices, offset, baseSprite, overlaySprite);
-            vertices[offset + IQuadTransformer.COLOR] = vertexAlpha << 24 | 0xFFFFFF;
+            vertices[offset + IQuadTransformer.COLOR] = vertexAlpha << 24 | tint << 16 | tint << 8 | tint;
             offsetPosition(vertices, offset, direction, layer);
         }
 
@@ -421,16 +394,17 @@ public final class OreDepositBakedModel extends BakedModelWrapper<BakedModel> {
     }
 
     /**
-     * The ore index selects a stable atlas slot. If another world assigns a different drop to that index,
-     * the slot pixels change in place and cached quads keep pointing at the same valid sprite region.
+     * The ore index selects a stable atlas slot. If another world assigns a different ore or drop to that
+     * index, the slot pixels change in place and cached quads keep pointing at the same valid sprite region.
      */
     private record Key(
             int stonePaletteRevision,
             int base,
             int oreIndex,
-            int richness,
-            int depletionRichness,
-            boolean depletionVisible,
+            int variant,
+            int stage,
+            int initialStage,
+            boolean depleted,
             LayerPass pass,
             @Nullable Direction side
     ) {

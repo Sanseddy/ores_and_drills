@@ -17,12 +17,15 @@
     "SableAssemblyTransformAccessor",
     "SableSubLevelAssemblyHelperMixin",
     "SableSubLevelPlayerChunkSenderMixin",
-    "SimulatedPhysicsAssemblerMixin"
+    "SimulatedPhysicsAssemblerMixin",
+    "TagLoaderMixin",
+    "TagManagerMixin"
   ],
   "client": [
     "CreateWorldScreenWorldTabMixin",
     "DrillBlockGetterMixin",
     "DrillLevelRendererMixin",
+    "LevelRendererAccessor",
     "RenderChunkRegionAccessor",
     "SableSubLevelRenderPlatformMixin"
   ],

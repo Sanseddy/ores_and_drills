@@ -29,10 +29,10 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Resolves a multi-color palette (sorted dark to light) for an ore deposit from the most likely item
- * dropped by the original ore block, for {@link OreTintedTextureSource} to recolor the grayscale ore-layer
- * mask by luminance. Only depends on {@link ResourceManager} (no {@code ItemRenderer}/baked-model access)
- * since this is resolved during atlas stitching, which runs before model baking in the reload order.
+ * Resolves the color palette of the item most likely dropped by an original ore block. The palette is not
+ * painted onto anything: {@link OreSpeckLibrary} uses it to recognize which pixels of the original ore
+ * texture are ore specks. Only depends on {@link ResourceManager} (no {@code ItemRenderer}/baked-model
+ * access) since this is resolved during atlas stitching, which runs before model baking in the reload order.
  * <p>
  * Keyed by the ore block's own {@link ResourceLocation}, not a per-world {@code oreIndex}: block-tag data
  * (which {@link OreDepositOrePalette#availableIds()} partly depends on) isn't bound yet at atlas-stitch time
@@ -41,10 +41,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * a completely different ore once that mismatch shifts anything's position.
  */
 public final class OreDepositOreColors {
-    private static final int[] FALLBACK_PALETTE = {0xFFFFFF, 0xFFFFFF};
-    private static final int PALETTE_SIZE = 5;
-    /** Entries at/above this brightness are considered already-light and are skipped by the dark-half contrast boost in {@link #adjustPalette}. */
-    private static final int DARK_CONTRAST_THRESHOLD = 170;
+    private static final int[] NO_PALETTE = new int[0];
+    /** Enough distinct tones to cover an item's shading, highlights and outline without matching everything. */
+    private static final int MAX_PALETTE_COLORS = 16;
+    private static final int MINIMUM_BRIGHTNESS = 20;
     private static final Map<ResourceLocation, int[]> CACHE = new ConcurrentHashMap<>();
     private static final Map<ResourceLocation, int[]> DROP_CACHE = new ConcurrentHashMap<>();
 
@@ -63,28 +63,24 @@ public final class OreDepositOreColors {
     /** Resolves colors directly from the item id selected by the server-side loot table. */
     static int[] paletteForDrop(ResourceManager resourceManager, ResourceLocation dropId) {
         if (dropId == null) {
-            return FALLBACK_PALETTE;
+            return NO_PALETTE;
         }
         return DROP_CACHE.computeIfAbsent(dropId, id -> {
             int[] palette = paletteForItem(resourceManager, id);
             if (palette == null) {
                 OresAndDrillsMod.LOGGER.debug(
-                        "Ore deposit: no texture found for synchronized drop {} - falling back to flat white tint",
+                        "Ore deposit: no texture found for synchronized drop {} - specks are detected without a palette",
                         id
                 );
-                return FALLBACK_PALETTE;
+                return NO_PALETTE;
             }
             return palette;
         });
     }
 
-    static int[] fallbackPalette() {
-        return FALLBACK_PALETTE;
-    }
-
     private static int[] resolvePalette(ResourceManager resourceManager, ResourceLocation oreBlockId) {
         if (!BuiltInRegistries.BLOCK.containsKey(oreBlockId)) {
-            return FALLBACK_PALETTE;
+            return NO_PALETTE;
         }
 
         Block ore = BuiltInRegistries.BLOCK.get(oreBlockId);
@@ -98,10 +94,10 @@ public final class OreDepositOreColors {
         int[] palette = paletteForItem(resourceManager, displayDropId);
         if (palette == null) {
             OresAndDrillsMod.LOGGER.debug(
-                    "Ore deposit: no texture found for {} (resolved drop {}) — falling back to flat white tint",
+                    "Ore deposit: no texture found for {} (resolved drop {}) - specks are detected without a palette",
                     oreBlockId, displayDropId
             );
-            return FALLBACK_PALETTE;
+            return NO_PALETTE;
         }
         return palette;
     }
@@ -132,9 +128,20 @@ public final class OreDepositOreColors {
         return paletteFromTexture(resourceManager, blockTexture);
     }
 
-    /** Resolves layer references through the item model and its parent chain, with child overrides. */
     private static List<ResourceLocation> texturesFromItemModel(ResourceManager resourceManager, ResourceLocation itemId) {
         ResourceLocation modelId = ResourceLocation.fromNamespaceAndPath(itemId.getNamespace(), "item/" + itemId.getPath());
+        return texturesFromModel(resourceManager, modelId, List.of("layer0", "all", "particle"));
+    }
+
+    /**
+     * Resolves texture references through a model and its parent chain, with child overrides; textures for
+     * {@code preferredKeys} come first, then every other texture the model chain declares.
+     */
+    static List<ResourceLocation> texturesFromModel(
+            ResourceManager resourceManager,
+            ResourceLocation modelId,
+            List<String> preferredKeys
+    ) {
         Map<String, TextureReference> textures = new LinkedHashMap<>();
         Set<ResourceLocation> visited = new HashSet<>();
 
@@ -160,14 +167,14 @@ public final class OreDepositOreColors {
                 String parent = stringProperty(model, "parent");
                 modelId = parent == null ? null : parseLocation(parent, modelId.getNamespace());
             } catch (IOException | RuntimeException exception) {
-                OresAndDrillsMod.LOGGER.debug("Ore deposit: failed to resolve item model {}", modelPath, exception);
+                OresAndDrillsMod.LOGGER.debug("Ore deposit: failed to resolve model {}", modelPath, exception);
                 break;
             }
         }
 
         List<ResourceLocation> result = new ArrayList<>();
         Set<ResourceLocation> unique = new HashSet<>();
-        for (String preferredKey : List.of("layer0", "all", "particle")) {
+        for (String preferredKey : preferredKeys) {
             addResolvedTexture(preferredKey, textures, result, unique);
         }
         for (String key : textures.keySet()) {
@@ -363,10 +370,9 @@ public final class OreDepositOreColors {
     }
 
     /**
-     * Groups pixels into similar-color buckets (scored by {@code count × brightness²}, so a bright but
-     * still-common cluster beats a merely-larger dark shading/outline cluster) and returns the real,
-     * observed colors of the top {@link #PALETTE_SIZE} buckets, sorted dark to light — e.g. for diamonds,
-     * the actual dark-to-light cyan tones the item texture uses, not one flat hue.
+     * The real colors of the drop texture: pixels grouped into similar-color buckets, most common first, up
+     * to {@link #MAX_PALETTE_COLORS} bucket averages. Near-black and transparent pixels are ignored so the
+     * palette does not match every dark crack of the host rock.
      */
     private static int[] paletteFromTexture(ResourceManager resourceManager, ResourceLocation texturePath) {
         Optional<Resource> resource = resourceManager.getResource(texturePath);
@@ -377,42 +383,23 @@ public final class OreDepositOreColors {
         try (InputStream stream = resource.get().open();
              NativeImage image = NativeImage.read(stream)) {
             Map<Integer, long[]> buckets = new HashMap<>();
-            Map<Integer, long[]> brightBuckets = new HashMap<>();
-            long pixelCount = 0;
-            long brightPixelCount = 0;
-
             for (int y = 0; y < image.getHeight(); y++) {
                 for (int x = 0; x < image.getWidth(); x++) {
                     int abgr = image.getPixelRGBA(x, y);
                     int alpha = (abgr >> 24) & 0xFF;
-                    if (alpha == 0) {
+                    int red = abgr & 0xFF;
+                    int green = (abgr >> 8) & 0xFF;
+                    int blue = (abgr >> 16) & 0xFF;
+                    if (alpha < 128 || Math.max(red, Math.max(green, blue)) < MINIMUM_BRIGHTNESS) {
                         continue;
                     }
 
-                    int pixelRed = abgr & 0xFF;
-                    int pixelGreen = (abgr >> 8) & 0xFF;
-                    int pixelBlue = (abgr >> 16) & 0xFF;
-                    int max = Math.max(pixelRed, Math.max(pixelGreen, pixelBlue));
-                    double brightness = max / 255.0D;
-                    if (brightness < 0.08D) {
-                        continue;
-                    }
-
-                    pixelCount++;
-                    int bucketKey = ((pixelRed >> 4) << 8) | ((pixelGreen >> 4) << 4) | (pixelBlue >> 4);
+                    int bucketKey = ((red >> 4) << 8) | ((green >> 4) << 4) | (blue >> 4);
                     long[] bucket = buckets.computeIfAbsent(bucketKey, ignored -> new long[4]);
-                    bucket[0] += pixelRed;
-                    bucket[1] += pixelGreen;
-                    bucket[2] += pixelBlue;
+                    bucket[0] += red;
+                    bucket[1] += green;
+                    bucket[2] += blue;
                     bucket[3] += 1;
-                    if (max >= 112) {
-                        brightPixelCount++;
-                        long[] brightBucket = brightBuckets.computeIfAbsent(bucketKey, ignored -> new long[4]);
-                        brightBucket[0] += pixelRed;
-                        brightBucket[1] += pixelGreen;
-                        brightBucket[2] += pixelBlue;
-                        brightBucket[3] += 1;
-                    }
                 }
             }
 
@@ -420,136 +407,19 @@ public final class OreDepositOreColors {
                 return null;
             }
 
-            Map<Integer, long[]> sourceBuckets = brightPixelCount >= Math.max(4, pixelCount / 4)
-                    ? brightBuckets
-                    : buckets;
-            List<long[]> ranked = new ArrayList<>(sourceBuckets.values());
-            ranked.sort(Comparator.comparingDouble(OreDepositOreColors::bucketScore).reversed());
-
-            List<Integer> topColors = new ArrayList<>();
-            for (int index = 0; index < Math.min(PALETTE_SIZE, ranked.size()); index++) {
-                topColors.add(bucketColor(ranked.get(index)));
-            }
-            topColors.sort(Comparator.comparingInt(OreDepositOreColors::brightnessOf));
-
-            // The bright-cluster ranking above deliberately ignores dark outline/shading pixels so the
-            // ore's characteristic hue wins the palette. For naturally near-white metals (silver, tin,
-            // aluminum, ...) that leaves the whole gradient light-on-light: the recolored flecks melt
-            // into the equally-grey stone base and the deposit looks untinted. Re-anchor the dark end
-            // with the texture's own darkest significant cluster from the full pixel set, so fleck
-            // outlines keep the ore's real shading tone — data straight from the texture, never a
-            // hard-coded per-ore color.
-            if (sourceBuckets == brightBuckets) {
-                int darkAnchor = darkestSignificantColor(buckets, pixelCount);
-                if (darkAnchor >= 0 && brightnessOf(darkAnchor) < brightnessOf(topColors.get(0))) {
-                    topColors.add(0, darkAnchor);
-                }
-            }
-
-            if (topColors.size() == 1) {
-                int only = topColors.get(0);
-                return adjustPalette(new int[] {darken(only, 0.35D), only});
-            }
-
-            int[] palette = new int[topColors.size()];
-            for (int index = 0; index < palette.length; index++) {
-                palette[index] = topColors.get(index);
-            }
-            return adjustPalette(palette);
+            return buckets.values().stream()
+                    .sorted(Comparator.comparingLong((long[] bucket) -> bucket[3]).reversed())
+                    .limit(MAX_PALETTE_COLORS)
+                    .mapToInt(bucket -> (int) (bucket[0] / bucket[3]) << 16
+                            | (int) (bucket[1] / bucket[3]) << 8
+                            | (int) (bucket[2] / bucket[3]))
+                    .toArray();
         } catch (IOException exception) {
-            OresAndDrillsMod.LOGGER.debug("Ore deposit: failed to read texture {} for tint palette", texturePath, exception);
+            OresAndDrillsMod.LOGGER.debug("Ore deposit: failed to read texture {} for the drop palette", texturePath, exception);
             return null;
         }
     }
 
     private record TextureReference(String value, String defaultNamespace) {
-    }
-
-    /**
-     * The darkest color cluster that is still a real feature of the texture (an outline/shading tone shared
-     * by a meaningful share of pixels), not a stray pixel. Returns {@code -1} when no cluster qualifies.
-     */
-    private static int darkestSignificantColor(Map<Integer, long[]> buckets, long pixelCount) {
-        long minimumCount = Math.max(1, pixelCount / 32);
-        int darkest = -1;
-        int darkestBrightness = Integer.MAX_VALUE;
-        for (long[] bucket : buckets.values()) {
-            if (bucket[3] < minimumCount) {
-                continue;
-            }
-
-            int color = bucketColor(bucket);
-            int brightness = brightnessOf(color);
-            if (brightness < darkestBrightness) {
-                darkestBrightness = brightness;
-                darkest = color;
-            }
-        }
-        return darkest;
-    }
-
-    private static double bucketScore(long[] bucket) {
-        long count = bucket[3];
-        double brightness = brightnessOf(bucketColor(bucket)) / 255.0D;
-        return count * (0.7D + brightness * brightness * 0.6D);
-    }
-
-    private static int bucketColor(long[] bucket) {
-        long count = bucket[3];
-        return rgb((int)(bucket[0] / count), (int)(bucket[1] / count), (int)(bucket[2] / count));
-    }
-
-    private static int brightnessOf(int color) {
-        int red = (color >> 16) & 0xFF;
-        int green = (color >> 8) & 0xFF;
-        int blue = color & 0xFF;
-        return Math.max(red, Math.max(green, blue));
-    }
-
-    private static int darken(int color, double amount) {
-        int red = (color >> 16) & 0xFF;
-        int green = (color >> 8) & 0xFF;
-        int blue = color & 0xFF;
-        return rgb(
-                (int)Math.round(red * (1.0D - amount)),
-                (int)Math.round(green * (1.0D - amount)),
-                (int)Math.round(blue * (1.0D - amount))
-        );
-    }
-
-    /**
-     * Extra darkening on the bottom half of the palette (the dark entries were reported as not dark enough
-     * relative to the light ones) — but only for entries that are ALREADY reasonably dark. Darkening by
-     * array position alone would also dull an ore whose whole palette is pale (e.g. fluorite): its "darkest"
-     * entry is still light, and it doesn't need extra contrast just because it's the dimmer of two pale tones.
-     */
-    private static int[] adjustPalette(int[] palette) {
-        int[] adjusted = new int[palette.length];
-        int lastDarkIndex = (palette.length - 1) / 2;
-        boolean brightPalette = averageBrightness(palette) >= 175;
-        for (int index = 0; index < palette.length; index++) {
-            int color = brightPalette ? palette[index] : darken(palette[index], 0.15D);
-            if (index <= lastDarkIndex && brightnessOf(color) < DARK_CONTRAST_THRESHOLD) {
-                color = darken(color, 0.15D);
-            }
-            adjusted[index] = color;
-        }
-        return adjusted;
-    }
-
-    private static int averageBrightness(int[] palette) {
-        int total = 0;
-        for (int color : palette) {
-            total += brightnessOf(color);
-        }
-        return palette.length == 0 ? 0 : total / palette.length;
-    }
-
-    private static int rgb(int red, int green, int blue) {
-        return (clamp(red) << 16) | (clamp(green) << 8) | clamp(blue);
-    }
-
-    private static int clamp(int value) {
-        return Math.max(0, Math.min(255, value));
     }
 }

@@ -1,9 +1,5 @@
 {
   "sources": [
-    { "type": "ores_and_drills:ore_tint" },
-    { "type": "minecraft:single", "resource": "ores_and_drills:block/depletion_layer_0" },
-    { "type": "minecraft:single", "resource": "ores_and_drills:block/depletion_layer_1" },
-    { "type": "minecraft:single", "resource": "ores_and_drills:block/depletion_layer_2" },
-    { "type": "minecraft:single", "resource": "ores_and_drills:block/depletion_layer_3" }
+    { "type": "ores_and_drills:ore_specks" }
   ]
 }

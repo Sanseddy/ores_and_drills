@@ -2,7 +2,7 @@ package dev.client;
 
 import dev.OresAndDrillsMod;
 import dev.client.ore.OreDepositBakedModel;
-import dev.client.ore.OreTintedTextureSource;
+import dev.client.ore.OreSpeckTextureSource;
 import dev.drill.AdvancedMiningDrill;
 import dev.drill.BurnerMiningDrill;
 import dev.drill.ElectricMiningDrill;
@@ -48,8 +48,8 @@ public final class ClientEvents {
 
     @SubscribeEvent
     public static void registerSpriteSourceTypes(RegisterSpriteSourceTypesEvent event) {
-        event.register(OreTintedTextureSource.ID, OreTintedTextureSource.TYPE);
-        OresAndDrillsMod.LOGGER.debug("Ore deposit: registered sprite source type {}", OreTintedTextureSource.ID);
+        event.register(OreSpeckTextureSource.ID, OreSpeckTextureSource.TYPE);
+        OresAndDrillsMod.LOGGER.debug("Ore deposit: registered sprite source type {}", OreSpeckTextureSource.ID);
     }
 
     @SubscribeEvent
@@ -67,7 +67,7 @@ public final class ClientEvents {
         OreDepositBakedModel.replaceModels(event);
     }
 
-    /** Recolors pre-stitched ore sprites once the logical server has supplied real loot-table drops. */
+    /** Regenerates pre-stitched ore speck sprites once the logical server has supplied real ores and loot-table drops. */
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
         int revision = OreDepositOrePalette.clientRevision();
@@ -75,7 +75,7 @@ public final class ClientEvents {
             return;
         }
 
-        if (OreTintedTextureSource.applySyncedPalette()) {
+        if (OreSpeckTextureSource.applySyncedPalette()) {
             appliedOrePaletteRevision = revision;
             OresAndDrillsMod.LOGGER.debug(
                     "Ore deposit: applied synchronized loot-drop palette revision {} without a resource reload",

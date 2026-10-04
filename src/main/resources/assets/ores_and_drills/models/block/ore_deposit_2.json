@@ -1,6 +1,0 @@
-{
-  "parent": "minecraft:block/cube_all",
-  "textures": {
-    "all": "ores_and_drills:block/upper_ore_layer_2"
-  }
-}

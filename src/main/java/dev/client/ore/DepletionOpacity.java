@@ -3,16 +3,17 @@ package dev.client.ore;
 final class DepletionOpacity {
     private static final int DARK_BRIGHTNESS_LIMIT = 64;
     private static final int MID_BRIGHTNESS = 128;
-    private static final int DARK_VERTEX_ALPHA = 255;
-    private static final int MID_VERTEX_ALPHA = 160;
+    private static final int DARK_VERTEX_ALPHA = 150;
+    private static final int MID_VERTEX_ALPHA = 125;
     private static final int LIGHT_VERTEX_ALPHA = 90;
 
     private DepletionOpacity() {
     }
 
     /**
-     * Keeps the depletion trace dense on dark host rock and gradually softens it on light rock.
-     * The texture's own per-pixel alpha still supplies the crack detail inside this envelope.
+     * Never fully opaque, so the host rock's own color (netherrack red, deepslate blue-grey) shows through
+     * the darkened trace; somewhat denser on dark rock, where the dark trace has less contrast, and gradually
+     * softer on light rock.
      */
     static int vertexAlpha(int averageBrightness) {
         int clampedBrightness = Math.max(0, Math.min(255, averageBrightness));
