@@ -5,6 +5,7 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "CanyonWorldCarverMixin",
+    "ChunkGeneratorMixin",
     "CaveWorldCarverMixin",
     "CreateBlockBreakingMovementBehaviourMixin",
     "CreateBlockHelperMixin",
@@ -18,8 +19,10 @@
     "SableSubLevelAssemblyHelperMixin",
     "SableSubLevelPlayerChunkSenderMixin",
     "SimulatedPhysicsAssemblerMixin",
+    "StructureStartMixin",
     "TagLoaderMixin",
-    "TagManagerMixin"
+    "TagManagerMixin",
+    "WorldGenRegionMixin"
   ],
   "client": [
     "CreateWorldScreenWorldTabMixin",

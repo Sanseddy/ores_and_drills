@@ -5,6 +5,7 @@
 bin/
 build/
 run/
+run-server/
 run-data/
 src/generated/
 out/

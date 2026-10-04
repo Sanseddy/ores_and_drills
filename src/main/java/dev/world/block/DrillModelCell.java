@@ -32,6 +32,18 @@ public final class DrillModelCell {
         return lines;
     }
 
+    /** Visits every model triangle of this cell in block-local coordinates (used for placement previews). */
+    public void forEachTriangle(TriangleVisitor visitor) {
+        for (Triangle triangle : triangles) {
+            visitor.accept(triangle.first(), triangle.second(), triangle.third(), triangle.normal());
+        }
+    }
+
+    @FunctionalInterface
+    public interface TriangleVisitor {
+        void accept(Vec3 first, Vec3 second, Vec3 third, Vec3 normal);
+    }
+
     public BlockHitResult clip(Vec3 worldStart, Vec3 worldEnd, BlockPos blockPos) {
         Vec3 origin = Vec3.atLowerCornerOf(blockPos);
         Vec3 start = worldStart.subtract(origin);

@@ -1,7 +1,9 @@
 package dev.world.block.entity.drill;
 
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.RecipeType;
 
 public final class FuelBurner {
     private int fuelTime;
@@ -40,15 +42,24 @@ public final class FuelBurner {
         return false;
     }
 
-    public boolean consume(ItemStack fuelStack) {
-        int burnTime = fuelStack.getBurnTime(null);
+    /** Lights the next fuel item exactly like a furnace: smelting burn time, and remainders such as an empty bucket stay. */
+    public boolean consume(Container container, int slot) {
+        ItemStack fuelStack = container.getItem(slot);
+        int burnTime = fuelStack.isEmpty() ? 0 : fuelStack.getBurnTime(RecipeType.SMELTING);
         if (burnTime <= 0) {
             return false;
         }
 
         fuelTime = burnTime;
         fuelDuration = burnTime;
-        fuelStack.shrink(1);
+        if (fuelStack.hasCraftingRemainingItem()) {
+            container.setItem(slot, fuelStack.getCraftingRemainingItem());
+        } else {
+            fuelStack.shrink(1);
+            if (fuelStack.isEmpty()) {
+                container.setItem(slot, fuelStack.getCraftingRemainingItem());
+            }
+        }
         return true;
     }
 

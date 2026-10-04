@@ -46,9 +46,10 @@ import software.bernie.geckolib.renderer.GeoBlockRenderer;
 import software.bernie.geckolib.renderer.GeoItemRenderer;
 
 public final class UltimateMiningDrill {
-    public static final MiningDrillTier TIER = new MiningDrillTier(7, 40, 64, new ItemStack(Items.NETHERITE_PICKAXE));
+    public static final MiningDrillTier TIER = new MiningDrillTier(7, 4, 1, new ItemStack(Items.NETHERITE_PICKAXE), 6);
     public static final int STRUCTURE_HEIGHT = 9;
-    public static final EnergyProfile ENERGY = new EnergyProfile(128_000, 80);
+    public static final EnergyProfile ENERGY = new EnergyProfile(128_000, 400);
+    public static final int PRODUCTIVITY_PERCENT = 70;
 
     private static final Component MENU_TITLE = Component.translatable("container.ores_and_drills.ultimate_mining_drill");
 
@@ -119,7 +120,7 @@ public final class UltimateMiningDrill {
 
     public static class BlockEntity extends AbstractEnergyDrillBlockEntity {
         public BlockEntity(BlockPos pos, BlockState state) {
-            super(ModBlockEntities.ULTIMATE_MINING_DRILL.get(), pos, state, TIER, ENERGY, ModBlocks.ULTIMATE_STRUCTURE, 70, 20_000);
+            super(ModBlockEntities.ULTIMATE_MINING_DRILL.get(), pos, state, TIER, ENERGY, ModBlocks.ULTIMATE_STRUCTURE, PRODUCTIVITY_PERCENT, 20_000);
         }
 
         public static void tick(Level level, BlockPos pos, BlockState state, BlockEntity blockEntity) {
@@ -153,7 +154,7 @@ public final class UltimateMiningDrill {
 
     public static class Item extends AbstractDrillBlockItem {
         public Item(net.minecraft.world.level.block.Block block, net.minecraft.world.item.Item.Properties properties) {
-            super(block, properties);
+            super(block, properties, TIER, ENERGY, PRODUCTIVITY_PERCENT);
         }
 
         @Override

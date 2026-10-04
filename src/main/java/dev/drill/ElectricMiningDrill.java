@@ -46,8 +46,8 @@ import software.bernie.geckolib.renderer.GeoBlockRenderer;
 import software.bernie.geckolib.renderer.GeoItemRenderer;
 
 public final class ElectricMiningDrill {
-    public static final MiningDrillTier TIER = new MiningDrillTier(3, 60, 8, new ItemStack(Items.IRON_PICKAXE));
-    public static final EnergyProfile ENERGY = new EnergyProfile(32_000, 20);
+    public static final MiningDrillTier TIER = new MiningDrillTier(3, 40, 1, new ItemStack(Items.IRON_PICKAXE), 1);
+    public static final EnergyProfile ENERGY = new EnergyProfile(32_000, 40);
 
     private static final Component MENU_TITLE = Component.translatable("container.ores_and_drills.electric_mining_drill");
 
@@ -152,7 +152,7 @@ public final class ElectricMiningDrill {
 
     public static class Item extends AbstractDrillBlockItem {
         public Item(net.minecraft.world.level.block.Block block, net.minecraft.world.item.Item.Properties properties) {
-            super(block, properties);
+            super(block, properties, TIER, ENERGY, 0);
         }
 
         @Override

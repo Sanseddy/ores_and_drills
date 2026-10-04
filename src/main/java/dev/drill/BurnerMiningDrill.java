@@ -38,6 +38,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerLevelAccess;
 import net.minecraft.world.inventory.DataSlot;
+import net.minecraft.world.inventory.FurnaceFuelSlot;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -56,7 +57,7 @@ import software.bernie.geckolib.renderer.GeoBlockRenderer;
 import software.bernie.geckolib.renderer.GeoItemRenderer;
 
 public final class BurnerMiningDrill {
-    public static final MiningDrillTier TIER = new MiningDrillTier(2, 60, 2, new ItemStack(Items.STONE_PICKAXE));
+    public static final MiningDrillTier TIER = new MiningDrillTier(2, 80, 1, new ItemStack(Items.STONE_PICKAXE), 0);
 
     private static final Component MENU_TITLE = Component.translatable("container.ores_and_drills.burner_mining_drill");
 
@@ -140,6 +141,13 @@ public final class BurnerMiningDrill {
             return slot == FUEL_SLOT && AbstractFurnaceBlockEntity.isFuel(stack);
         }
 
+        @Override
+        protected boolean canAutomationExtractItem(int slot) {
+            // As from a furnace, automation may take the empty bucket left behind by a lava bucket.
+            return super.canAutomationExtractItem(slot)
+                    || slot == FUEL_SLOT && FurnaceFuelSlot.isBucket(inventory.getItem(FUEL_SLOT));
+        }
+
         public int getFuelTime() {
             return fuelBurner.fuelTime();
         }
@@ -169,15 +177,17 @@ public final class BurnerMiningDrill {
             boolean changed = scan.changed();
             FuelBurner fuelBurner = blockEntity.fuelBurner;
 
+            // Like a furnace: new fuel is lit only when there is work, but lit fuel burns down every tick
+            // until it is spent, whether or not the drill can keep mining.
             if (!fuelBurner.isBurning() && canMine && outputReady) {
-                changed |= fuelBurner.consume(blockEntity.inventory.getItem(FUEL_SLOT));
+                changed |= fuelBurner.consume(blockEntity.inventory, FUEL_SLOT);
             } else if (!fuelBurner.isBurning()) {
                 changed |= fuelBurner.clearIfIdle();
             }
 
             boolean wasBurning = fuelBurner.isBurning();
             boolean poweredAndMining = wasBurning && canMine && outputReady;
-            if (poweredAndMining) {
+            if (wasBurning) {
                 fuelBurner.tickDown();
             }
 
@@ -405,7 +415,12 @@ public final class BurnerMiningDrill {
 
             @Override
             public boolean mayPlace(ItemStack stack) {
-                return AbstractFurnaceBlockEntity.isFuel(stack);
+                return AbstractFurnaceBlockEntity.isFuel(stack) || FurnaceFuelSlot.isBucket(stack);
+            }
+
+            @Override
+            public int getMaxStackSize(ItemStack stack) {
+                return FurnaceFuelSlot.isBucket(stack) ? 1 : super.getMaxStackSize(stack);
             }
         }
 
@@ -444,7 +459,7 @@ public final class BurnerMiningDrill {
 
     public static class Item extends AbstractDrillBlockItem {
         public Item(net.minecraft.world.level.block.Block block, net.minecraft.world.item.Item.Properties properties) {
-            super(block, properties);
+            super(block, properties, TIER, null, 0);
         }
 
         @Override

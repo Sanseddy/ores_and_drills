@@ -44,6 +44,14 @@ public final class OreDepositConfig {
     // RU: Общий множитель попыток создать MEDIUM/LARGE залежь: 1.0 оставляет исходную частоту.
     public static final double LARGE_DEPOSIT_ATTEMPT_MULTIPLIER = 1.0D;
 
+    // EN: Extra frequency multiplier for SMALL deposits only; below 1.0 makes SMALL rarer without touching TINY.
+    // RU: Дополнительный множитель частоты только для SMALL: меньше 1.0 — SMALL реже, TINY не меняется.
+    public static final double SMALL_DEPOSIT_FREQUENCY_MULTIPLIER = 0.5D;
+
+    // EN: Extra frequency multiplier for LARGE deposits only; above 1.0 makes LARGE more common without touching MEDIUM.
+    // RU: Дополнительный множитель частоты только для LARGE: больше 1.0 — LARGE чаще, MEDIUM не меняется.
+    public static final double LARGE_DEPOSIT_FREQUENCY_MULTIPLIER = 2.0D;
+
     // EN: Share of an ore's original frequency allocated to TINY/SMALL deposits.
     // RU: Доля исходной частоты руды, выделяемая маленьким залежам TINY/SMALL.
     public static final double SMALL_DEPOSIT_FREQUENCY_SHARE = 0.65D;

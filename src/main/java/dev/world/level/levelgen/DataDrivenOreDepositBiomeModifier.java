@@ -13,13 +13,18 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.ChunkGenerator;
+import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.levelgen.GenerationStep;
 import net.minecraft.world.level.levelgen.feature.ConfiguredFeature;
 import net.minecraft.world.level.levelgen.feature.configurations.OreConfiguration;
-import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.structure.templatesystem.BlockMatchTest;
 import net.minecraft.world.level.levelgen.structure.templatesystem.RuleTest;
 import net.minecraft.world.level.levelgen.structure.templatesystem.TagMatchTest;
@@ -51,6 +56,8 @@ public record DataDrivenOreDepositBiomeModifier(
 ) implements BiomeModifier {
     private static final Map<Holder<Biome>, RuleSession> ACTIVE_RULES =
             java.util.Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Map<ResourceLocation, List<ConfiguredFeature<?, ?>>> DECORATION_FEATURES =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
     public static final MapCodec<DataDrivenOreDepositBiomeModifier> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             Codec.STRING.listOf().fieldOf("ores").forGetter(DataDrivenOreDepositBiomeModifier::ores),
@@ -91,6 +98,7 @@ public record DataDrivenOreDepositBiomeModifier(
                 if (session == null || session.builder() != builder) {
                     session = new RuleSession(builder, new ArrayList<>());
                     ACTIVE_RULES.put(biome, session);
+                    biome.unwrapKey().ifPresent(key -> DECORATION_FEATURES.remove(key.location()));
                 }
                 List<DataDrivenOreDepositBiomeModifier> rules = session.rules();
                 if (!rules.contains(this)) {
@@ -102,9 +110,17 @@ public record DataDrivenOreDepositBiomeModifier(
         if (phase != Phase.AFTER_EVERYTHING || !matchesBiome(biome)) {
             return;
         }
+        ResourceLocation biomeId = biome.unwrapKey().map(key -> key.location()).orElse(null);
+        if (biomeId == null) {
+            return;
+        }
 
-        List<Holder<PlacedFeature>> features = builder.getGenerationSettings()
-                .getFeatures(GenerationStep.Decoration.UNDERGROUND_ORES);
+        // Rules are not attached to the biome's feature list: some cave-biome mods (Alex's Caves) install
+        // their biomes outside the vanilla feature index, so such a feature would silently never run there.
+        // decorate() runs them from the chunk's real biome data instead.
+        List<ConfiguredFeature<?, ?>> features = DECORATION_FEATURES.computeIfAbsent(
+                biomeId, ignored -> new java.util.concurrent.CopyOnWriteArrayList<>()
+        );
         for (Block ore : matchingUnifiedOres()) {
             for (Map.Entry<String, TierSettings> entry : sizes.entrySet()) {
                 OreDepositTier tier = OreDepositTier.fromName(entry.getKey()).orElseThrow();
@@ -112,16 +128,15 @@ public record DataDrivenOreDepositBiomeModifier(
                     continue;
                 }
                 TierSettings tierSettings = entry.getValue();
-                int slots = tierSettings.candidateSlots();
+                // A forced rule places exactly `count` deposits per biome instance from one feature, which
+                // keeps its own per-instance ledger; frequency rules keep one feature per cell slot.
+                int slots = tierSettings.forced() ? 1 : tierSettings.candidateSlots();
                 for (int slot = 0; slot < slots; slot++) {
                     double chance = tierSettings.chanceForSlot(slot);
                     if (chance <= 0.0D) {
                         continue;
                     }
-                    OreDepositFeature.DataDrivenSettings settings = new OreDepositFeature.DataDrivenSettings(
-                            dimensions, minY, maxY, tierSettings.placement(), tierSettings.forced(), chance, slot,
-                            stableSignature(), tierSettings.sizeMultiplier(), tierSettings.richnessMultiplier()
-                    );
+                    OreDepositFeature.DataDrivenSettings settings = featureSettings(tierSettings, chance, slot);
                     OreDepositFeature.Configuration configuration = new OreDepositFeature.Configuration(
                             targetsFor(ore), tier.index(), 1.0F, 1.0F,
                             tierSettings.sizeMultiplier(), tierSettings.richnessMultiplier(),
@@ -129,8 +144,46 @@ public record DataDrivenOreDepositBiomeModifier(
                     );
                     ConfiguredFeature<OreDepositFeature.Configuration, OreDepositFeature> configured =
                             new ConfiguredFeature<>(ModWorldgen.ORE_DEPOSIT_FEATURE.get(), configuration);
-                    features.add(Holder.direct(new PlacedFeature(Holder.direct(configured), List.of())));
+                    features.add(configured);
                 }
+            }
+        }
+    }
+
+    /**
+     * Runs the datapack rules of every biome present in this chunk. Called after vanilla biome decoration;
+     * each rule still places only from its planned source chunk and only when the planned center is in its biome.
+     */
+    public static void decorate(WorldGenLevel level, ChunkAccess chunk, ChunkGenerator generator) {
+        if (DECORATION_FEATURES.isEmpty()) {
+            return;
+        }
+        // Like vanilla decoration, a rule runs when its biome is in this chunk or a neighbour: its planned
+        // center may sit just outside the real biome and is then moved onto it (see OreDepositFeature).
+        Set<Holder<Biome>> biomes = new java.util.HashSet<>();
+        ChunkPos chunkPos = chunk.getPos();
+        for (int offsetX = -1; offsetX <= 1; offsetX++) {
+            for (int offsetZ = -1; offsetZ <= 1; offsetZ++) {
+                ChunkAccess neighbour = level.getChunk(
+                        chunkPos.x + offsetX, chunkPos.z + offsetZ, ChunkStatus.BIOMES, false
+                );
+                if (neighbour == null) {
+                    continue;
+                }
+                for (LevelChunkSection section : neighbour.getSections()) {
+                    section.getBiomes().getAll(biomes::add);
+                }
+            }
+        }
+        BlockPos origin = new BlockPos(chunkPos.getMinBlockX(), level.getMinBuildHeight(), chunkPos.getMinBlockZ());
+        for (Holder<Biome> biome : biomes) {
+            ResourceLocation biomeId = biome.unwrapKey().map(key -> key.location()).orElse(null);
+            List<ConfiguredFeature<?, ?>> features = biomeId == null ? null : DECORATION_FEATURES.get(biomeId);
+            if (features == null) {
+                continue;
+            }
+            for (ConfiguredFeature<?, ?> feature : features) {
+                feature.place(level, generator, RandomSource.create(level.getSeed() ^ chunkPos.toLong()), origin);
             }
         }
     }
@@ -262,6 +315,11 @@ public record DataDrivenOreDepositBiomeModifier(
                 return;
             }
             TierSettings tierSettings = winner.settings(tier).orElseThrow();
+            if (tierSettings.forced()) {
+                // Forced deposits are counted per biome instance while chunks generate, so their positions
+                // are not seed-predictable; /locate returns them from the confirmed index once placed.
+                return;
+            }
             int slots = tierSettings.candidateSlots();
             for (int slot = 0; slot < slots; slot++) {
                 double chance = tierSettings.chanceForSlot(slot);
@@ -320,7 +378,7 @@ public record DataDrivenOreDepositBiomeModifier(
     private OreDepositFeature.DataDrivenSettings featureSettings(TierSettings settings, double chance, int slot) {
         return new OreDepositFeature.DataDrivenSettings(
                 dimensions, minY, maxY, settings.placement(), settings.forced(), chance, slot,
-                stableSignature(), settings.sizeMultiplier(), settings.richnessMultiplier()
+                stableSignature(), settings.sizeMultiplier(), settings.richnessMultiplier(), settings.count()
         );
     }
 

@@ -16,9 +16,8 @@ final class OptionalBiomeRegionHints {
     private static final String ALEX_CAVES_RARITY_CLASS =
             "com.github.alexmodguy.alexscaves.server.level.biome.ACBiomeRarity";
     private static final int ALEX_CAVES_CHUNK_STEP = 4;
-    // Stay in the stable core of a late-installed cave biome. The outer Voronoi region only
-    // selects which cave may appear; it is not itself proof that every block is in that biome.
-    private static final int ALEX_CAVES_SAFE_CORE_RADIUS = 64;
+    private static final int REGION_EDGE_SEARCH_RADIUS = 192;
+    private static final int REGION_EDGE_SEARCH_STEP = 16;
     private static volatile boolean alexCavesLookupResolved;
     private static volatile Method alexCavesLookup;
     private static volatile Method alexCavesCenterLookup;
@@ -85,9 +84,10 @@ final class OptionalBiomeRegionHints {
     }
 
     /**
-     * Tests the seed-based biome region used by an optional mod. Alex's Caves replaces the
-     * biome during chunk filling, so it is intentionally not always visible through the
-     * vanilla noise-biome source used by remote planning and /locate.
+     * Tests whether the seed-based region of an optional mod assigns this biome to the column. Alex's
+     * Caves replaces the biome during chunk filling from climate values that the uncached noise source
+     * does not reproduce, so the exact 3D shape cannot be predicted remotely. The region is reliable,
+     * and generation moves a planned center onto the real biome from the chunk's own data.
      */
     static boolean matches(ServerLevel level, BlockPos pos, ResourceLocation requestedBiome) {
         if (!ALEX_CAVES_NAMESPACE.equals(requestedBiome.getNamespace())) {
@@ -99,17 +99,7 @@ final class OptionalBiomeRegionHints {
         }
         try {
             Object result = lookup.invoke(null, level.getSeed(), pos.getX(), pos.getZ());
-            if (!(result instanceof ResourceKey<?> key) || !requestedBiome.equals(key.location())) {
-                return false;
-            }
-            BlockPos center = alexCavesRegionCenter(level, pos.getX(), pos.getZ(), pos.getY());
-            if (center == null) {
-                return false;
-            }
-            long dx = (long) center.getX() - pos.getX();
-            long dz = (long) center.getZ() - pos.getZ();
-            return dx * dx + dz * dz
-                    <= (long) ALEX_CAVES_SAFE_CORE_RADIUS * ALEX_CAVES_SAFE_CORE_RADIUS;
+            return result instanceof ResourceKey<?> key && requestedBiome.equals(key.location());
         } catch (ReflectiveOperationException | RuntimeException exception) {
             OresAndDrillsMod.LOGGER.debug(
                     "Optional Alex's Caves biome-region lookup became unavailable", exception
@@ -117,6 +107,50 @@ final class OptionalBiomeRegionHints {
             alexCavesLookup = null;
             return false;
         }
+    }
+
+    /**
+     * Stable identity of the optional mod's biome region containing this column (one Alex's Caves cave), or
+     * {@code null} for biomes that are not region-based.
+     */
+    static String regionKey(ServerLevel level, BlockPos pos, ResourceLocation biome) {
+        Method lookup = alexCavesLookup();
+        if (!ALEX_CAVES_NAMESPACE.equals(biome.getNamespace()) || lookup == null) {
+            return null;
+        }
+        Method centerLookup = alexCavesCenterLookup;
+        if (centerLookup == null) {
+            return null;
+        }
+        try {
+            // The real cave can reach a little past the region's own radius; such edge columns belong to the
+            // nearest region of the same biome (regions of one biome are about 2000 blocks apart).
+            for (int ring = 0; ring <= REGION_EDGE_SEARCH_RADIUS; ring += REGION_EDGE_SEARCH_STEP) {
+                for (int dx = -ring; dx <= ring; dx += REGION_EDGE_SEARCH_STEP) {
+                    for (int dz = -ring; dz <= ring; dz += REGION_EDGE_SEARCH_STEP) {
+                        if (Math.max(Math.abs(dx), Math.abs(dz)) != ring) {
+                            continue;
+                        }
+                        int x = pos.getX() + dx;
+                        int z = pos.getZ() + dz;
+                        Object regionBiome = lookup.invoke(null, level.getSeed(), x, z);
+                        if (!(regionBiome instanceof ResourceKey<?> key) || !biome.equals(key.location())) {
+                            continue;
+                        }
+                        Object result = centerLookup.invoke(null, level.getSeed(), x, z);
+                        if (result instanceof Vec3 center) {
+                            return "region:" + biome + ":" + (long) Math.floor(center.x) + ":" + (long) Math.floor(center.z);
+                        }
+                    }
+                }
+            }
+        } catch (ReflectiveOperationException | RuntimeException exception) {
+            OresAndDrillsMod.LOGGER.debug(
+                    "Optional Alex's Caves biome-center lookup became unavailable", exception
+            );
+            alexCavesCenterLookup = null;
+        }
+        return null;
     }
 
     private static BlockPos alexCavesRegionCenter(ServerLevel level, int x, int z, int y) {

@@ -39,11 +39,16 @@ exist simply match nothing. `frequency` is the expected number of independent ca
 tier cell and accepts values from `0` to `64`; for example `1.25` is one guaranteed candidate plus
 a deterministic 25% second slot. Omit a size to disable it.
 
-Set `forced` to `true` to disable the frequency roll for that size. `count` then specifies how many
-guaranteed independent candidates are created in every qualifying cell of an allowed biome and
-accepts values from `1` to `64`. `frequency` may be omitted in forced mode. Biome, dimension,
-height, replacement-block and placement-mode checks are still authoritative: `forced` does not
-place a deposit into a forbidden biome or into terrain that contains no allowed host blocks.
+Set `forced` to `true` to disable the frequency roll for that size. `count` then specifies exactly how
+many deposits are placed in every instance of an allowed biome (one cave, one connected biome patch)
+and accepts values from `1` to `64`. `frequency` may be omitted in forced mode. Instances of
+region-based mod biomes (Alex's Caves) are their regions; other biomes are measured as connected
+patches, and patches too large to measure are counted per layout cell instead. A chunk of the
+instance only claims a slot once its deposit is really built, so a spot without enough host rock
+leaves the slot to another part of the instance. Deposits of one instance keep a distance from each
+other. Biome, dimension, height, replacement-block and placement-mode checks are still authoritative:
+`forced` does not place a deposit into a forbidden biome or into terrain that contains no allowed host
+blocks. Forced deposits are placed while chunks generate, so `/locate` finds them once they exist.
 
 Placement modes:
 

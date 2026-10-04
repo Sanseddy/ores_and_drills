@@ -81,7 +81,8 @@ public final class ModBlocks {
             BURNER_MINING_DRILL, BURNER_MINING_DRILL_PART, BURNER_MINING_DRILL_ITEM,
             BurnerMiningDrill.PartBlock.OFFSET_X, BurnerMiningDrill.PartBlock.OFFSET_Y, BurnerMiningDrill.PartBlock.OFFSET_Z,
             0.0D,
-            "/assets/ores_and_drills/geo/burner_mining_drill.geo.json"
+            "/assets/ores_and_drills/geo/burner_mining_drill.geo.json",
+            BurnerMiningDrill.TIER
     );
 
     // Electric Mining Drill (FE-powered)
@@ -106,7 +107,8 @@ public final class ModBlocks {
             ELECTRIC_MINING_DRILL, ELECTRIC_MINING_DRILL_PART, ELECTRIC_MINING_DRILL_ITEM,
             ElectricMiningDrill.PartBlock.OFFSET_X, ElectricMiningDrill.PartBlock.OFFSET_Y, ElectricMiningDrill.PartBlock.OFFSET_Z,
             1.0D,
-            "/assets/ores_and_drills/geo/electric_mining_drill.geo.json"
+            "/assets/ores_and_drills/geo/electric_mining_drill.geo.json",
+            ElectricMiningDrill.TIER
     );
 
     // Advanced Mining Drill (FE-powered)
@@ -131,7 +133,8 @@ public final class ModBlocks {
             ADVANCED_MINING_DRILL, ADVANCED_MINING_DRILL_PART, ADVANCED_MINING_DRILL_ITEM,
             AdvancedMiningDrill.PartBlock.OFFSET_X, AdvancedMiningDrill.PartBlock.OFFSET_Y, AdvancedMiningDrill.PartBlock.OFFSET_Z,
             2.0D,
-            "/assets/ores_and_drills/geo/advanced_mining_drill.geo.json"
+            "/assets/ores_and_drills/geo/advanced_mining_drill.geo.json",
+            AdvancedMiningDrill.TIER
     );
 
     // Ultimate Mining Drill (FE-powered)
@@ -157,7 +160,8 @@ public final class ModBlocks {
             ULTIMATE_MINING_DRILL, ULTIMATE_MINING_DRILL_PART, ULTIMATE_MINING_DRILL_ITEM,
             UltimateMiningDrill.PartBlock.OFFSET_X, UltimateMiningDrill.PartBlock.OFFSET_Y, UltimateMiningDrill.PartBlock.OFFSET_Z,
             3.0D,
-            "/assets/ores_and_drills/geo/ultimate_mining_drill.geo.json"
+            "/assets/ores_and_drills/geo/ultimate_mining_drill.geo.json",
+            UltimateMiningDrill.TIER
     );
 
     private ModBlocks() {

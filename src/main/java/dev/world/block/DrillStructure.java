@@ -1,5 +1,8 @@
 package dev.world.block;
 
+import dev.registry.ModBlocks;
+import dev.world.block.entity.drill.OreScanner;
+import dev.world.level.levelgen.OreDepositData;
 import dev.world.level.levelgen.OreTags;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -25,6 +28,8 @@ public final class DrillStructure {
     private static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
 
     private final int size;
+    private final MiningDrillTier tier;
+    private final int miningAreaMargin;
     private final int height;
     private final int mainOffsetX;
     private final int mainOffsetY;
@@ -45,8 +50,11 @@ public final class DrillStructure {
                           Supplier<? extends Item> partCloneItem,
                           IntegerProperty offsetXProperty, IntegerProperty offsetYProperty, IntegerProperty offsetZProperty,
                           double modelForwardOffset,
-                          String geometryResource) {
+                          String geometryResource,
+                          MiningDrillTier tier) {
         this.size = size;
+        this.tier = tier;
+        this.miningAreaMargin = Math.max(0, tier.miningAreaMargin());
         this.height = height;
         this.mainOffsetX = mainOffsetX;
         this.mainOffsetY = mainOffsetY;
@@ -77,6 +85,24 @@ public final class DrillStructure {
 
     public int height() {
         return height;
+    }
+
+    /** Blocks the mining area reaches past the drill body on every side. */
+    public int miningAreaMargin() {
+        return miningAreaMargin;
+    }
+
+    /**
+     * Horizontal bounds of the mined columns: the body footprint grown by {@link #miningAreaMargin()} on every
+     * side. The box spans the ground layer directly below the drill; ore is scanned downwards from there.
+     */
+    public AABB miningAreaBounds(BlockPos origin, Direction facing) {
+        BlockPos first = offset(origin, facing, -miningAreaMargin, 0, -miningAreaMargin).below();
+        BlockPos second = offset(origin, facing, size - 1 + miningAreaMargin, 0, size - 1 + miningAreaMargin).below();
+        return new AABB(
+                Math.min(first.getX(), second.getX()), first.getY(), Math.min(first.getZ(), second.getZ()),
+                Math.max(first.getX(), second.getX()) + 1, first.getY() + 1, Math.max(first.getZ(), second.getZ()) + 1
+        );
     }
 
     public IntegerProperty offsetXProperty() {
@@ -117,8 +143,6 @@ public final class DrillStructure {
     }
 
     private boolean hasValidSupport(Level level, BlockPos origin, Direction facing) {
-        boolean hasOre = false;
-
         for (int offsetX = 0; offsetX < size; offsetX++) {
             for (int offsetZ = 0; offsetZ < size; offsetZ++) {
                 BlockPos supportPos = offset(origin, facing, offsetX, 0, offsetZ).below();
@@ -129,14 +153,39 @@ public final class DrillStructure {
                         || !supportState.isFaceSturdy(level, supportPos, Direction.UP)) {
                     return false;
                 }
-
-                if (OreTags.isOre(supportState)) {
-                    hasOre = true;
-                }
             }
         }
 
-        return hasOre;
+        return hasMineableOre(level, origin, facing);
+    }
+
+    /**
+     * True when the mining area holds ore this drill can harvest, searched as deep as the drill scans. The
+     * ore may lie anywhere in the area, not only under the body.
+     */
+    public boolean hasMineableOre(Level level, BlockPos origin, Direction facing) {
+        for (int offsetX = -miningAreaMargin; offsetX < size + miningAreaMargin; offsetX++) {
+            for (int offsetZ = -miningAreaMargin; offsetZ < size + miningAreaMargin; offsetZ++) {
+                BlockPos columnTop = offset(origin, facing, offsetX, 0, offsetZ).below();
+                for (int depth = 0; depth < OreScanner.SCAN_DEPTH; depth++) {
+                    BlockPos pos = columnTop.below(depth);
+                    BlockState state = level.getBlockState(pos);
+                    if (OreTags.isOre(state) && tier.canHarvest(harvestCheckState(level, pos, state))) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /** A deposit block is harvested as the ore it holds, like the drill's own scanner does. */
+    private static BlockState harvestCheckState(Level level, BlockPos pos, BlockState state) {
+        if (!state.is(ModBlocks.ORE_DEPOSIT.get())) {
+            return state;
+        }
+        Block ore = OreDepositData.oreBlockAt(level, pos);
+        return ore == null ? state : ore.defaultBlockState();
     }
 
     public void placeParts(Level level, BlockPos origin, Direction facing) {

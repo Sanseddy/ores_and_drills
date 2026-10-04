@@ -25,7 +25,7 @@ import java.util.function.Predicate;
 public final class OreScanner {
     private static final int DROP_RANGE_SAMPLES = 64;
     /** Vertical range scanned below the drill per column; comfortably covers the deepest possible vein (see {@link OreDepositFeature#MAX_UNDERGROUND_DEPTH}). */
-    private static final int SCAN_DEPTH = OreDepositFeature.MAX_UNDERGROUND_DEPTH + 4;
+    public static final int SCAN_DEPTH = OreDepositFeature.MAX_UNDERGROUND_DEPTH + 4;
     private static final Map<ResourceLocation, DropRange> DROP_RANGE_CACHE = new HashMap<>();
 
     private OreScanner() {
@@ -46,16 +46,18 @@ public final class OreScanner {
     }
 
     /**
-     * Scans every column in the drill's footprint from directly below it down through {@link #SCAN_DEPTH}
+     * Scans every column in the drill's mining area from directly below it down through {@link #SCAN_DEPTH}
      * blocks, collecting every ore position found along the way (plain stone/rock between ore is skipped,
      * not mined) so a vein isn't limited to whatever single layer happens to sit right under the drill.
      */
     public static List<Target> scan(ServerLevel level, BlockPos origin, Direction facing, DrillStructure structure, MiningDrillTier tier) {
         int size = structure.size();
+        // The mining area extends past the body on every side (2x2 -> 2x2, 3x3 -> 5x5, 5x5 -> 13x13, 7x7 -> 19x19).
+        int margin = structure.miningAreaMargin();
         List<Target> targets = new ArrayList<>();
 
-        for (int offsetZ = 0; offsetZ < size; offsetZ++) {
-            for (int offsetX = 0; offsetX < size; offsetX++) {
+        for (int offsetZ = -margin; offsetZ < size + margin; offsetZ++) {
+            for (int offsetX = -margin; offsetX < size + margin; offsetX++) {
                 BlockPos columnTop = structure.offset(origin, facing, offsetX, 0, offsetZ).below();
                 scanColumn(level, columnTop, tier, targets);
             }

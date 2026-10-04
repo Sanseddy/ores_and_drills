@@ -18,6 +18,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.QuartPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
@@ -30,6 +31,7 @@ import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.feature.Feature;
@@ -37,6 +39,12 @@ import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfiguration;
 import net.minecraft.world.level.levelgen.feature.configurations.OreConfiguration;
 import net.minecraft.world.level.levelgen.structure.templatesystem.RuleTest;
+
+import it.unimi.dsi.fastutil.longs.LongSet;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.minecraft.world.level.levelgen.structure.Structure;
+import net.minecraft.world.level.levelgen.structure.StructurePiece;
+import net.minecraft.world.level.levelgen.structure.StructureStart;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
@@ -120,7 +128,15 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
             ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "biome_anchor");
     private static final int DATA_DRIVEN_BIOME_COLUMNS_PER_CELL = 256;
     private static final int MAX_DATA_DRIVEN_BIOME_ANCHORS = 64;
-    private static final int MAX_DATA_DRIVEN_CANDIDATE_CACHE_ENTRIES = 131_072;
+    // MEDIUM/LARGE lens relocation away from caves, fluids, planned structures and the write bounds.
+    private static final int MAX_LENS_SHIFT = 16;
+    private static final int LENS_SHIFT_STEP = 2;
+    private static final int[] LENS_SHIFT_HEIGHTS = {0, -2, 2, -4, 4};
+    private static final int MAX_LENS_SHIFT_EVALUATIONS = 160;
+    private static final long LENS_SHIFT_SALT = 0x4C454E5353484946L;
+    private static final long FORCED_SLOT_SALT = 0x464F524345445354L;
+    private static final int FORCED_ASSUMED_REGION_RADIUS = 150;
+    private static final ThreadLocal<DataDrivenDepositLedger.Reservation> PENDING_RESERVATION = new ThreadLocal<>();    private static final int MAX_DATA_DRIVEN_CANDIDATE_CACHE_ENTRIES = 131_072;
     private static final ConcurrentHashMap<Long, DepositCandidate> DATA_DRIVEN_CANDIDATE_CACHE =
             new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<Long, List<BlockPos>> DATA_DRIVEN_BIOME_ANCHOR_CACHE =
@@ -616,10 +632,11 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
                     if (!isNoiseBiome(level, sample, biomeId)) {
                         continue;
                     }
+                    // One anchor per column: the Y order is already permuted, so the first match is a
+                    // random height. Taking every matching height filled the list from two or three
+                    // columns in cave biomes and stacked all slots of a cell at the same X/Z.
                     anchors.add(sample.immutable());
-                    if (anchors.size() >= MAX_DATA_DRIVEN_BIOME_ANCHORS) {
-                        break;
-                    }
+                    break;
                 }
                 if (anchors.size() >= MAX_DATA_DRIVEN_BIOME_ANCHORS) {
                     break;
@@ -668,6 +685,134 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
                 quartMinimumY + pointRandom.nextInt(quartMaximumY - quartMinimumY + 1),
                 (quartZ << 2) + pointRandom.nextInt(4)
         );
+    }
+
+    /**
+     * Forced datapack rules place exactly {@code count} deposits per biome instance. This chunk offers a center
+     * from its own real biome data and reserves a slot of the instance's ledger; the slot is committed only if
+     * the deposit is built (see {@link #place}), so a failed chunk leaves it for another part of the instance.
+     */
+    private static DepositCandidate reserveForcedDeposit(
+            WorldGenLevel level,
+            int chunkX,
+            int chunkZ,
+            int tier,
+            ResourceLocation oreId,
+            ResourceLocation biomeId,
+            DataDrivenSettings settings,
+            DepositTierLayout layout
+    ) {
+        ServerLevel serverLevel = level.getLevel();
+        int minimumY = Mth.clamp(
+                settings.minY(), level.getMinBuildHeight() + BEDROCK_CLEARANCE, level.getMaxBuildHeight() - 1
+        );
+        int maximumY = Mth.clamp(settings.maxY(), minimumY, level.getMaxBuildHeight() - 1);
+        long chunkSeed = SeedMixer.mix(serverLevel.getSeed() ^ settings.ruleSalt() ^ FORCED_SLOT_SALT
+                ^ ChunkPos.asLong(chunkX, chunkZ) ^ ((long) tier << 56) ^ oreId.hashCode());
+        BlockPos center = realBiomePositionInChunk(
+                level, chunkX, chunkZ, ResourceKey.create(Registries.BIOME, biomeId), minimumY, maximumY, chunkSeed
+        );
+        if (center == null) {
+            return null;
+        }
+        DepositCandidate candidate = createPlannedCandidateAtCenter(
+                serverLevel, chunkX, chunkZ, tier, oreId, center, settings.sizeMultiplier()
+        );
+        BiomeInstances.Instance instance = BiomeInstances.at(
+                serverLevel, center, biomeId, minimumY, maximumY, layout.cellSizeBlocks()
+        );
+        // Deposits of one instance must not overlap even after their uncut-lens shift; beyond that they are
+        // spread over the instance (region-based caves are assumed to span about 150 blocks).
+        int count = Math.max(1, settings.count());
+        int noOverlap = 2 * Math.max(candidate.radiusX(), candidate.radiusZ()) + 4 + MAX_LENS_SHIFT;
+        int instanceRadius = Math.min(instance.approximateRadius(), FORCED_ASSUMED_REGION_RADIUS);
+        int spacing = Math.max(noOverlap, (int) (instanceRadius / Math.sqrt(count)));
+        String ledgerKey = Long.toUnsignedString(settings.ruleSalt()) + "|" + oreId + "|" + tier + "|" + instance.key();
+        DataDrivenDepositLedger.Reservation reservation = DataDrivenDepositLedger.get(serverLevel)
+                .tryReserve(ledgerKey, count, center, spacing);        if (reservation == null) {
+            return null;
+        }
+        PENDING_RESERVATION.set(reservation);
+        return candidate;
+    }
+
+    /** A deterministic quart-cell center of this chunk whose real biome is the rule biome. */
+    private static BlockPos realBiomePositionInChunk(
+            WorldGenLevel level,
+            int chunkX,
+            int chunkZ,
+            ResourceKey<Biome> biome,
+            int minimumY,
+            int maximumY,
+            long seed
+    ) {
+        ChunkAccess chunk = level.getChunk(chunkX, chunkZ, ChunkStatus.BIOMES, false);
+        if (chunk == null) {
+            return null;
+        }
+        List<BlockPos> matches = new ArrayList<>();
+        for (int quartX = QuartPos.fromSection(chunkX); quartX < QuartPos.fromSection(chunkX + 1); quartX++) {
+            for (int quartZ = QuartPos.fromSection(chunkZ); quartZ < QuartPos.fromSection(chunkZ + 1); quartZ++) {
+                for (int quartY = QuartPos.fromBlock(minimumY); quartY <= QuartPos.fromBlock(maximumY); quartY++) {
+                    if (chunk.getNoiseBiome(quartX, quartY, quartZ).is(biome)) {
+                        matches.add(new BlockPos(
+                                QuartPos.toBlock(quartX) + 2,
+                                Mth.clamp(QuartPos.toBlock(quartY) + 2, minimumY, maximumY),
+                                QuartPos.toBlock(quartZ) + 2
+                        ));
+                    }
+                }
+            }
+        }
+        return matches.isEmpty() ? null : matches.get((int) Math.floorMod(seed, (long) matches.size()));
+    }
+
+    /**
+     * Nearest quart-cell center in the planned chunk and its neighbours whose real chunk biome is the rule
+     * biome, within the rule's height range. Only chunks already present in the generation region are read.
+     */
+    private static BlockPos nearestRealBiomePosition(
+            WorldGenLevel level,
+            BlockPos planned,
+            ResourceKey<Biome> biome,
+            DataDrivenSettings settings
+    ) {
+        int minimumY = Mth.clamp(
+                settings.minY(), level.getMinBuildHeight() + BEDROCK_CLEARANCE, level.getMaxBuildHeight() - 1
+        );
+        int maximumY = Mth.clamp(settings.maxY(), minimumY, level.getMaxBuildHeight() - 1);
+        int plannedChunkX = planned.getX() >> 4;
+        int plannedChunkZ = planned.getZ() >> 4;
+        BlockPos best = null;
+        double bestDistance = Double.MAX_VALUE;
+        for (int chunkX = plannedChunkX - 1; chunkX <= plannedChunkX + 1; chunkX++) {
+            for (int chunkZ = plannedChunkZ - 1; chunkZ <= plannedChunkZ + 1; chunkZ++) {
+                ChunkAccess chunk = level.getChunk(chunkX, chunkZ, ChunkStatus.BIOMES, false);
+                if (chunk == null) {
+                    continue;
+                }
+                for (int quartX = QuartPos.fromSection(chunkX); quartX < QuartPos.fromSection(chunkX + 1); quartX++) {
+                    for (int quartZ = QuartPos.fromSection(chunkZ); quartZ < QuartPos.fromSection(chunkZ + 1); quartZ++) {
+                        for (int quartY = QuartPos.fromBlock(minimumY); quartY <= QuartPos.fromBlock(maximumY); quartY++) {
+                            if (!chunk.getNoiseBiome(quartX, quartY, quartZ).is(biome)) {
+                                continue;
+                            }
+                            BlockPos candidate = new BlockPos(
+                                    QuartPos.toBlock(quartX) + 2,
+                                    Mth.clamp(QuartPos.toBlock(quartY) + 2, minimumY, maximumY),
+                                    QuartPos.toBlock(quartZ) + 2
+                            );
+                            double distance = candidate.distSqr(planned);
+                            if (distance < bestDistance) {
+                                bestDistance = distance;
+                                best = candidate;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return best;
     }
 
     private static boolean isNoiseBiome(ServerLevel level, BlockPos pos, ResourceLocation biomeId) {
@@ -771,7 +916,8 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
         double frequencyBudgetMultiplier = OreGenerationWeights.tierFrequencyBudgetMultiplier(
                 level.dimension().location(), biomeId, tier);
         double tierAttempts = Mth.clamp(
-                totalDepositAttempts(level, biomeId) * shares.share()[tier] * frequencyBudgetMultiplier,
+                totalDepositAttempts(level, biomeId) * shares.share()[tier] * frequencyBudgetMultiplier
+                        * tierFrequencyMultiplier(tier),
                 0.0D,
                 OreDepositConfig.MAX_GENERATION_ATTEMPTS_PER_CHUNK
         );
@@ -781,6 +927,17 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
         boolean extraAttempt = fractionalChance > 0.0D
                 && chunkTierSeed(level, chunkX, chunkZ, tier, biomeId).nextDouble() < fractionalChance;
         return guaranteedAttempts + (extraAttempt ? 1 : 0);
+    }
+
+    /** Per-tier frequency tuning on top of the shared tier curves: SMALL rarer, LARGE more common. */
+    private static double tierFrequencyMultiplier(int tier) {
+        if (tier == TIER_SMALL) {
+            return OreDepositConfig.SMALL_DEPOSIT_FREQUENCY_MULTIPLIER;
+        }
+        if (tier == TIER_LARGE) {
+            return OreDepositConfig.LARGE_DEPOSIT_FREQUENCY_MULTIPLIER;
+        }
+        return 1.0D;
     }
 
     private static boolean isTierAnchorChunk(int chunkX, int chunkZ, int tier) {
@@ -945,7 +1102,7 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
                         OreDepositTier.fromIndex(tier).orElseThrow()
                 );
                 double gateProbability = DepositTierMath.cellCandidateProbability(
-                        plan.expectedAttempts()[tier],
+                        plan.expectedAttempts()[tier] * tierFrequencyMultiplier(tier),
                         layout.cellSizeChunks(),
                         liveFrequencyMultiplier(block)
                 );
@@ -1003,6 +1160,26 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
 
     @Override
     public boolean place(FeaturePlaceContext<Configuration> context) {
+        boolean placed = false;
+        try {
+            placed = placeAttempt(context);
+            return placed;
+        } finally {
+            // A forced datapack slot reserved by this attempt is kept only if the deposit really exists;
+            // otherwise another chunk of the same biome instance may take it.
+            DataDrivenDepositLedger.Reservation reservation = PENDING_RESERVATION.get();
+            if (reservation != null) {
+                PENDING_RESERVATION.remove();
+                if (placed) {
+                    reservation.commit();
+                } else {
+                    reservation.release();
+                }
+            }
+        }
+    }
+
+    private boolean placeAttempt(FeaturePlaceContext<Configuration> context) {
         WorldGenLevel level = context.level();
         RandomSource random = context.random();
         Configuration config = context.config();
@@ -1044,25 +1221,50 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
             DepositTierLayout layout = DepositLayouts.forTier(
                     OreDepositTier.fromIndex(anchorTier).orElseThrow()
             );
-            int cellX = Math.floorDiv(chunkX, layout.cellSizeChunks());
-            int cellZ = Math.floorDiv(chunkZ, layout.cellSizeChunks());
-            plannedCandidate = createDataDrivenCandidate(
-                    level.getLevel(), cellX, cellZ, sourceBiomeId, oreId, anchorTier, dataSettings
-            );
-            if (plannedCandidate.sourceChunkX() != chunkX || plannedCandidate.sourceChunkZ() != chunkZ) {
-                return false;
+            if (dataSettings.forced()) {
+                plannedCandidate = reserveForcedDeposit(level, chunkX, chunkZ, anchorTier, oreId,
+                        sourceBiomeId, dataSettings, layout);
+                if (plannedCandidate == null) {
+                    return false;
+                }
+                origin = plannedCandidate.center();
+                claim = new AttemptClaim(plannedCandidate.depositId(), false, null, null);
+            } else {
+                int cellX = Math.floorDiv(chunkX, layout.cellSizeChunks());
+                int cellZ = Math.floorDiv(chunkZ, layout.cellSizeChunks());
+                plannedCandidate = createDataDrivenCandidate(
+                        level.getLevel(), cellX, cellZ, sourceBiomeId, oreId, anchorTier, dataSettings
+                );
+                if (plannedCandidate.sourceChunkX() != chunkX || plannedCandidate.sourceChunkZ() != chunkZ) {
+                    return false;
+                }
+                if (!passesDataDrivenFrequency(level.getLevel(), cellX, cellZ, sourceBiomeId, oreId, anchorTier, dataSettings)) {
+                    return false;
+                }
+                ResourceKey<Biome> sourceBiomeKey = ResourceKey.create(Registries.BIOME, sourceBiomeId);
+                Holder<Biome> plannedBiome = level.getBiome(plannedCandidate.center());
+                if (!plannedBiome.is(sourceBiomeKey)) {
+                    // Remote planning cannot always see biomes that mods install while filling a chunk
+                    // (Alex's Caves). The surrounding chunks' real biome data is authoritative here.
+                    BlockPos realBiomeCenter = nearestRealBiomePosition(
+                            level, plannedCandidate.center(), sourceBiomeKey, dataSettings
+                    );
+                    if (realBiomeCenter == null) {
+                        OresAndDrillsMod.LOGGER.debug(
+                                "Data-driven ore-deposit candidate {} rejected: no {} near planned center {} (biome {})",
+                                Long.toUnsignedString(plannedCandidate.depositId()), sourceBiomeId,
+                                plannedCandidate.center(),
+                                plannedBiome.unwrapKey().map(key -> key.location().toString()).orElse("<direct>")
+                        );
+                        return false;
+                    }
+                    plannedCandidate = plannedCandidate.withUndergroundCenter(realBiomeCenter);
+                }
+                origin = plannedCandidate.center();
+                chunkX = plannedCandidate.sourceChunkX();
+                chunkZ = plannedCandidate.sourceChunkZ();
+                claim = new AttemptClaim(plannedCandidate.depositId(), false, null, null);
             }
-            Holder<Biome> plannedBiome = level.getBiome(plannedCandidate.center());
-            if (!passesDataDrivenFrequency(level.getLevel(), cellX, cellZ, sourceBiomeId, oreId, anchorTier, dataSettings)
-                    || !plannedBiome.is(
-                            net.minecraft.resources.ResourceKey.create(Registries.BIOME, sourceBiomeId)
-                    )) {
-                return false;
-            }
-            origin = plannedCandidate.center();
-            chunkX = plannedCandidate.sourceChunkX();
-            chunkZ = plannedCandidate.sourceChunkZ();
-            claim = new AttemptClaim(plannedCandidate.depositId(), false, null, null);
         } else {
             claim = findEligibleAttempt(
                     level.getLevel(), origin, config.targets(), anchorTier, sourceBiomeId,
@@ -1198,7 +1400,13 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
             if (taggedStoneOrigin == null) {
                 return rejectAttempt(claim, "no_c_stone_near_spawn");
             }
-            origin = taggedStoneOrigin;
+            // Caves are carved before features and structures may still be built over this area, so a
+            // lens placed blindly is cut by them or by the write bounds. Move it to an uncut spot instead.
+            origin = uncutLensOrigin(
+                    level, taggedStoneOrigin, targets, radiusX, radiusZ, maxDepth, dataSettings == null,
+                    plannedCandidate.shapeSeed()
+            );
+            plannedCandidate = plannedCandidate.withUndergroundCenter(origin);
         }
 
         if (tier >= TIER_MEDIUM && (dataSettings == null || !dataSettings.forced())
@@ -1456,6 +1664,13 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
             return rejectAttempt(claim, "insufficient_placed_blocks");
         }
 
+        if (dataSettings != null) {
+            OresAndDrillsMod.LOGGER.debug(
+                    "Data-driven ore deposit {} tier {} placed at {} ({} blocks) in biome {}",
+                    firstOreBlockId, confirmationCandidate.tier().serializedName(), recordedCenter,
+                    placedBlocks, sourceBiomeId
+            );
+        }
         return completeAttempt(claim);
     }
 
@@ -1891,6 +2106,167 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
         return nearest.mapToList((packedPos, target) -> new DepositPosition(BlockPos.of(packedPos), target));
     }
 
+    /**
+     * Nearest origin (searched outward in rings, the original spot first) whose full MEDIUM/LARGE lens lies
+     * inside the write bounds, in host rock without fluids or cave air, and outside every structure that is
+     * already planned around it. When no fully clear spot exists the least-cut one is kept.
+     */
+    private static BlockPos uncutLensOrigin(
+            WorldGenLevel level,
+            BlockPos origin,
+            List<OreConfiguration.TargetBlockState> targets,
+            int radiusX,
+            int radiusZ,
+            int maxDepth,
+            boolean allowStoneFallback,
+            long shapeSeed
+    ) {
+        List<OreConfiguration.TargetBlockState> oreTargets = new ArrayList<>(targets.size());
+        for (OreConfiguration.TargetBlockState target : targets) {
+            if (OreTags.isOre(target.state)) {
+                oreTargets.add(target);
+            }
+        }
+        if (oreTargets.isEmpty()) {
+            return origin;
+        }
+        List<BoundingBox> structures = plannedStructureBoxes(level);
+        RandomSource hostRandom = RandomSource.create(shapeSeed ^ LENS_SHIFT_SALT);
+        BlockPos best = origin;
+        int bestBlocked = Integer.MAX_VALUE;
+        int evaluations = 0;
+        for (int ring = 0; ring <= MAX_LENS_SHIFT; ring += LENS_SHIFT_STEP) {
+            for (int dx = -ring; dx <= ring; dx += LENS_SHIFT_STEP) {
+                for (int dz = -ring; dz <= ring; dz += LENS_SHIFT_STEP) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != ring) {
+                        continue;
+                    }
+                    for (int dy : LENS_SHIFT_HEIGHTS) {
+                        BlockPos candidate = origin.offset(dx, dy, dz);
+                        int blocked = blockedLensCells(
+                                level, candidate, oreTargets, radiusX, radiusZ, maxDepth, allowStoneFallback,
+                                structures, hostRandom, bestBlocked
+                        );
+                        if (blocked < bestBlocked) {
+                            best = candidate;
+                            bestBlocked = blocked;
+                            if (blocked == 0) {
+                                return best;
+                            }
+                        }
+                        if (++evaluations >= MAX_LENS_SHIFT_EVALUATIONS) {
+                            return best;
+                        }
+                    }
+                }
+            }
+        }
+        return best;
+    }
+
+    /** Cells of the ideal lens at this origin that cannot hold a deposit block; stops counting at the limit. */
+    private static int blockedLensCells(
+            WorldGenLevel level,
+            BlockPos origin,
+            List<OreConfiguration.TargetBlockState> oreTargets,
+            int radiusX,
+            int radiusZ,
+            int maxDepth,
+            boolean allowStoneFallback,
+            List<BoundingBox> structures,
+            RandomSource random,
+            int limit
+    ) {
+        GenerationWriteBounds writeBounds = generationWriteBounds(level);
+        int minimumY = level.getMinBuildHeight() + BEDROCK_CLEARANCE;
+        int maximumY = level.getMaxBuildHeight();
+        double radiusXSquared = Math.max(1.0D, (double) radiusX * radiusX);
+        double radiusZSquared = Math.max(1.0D, (double) radiusZ * radiusZ);
+        BlockPos.MutableBlockPos mutable = new BlockPos.MutableBlockPos();
+        int blocked = 0;
+        for (int dx = -radiusX; dx <= radiusX; dx++) {
+            for (int dz = -radiusZ; dz <= radiusZ; dz++) {
+                double normalized = (dx * dx) / radiusXSquared + (dz * dz) / radiusZSquared;
+                if (normalized > 1.0D) {
+                    continue;
+                }
+                double lensProfile = Math.sqrt(Math.max(0.0D, 1.0D - normalized));
+                int depth = Mth.clamp(1 + Mth.floor((maxDepth - 1) * lensProfile), 1, maxDepth);
+                for (int dy = 0; dy < depth; dy++) {
+                    mutable.set(origin.getX() + dx, origin.getY() - dy, origin.getZ() + dz);
+                    if (!canHoldLensCell(level, mutable, oreTargets, allowStoneFallback, structures, random,
+                            writeBounds, minimumY, maximumY) && ++blocked >= limit) {
+                        return blocked;
+                    }
+                }
+            }
+        }
+        return blocked;
+    }
+
+    private static boolean canHoldLensCell(
+            WorldGenLevel level,
+            BlockPos pos,
+            List<OreConfiguration.TargetBlockState> oreTargets,
+            boolean allowStoneFallback,
+            List<BoundingBox> structures,
+            RandomSource random,
+            GenerationWriteBounds writeBounds,
+            int minimumY,
+            int maximumY
+    ) {
+        if (pos.getY() < minimumY || pos.getY() >= maximumY
+                || writeBounds != null && !writeBounds.contains(pos.getX(), pos.getZ())
+                || writeBounds == null && !level.ensureCanWrite(pos)) {
+            return false;
+        }
+        for (BoundingBox structure : structures) {
+            if (structure.isInside(pos)) {
+                return false;
+            }
+        }
+        BlockState state = level.getBlockState(pos);
+        return state.getFluidState().isEmpty() && matchingTarget(oreTargets, state, random, allowStoneFallback) != null;
+    }
+
+    /**
+     * Piece boxes of every structure referenced by the chunks this feature may write to. Structures are
+     * built chunk by chunk during decoration, so pieces in neighbouring chunks may not exist yet; their
+     * starts are already known and would later overwrite the deposit.
+     */
+    private static List<BoundingBox> plannedStructureBoxes(WorldGenLevel level) {
+        if (!(level instanceof WorldGenRegion region)) {
+            return List.of();
+        }
+        ChunkPos center = region.getCenter();
+        List<BoundingBox> boxes = new ArrayList<>();
+        Set<StructureStart> seen = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+        for (int chunkX = center.x - FEATURE_WRITE_RADIUS_CHUNKS; chunkX <= center.x + FEATURE_WRITE_RADIUS_CHUNKS; chunkX++) {
+            for (int chunkZ = center.z - FEATURE_WRITE_RADIUS_CHUNKS; chunkZ <= center.z + FEATURE_WRITE_RADIUS_CHUNKS; chunkZ++) {
+                ChunkAccess chunk = region.getChunk(chunkX, chunkZ, ChunkStatus.STRUCTURE_REFERENCES);
+                for (Map.Entry<Structure, LongSet> references : chunk.getAllReferences().entrySet()) {
+                    for (long reference : references.getValue()) {
+                        int startX = ChunkPos.getX(reference);
+                        int startZ = ChunkPos.getZ(reference);
+                        // A start beyond the region's structure-start radius cannot be read safely.
+                        if (!region.hasChunk(startX, startZ)) {
+                            continue;
+                        }
+                        StructureStart start = region.getChunk(startX, startZ, ChunkStatus.STRUCTURE_STARTS)
+                                .getStartForStructure(references.getKey());
+                        if (start == null || !start.isValid() || !seen.add(start)) {
+                            continue;
+                        }
+                        for (StructurePiece piece : start.getPieces()) {
+                            boxes.add(piece.getBoundingBox().inflatedBy(1));
+                        }
+                    }
+                }
+            }
+        }
+        return boxes;
+    }
+
     private static GenerationWriteBounds generationWriteBounds(WorldGenLevel level) {
         if (!(level instanceof WorldGenRegion region)) {
             return null;
@@ -2295,7 +2671,8 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
                 String expectedRareAttempts = tier < TIER_MEDIUM
                         ? "per-material deterministic cell gate"
                         : String.format(java.util.Locale.ROOT, "%.6f",
-                                totalAttempts * shares.share()[tier] * frequencyBudgetMultiplier);
+                                totalAttempts * shares.share()[tier] * frequencyBudgetMultiplier
+                                        * tierFrequencyMultiplier(tier));
                 OresAndDrillsMod.LOGGER.debug(
                         "  Tier: {} | Normalized tier position: {} | Block scale position: {} | Characteristic block count: {} | Calculated minimum block count: {} | Calculated maximum block count: {} | Characteristic ore density: {} | Calculated minimum total ore: {} | Calculated maximum total ore: {} | Tier spawn weight: {} | Tier share: {} | Expected rare-event attempts per chunk: {}",
                         depositTier.serializedName(),
@@ -2356,7 +2733,7 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
                 ? plan.expectedAttempts()[TIER_TINY] * frequencyMultiplier
                 : 0.0D;
         double smallExpected = plan.expectedAttempts().length > TIER_SMALL
-                ? plan.expectedAttempts()[TIER_SMALL] * frequencyMultiplier
+                ? plan.expectedAttempts()[TIER_SMALL] * tierFrequencyMultiplier(TIER_SMALL) * frequencyMultiplier
                 : 0.0D;
         OresAndDrillsMod.LOGGER.debug(
                 "Ore deposit frequency: Ore ID={} | Original expected frequency={} | Small-deposit budget={} | TINY expected attempts={} | SMALL expected attempts={} | TINY + SMALL total={} | Percentage of original frequency retained={}% | MEDIUM expected attempts={} | LARGE expected attempts={} | Biome={}",
@@ -2399,6 +2776,7 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
         return totalDepositAttempts(level, biomeId)
                 * shares.share()[tier]
                 * frequencyBudgetMultiplier
+                * tierFrequencyMultiplier(tier)
                 * materialShare;
     }
 
@@ -2578,7 +2956,8 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
             int slot,
             long ruleSalt,
             float sizeMultiplier,
-            float richnessMultiplier
+            float richnessMultiplier,
+            int count
     ) {
         public static final Codec<DataDrivenSettings> CODEC = RecordCodecBuilder.create(instance -> instance.group(
                 Codec.STRING.listOf().fieldOf("dimensions").forGetter(DataDrivenSettings::dimensions),
@@ -2590,7 +2969,8 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
                 Codec.INT.fieldOf("slot").forGetter(DataDrivenSettings::slot),
                 Codec.LONG.fieldOf("rule_salt").forGetter(DataDrivenSettings::ruleSalt),
                 Codec.FLOAT.fieldOf("size_multiplier").forGetter(DataDrivenSettings::sizeMultiplier),
-                Codec.FLOAT.fieldOf("richness_multiplier").forGetter(DataDrivenSettings::richnessMultiplier)
+                Codec.FLOAT.fieldOf("richness_multiplier").forGetter(DataDrivenSettings::richnessMultiplier),
+                Codec.INT.optionalFieldOf("count", 1).forGetter(DataDrivenSettings::count)
         ).apply(instance, DataDrivenSettings::new));
 
         public DataDrivenSettings {

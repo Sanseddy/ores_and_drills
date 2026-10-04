@@ -7,7 +7,11 @@
   ],
   "type": "ores_and_drills:ore_deposit_rule",
   "ores": [
+    // "#c:ores/uranium",
+    // "alexscaves:radrock_uranium_ore"
+    
     "#c:ores/uranium"
+    // "alexscaves:radrock_uranium_ore"
   ],
   "biomes": [
     "alexscaves:toxic_caves"
