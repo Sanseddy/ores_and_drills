@@ -1,0 +1,264 @@
+package dev.world.level.levelgen;
+
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.PriorityQueue;
+import java.util.Set;
+
+/**
+ * Compact Minecraft adaptation of Factorio's radial spot + multi-scale basis-noise principle.
+ * This is not Factorio's spot_noise implementation. Dimensions below are DIAMETERS in blocks.
+ * There is no central curve, directional stretching, or coupling of the XZ mask to Y.
+ * World positions are converted to deposit-local coordinates before sampling these cached fields.
+ */
+final class CompactDepositGeometry {
+    static final int MAX_HORIZONTAL_REACH = 4;
+    static final int MAX_VERTICAL_REACH = 10;
+    private static final int[][] NEIGHBORS = {{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}};
+    private static final int GRID = MAX_HORIZONTAL_REACH * 2 + 1;
+    private final long seed;
+    private final boolean large;
+    private final double radius;
+    private final double maximumRadius;
+    private final double baseThickness;
+    private final Column[] columns = new Column[GRID * GRID];
+    private final List<Cell> cells;
+    private final int radiusX;
+    private final int radiusZ;
+    private final int radiusY;
+
+    CompactDepositGeometry(long seed, boolean large, double sizeMultiplier) {
+        this(seed, large, sizeMultiplier, 0);
+    }
+
+    CompactDepositGeometry(long seed, boolean large, double sizeMultiplier, long verticalSalt) {
+        this.seed = seed;
+        this.large = large;
+        double size = clamp(sizeMultiplier, 0.1, 6.0);
+        maximumRadius = large ? 3.5 : 2.5;
+        // R = min(Rmax, k*cbrt(Q)); Size scales it only within the category bounds.
+        // Q is the base reserve, before Richness: changing Richness never enlarges the body.
+        double radiusQuantity = baseReserve(seed, large);
+        radius = clamp((large ? 0.235 : 0.345) * Math.cbrt(radiusQuantity) * Math.pow(size, 0.20),
+                large ? 2.5 : 1.5, maximumRadius);
+        baseThickness = lerp(large ? 3.25 : 2.25, large ? 4.75 : 3.75, unit(seed, 3));
+
+        double[] fields = new double[columns.length];
+        for (int x = -MAX_HORIZONTAL_REACH; x <= MAX_HORIZONTAL_REACH; x++) {
+            for (int z = -MAX_HORIZONTAL_REACH; z <= MAX_HORIZONTAL_REACH; z++) {
+                fields[index(x, z)] = horizontalField(x, z);
+            }
+        }
+        // Correct only disconnected XZ islands. This pass knows nothing about height or thickness.
+        boolean[] mask = horizontalComponent(fields);
+        double[] centers = new double[columns.length];
+        double[] thicknesses = new double[columns.length];
+        double minimumCenter = Double.POSITIVE_INFINITY, maximumCenter = Double.NEGATIVE_INFINITY;
+        double diameter = radius * 2;
+        long heightSeed = SeedMixer.mix(seed ^ verticalSalt ^ 0x594845494748544CL);
+        for (int x = -MAX_HORIZONTAL_REACH; x <= MAX_HORIZONTAL_REACH; x++) {
+            for (int z = -MAX_HORIZONTAL_REACH; z <= MAX_HORIZONTAL_REACH; z++) {
+                int i = index(x, z);
+                // Two continuous 2D scales form the main wave and the smaller undulations.
+                double yc = 2.0 * noise2(heightSeed + 41, x, z, diameter * 1.25)
+                        + 0.20 * noise2(heightSeed + 42, x, z, diameter * 0.65);
+                double t = clamp(baseThickness + 0.65 * noise2(heightSeed + 51, x, z, diameter * 0.65),
+                        minimumThickness(), maximumThickness());
+                double topNoise = surface(heightSeed + 61, x, z, diameter);
+                double bottomNoise = surface(heightSeed + 71, x, z, diameter);
+                double top = yc + t * 0.5 + topNoise;
+                double bottom = yc - t * 0.5 + bottomNoise;
+                centers[i] = (top + bottom) * 0.5;
+                thicknesses[i] = clamp(top - bottom, minimumThickness(), maximumThickness());
+                if (mask[i]) {
+                    minimumCenter = Math.min(minimumCenter, centers[i]);
+                    maximumCenter = Math.max(maximumCenter, centers[i]);
+                }
+            }
+        }
+        double largestStep = 0;
+        for (int x = -MAX_HORIZONTAL_REACH; x <= MAX_HORIZONTAL_REACH; x++) {
+            for (int z = -MAX_HORIZONTAL_REACH; z <= MAX_HORIZONTAL_REACH; z++) {
+                int i = index(x, z);
+                if (!mask[i]) continue;
+                if (x < MAX_HORIZONTAL_REACH && mask[index(x + 1, z)]) largestStep = Math.max(largestStep, Math.abs(centers[i] - centers[index(x + 1, z)]));
+                if (z < MAX_HORIZONTAL_REACH && mask[index(x, z + 1)]) largestStep = Math.max(largestStep, Math.abs(centers[i] - centers[index(x, z + 1)]));
+            }
+        }
+        double targetHeightRange = lerp(large ? 4 : 2, large ? 7.5 : 4.5, unit(seed, 45));
+        double amplitude = Math.min(targetHeightRange / Math.max(1e-9, maximumCenter - minimumCenter),
+                (large ? 1.8 : 0.9) / Math.max(1e-9, largestStep));
+        double centerOffset = (minimumCenter + maximumCenter) * 0.5;
+        List<Cell> body = new ArrayList<>();
+        for (int x = -MAX_HORIZONTAL_REACH; x <= MAX_HORIZONTAL_REACH; x++) {
+            for (int z = -MAX_HORIZONTAL_REACH; z <= MAX_HORIZONTAL_REACH; z++) {
+                int i = index(x, z);
+                double center = (centers[i] - centerOffset) * amplitude;
+                double t = thicknesses[i];
+                Column column = new Column(mask[i] ? fields[i] : Math.min(-1e-9, fields[i]), center - t * 0.5, center + t * 0.5);
+                columns[i] = column;
+                if (!mask[i]) continue;
+                int bottom = (int) Math.ceil(column.bottom()), top = (int) Math.floor(column.top());
+                int coreLayers = large ? 3 : 2;
+                int coreBottom = (int) Math.floor(center - (coreLayers - 1) * 0.5 + 0.5);
+                coreBottom = Math.max(bottom, Math.min(top - coreLayers + 1, coreBottom));
+                int selectedBottom = coreBottom, selectedTop = coreBottom + coreLayers - 1;
+                // Richness selects correlated outer layers, while the minimum core keeps every XZ
+                // column and its face connections. Thus Y never changes the horizontal footprint.
+                while (selectedBottom > bottom && weight(x, selectedBottom - 1, z, column) >= 0.23) selectedBottom--;
+                while (selectedTop < top && weight(x, selectedTop + 1, z, column) >= 0.23) selectedTop++;
+                for (int y = selectedBottom; y <= selectedTop; y++) body.add(new Cell(x, y, z, weight(x, y, z, column)));
+            }
+        }
+        cells = body.stream().sorted(Cell.ORDER).toList();
+        radiusX = cells.stream().mapToInt(c -> Math.abs(c.x())).max().orElse(1);
+        radiusZ = cells.stream().mapToInt(c -> Math.abs(c.z())).max().orElse(1);
+        radiusY = cells.stream().mapToInt(c -> Math.abs(c.y())).max().orElse(1);
+    }
+
+    private double horizontalField(int x, int z) {
+        double distance = Math.hypot(x, z);
+        double scale = radius * 2 / 24.0;
+        double blobs = (noise2(seed + 31, x, z, 8 * scale)
+                + noise2(seed + 32, x, z, 24 * scale)
+                + 1.5 * noise2(seed + 33, x, z, 64 * scale) - 1.0 / 3.0) / 3.5;
+        double spot = radius - distance;
+        // Bounding the perturbation preserves a central disk; Rmax limits the complete footprint,
+        // including protrusions, rather than limiting just the undeformed spot.
+        return Math.min(maximumRadius - distance,
+                Math.max((large ? 2.1 : 1.1) - distance, spot + radius * 0.40 * blobs));
+    }
+
+    private static boolean[] horizontalComponent(double[] fields) {
+        boolean[] kept = new boolean[fields.length];
+        ArrayDeque<Integer> queue = new ArrayDeque<>();
+        int root = index(0, 0);
+        kept[root] = true;
+        queue.add(root);
+        while (!queue.isEmpty()) {
+            int i = queue.removeFirst();
+            int x = i / GRID, z = i % GRID;
+            for (int[] d : new int[][]{{1,0},{-1,0},{0,1},{0,-1}}) {
+                int nx = x + d[0], nz = z + d[1];
+                if (nx < 0 || nx >= GRID || nz < 0 || nz >= GRID) continue;
+                int next = nx * GRID + nz;
+                if (!kept[next] && fields[next] > 0) { kept[next] = true; queue.addLast(next); }
+            }
+        }
+        return kept;
+    }
+
+    private double weight(int x, int y, int z, Column column) {
+        double h = clamp(column.horizontal() / (radius * 0.65), 0, 1);
+        double v = clamp(1 - 2 * Math.abs(y - column.center()) / column.thickness(), 0, 1);
+        double scale = radius * 2 / 6.0;
+        double richness = 0.65 * noise3(seed + 101, x, y, z, 8 * scale)
+                + 0.35 * noise3(seed + 102, x, y, z, 3 * scale);
+        return clamp(0.10 + 0.55 * h + 0.35 * v + 0.25 * richness, 0.03, 1);
+    }
+
+    private static double surface(long seed, int x, int z, double diameter) {
+        return 0.18 * noise2(seed, x, z, diameter * 10 / 16)
+                + 0.05 * noise2(seed + 1, x, z, diameter * 4 / 16);
+    }
+
+    Column column(int x, int z) {
+        if (Math.abs(x) > MAX_HORIZONTAL_REACH || Math.abs(z) > MAX_HORIZONTAL_REACH) return new Column(-1, -1, 1);
+        return columns[index(x, z)];
+    }
+    private static int index(int x, int z) { return (x + MAX_HORIZONTAL_REACH) * GRID + z + MAX_HORIZONTAL_REACH; }
+    private int minimumThickness() { return large ? 3 : 2; }
+    private int maximumThickness() { return large ? 5 : 4; }
+
+    /** Host filtering is separate from the mathematical mask. Retain one actual face-connected body. */
+    static List<Cell> connected(List<Cell> input, int maximum) {
+        Map<Key, Cell> remaining = new HashMap<>();
+        for (Cell cell : input) remaining.put(cell.key(), cell);
+        List<Cell> largest = List.of();
+        List<Cell> sorted = input.stream().sorted(Cell.ORDER).toList();
+        ArrayDeque<Cell> queue = new ArrayDeque<>();
+        for (Cell start : sorted) {
+            if (remaining.remove(start.key()) == null) continue;
+            List<Cell> component = new ArrayList<>();
+            queue.add(start);
+            while (!queue.isEmpty()) {
+                Cell cell = queue.removeFirst();
+                component.add(cell);
+                for (int[] d : NEIGHBORS) {
+                    Cell next = remaining.remove(new Key(cell.x + d[0], cell.y + d[1], cell.z + d[2]));
+                    if (next != null) queue.addLast(next);
+                }
+            }
+            if (component.size() > largest.size()) largest = component;
+        }
+        if (largest.size() > maximum) {
+            Map<Key, Cell> body = new HashMap<>();
+            for (Cell cell : largest) body.put(cell.key(), cell);
+            Set<Key> visited = new HashSet<>();
+            PriorityQueue<Cell> frontier = new PriorityQueue<>(Comparator.comparingDouble(Cell::weight).reversed().thenComparing(Cell.ORDER));
+            Cell root = largest.stream().max(Comparator.comparingDouble(Cell::weight).thenComparing(Cell.ORDER)).orElseThrow();
+            visited.add(root.key()); frontier.add(root);
+            List<Cell> limited = new ArrayList<>(maximum);
+            while (!frontier.isEmpty() && limited.size() < maximum) {
+                Cell cell = frontier.remove(); limited.add(cell);
+                for (int[] d : NEIGHBORS) {
+                    Key key = new Key(cell.x + d[0], cell.y + d[1], cell.z + d[2]);
+                    Cell next = body.get(key);
+                    if (next != null && visited.add(key)) frontier.add(next);
+                }
+            }
+            largest = limited;
+        }
+        return largest.stream().sorted(Cell.ORDER).toList();
+    }
+
+    static double noise(long seed, double x, double y, double z) {
+        int ix = (int) Math.floor(x), iy = (int) Math.floor(y), iz = (int) Math.floor(z);
+        double fx = fade(x - ix), fy = fade(y - iy), fz = fade(z - iz);
+        double a = lerp(value(seed, ix, iy, iz), value(seed, ix + 1, iy, iz), fx);
+        double b = lerp(value(seed, ix, iy + 1, iz), value(seed, ix + 1, iy + 1, iz), fx);
+        double c = lerp(value(seed, ix, iy, iz + 1), value(seed, ix + 1, iy, iz + 1), fx);
+        double d = lerp(value(seed, ix, iy + 1, iz + 1), value(seed, ix + 1, iy + 1, iz + 1), fx);
+        return lerp(lerp(a, b, fy), lerp(c, d, fy), fz);
+    }
+    private static double noise2(long seed, double x, double z, double scale) {
+        return noise(seed, x / scale + unit(seed, 91) * 31, 0, z / scale + unit(seed, 92) * 31);
+    }
+    private static double noise3(long seed, double x, double y, double z, double scale) {
+        return noise(seed, x / scale + unit(seed, 91) * 31, y / scale + unit(seed, 93) * 31, z / scale + unit(seed, 92) * 31);
+    }
+    private static double value(long seed, int x, int y, int z) {
+        return unit(seed ^ (long) x * 0x632BE59BD9B4E019L ^ (long) y * 0x9E3779B97F4A7C15L ^ (long) z * 0x85157AF5D66D4A13L, 0) * 2 - 1;
+    }
+    static double unit(long seed, long salt) { return (SeedMixer.mix(seed + salt * 0x9E3779B97F4A7C15L) >>> 11) * 0x1.0p-53; }
+    static int totalOre(long seed, boolean large, int blocks, float richness) {
+        return (int) Math.min((long) blocks * 5_000, Math.max(blocks, Math.round(baseReserve(seed, large) * clamp(richness, 0.1, 6.0))));
+    }
+    private static long baseReserve(long seed, boolean large) {
+        long minimum = large ? 1_100 : 180, maximum = large ? 5_000 : 500;
+        return DepositTierMath.sampleAroundCharacteristicValue(minimum, maximum, Math.sqrt(minimum * maximum), () -> unit(seed, 201));
+    }
+    private static double fade(double x) { return x * x * x * (x * (x * 6 - 15) + 10); }
+    private static double lerp(double a, double b, double t) { return a + (b - a) * t; }
+    private static double clamp(double x, double a, double b) { return Math.max(a, Math.min(b, x)); }
+    List<Cell> cells() { return cells; }
+    int radiusX() { return Math.max(1, radiusX); }
+    int radiusZ() { return Math.max(1, radiusZ); }
+    int radiusY() { return Math.max(1, radiusY); }
+    double diameter() { return radius * 2; }
+    record Key(int x, int y, int z) {}
+    record Cell(int x, int y, int z, double weight) {
+        static final Comparator<Cell> ORDER = Comparator.comparingInt(Cell::x).thenComparingInt(Cell::z).thenComparingInt(Cell::y);
+        Key key() { return new Key(x, y, z); }
+    }
+    record Column(double horizontal, double bottom, double top) {
+        double thickness() { return top - bottom; }
+        double center() { return (top + bottom) * 0.5; }
+        double field(int y) { return Math.min(horizontal, Math.min(y - bottom, top - y)); }
+    }
+}

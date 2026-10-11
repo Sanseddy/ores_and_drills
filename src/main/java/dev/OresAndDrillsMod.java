@@ -41,6 +41,9 @@ public final class OresAndDrillsMod {
         ModMenuTypes.MENU_TYPES.register(modEventBus);
         ModWorldgen.FEATURES.register(modEventBus);
         ModWorldgen.BIOME_MODIFIER_SERIALIZERS.register(modEventBus);
+        dev.recipe.DrillMiningCondition.registerDefaults();
+        dev.registry.ModRecipes.TYPES.register(modEventBus);
+        dev.registry.ModRecipes.SERIALIZERS.register(modEventBus);
 
         modEventBus.addListener(this::addCreativeTabItems);
         modEventBus.addListener(ModCapabilities::register);
@@ -52,6 +55,9 @@ public final class OresAndDrillsMod {
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, OreDepositMiningSpeed::onBreakSpeed);
         NeoForge.EVENT_BUS.addListener(OreDepositPaletteSync::onDatapackSync);
         NeoForge.EVENT_BUS.addListener(DepositTerrainValidator::onTagsUpdated);
+        NeoForge.EVENT_BUS.addListener(dev.recipe.DrillMiningRecipes::onTagsUpdated);
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, dev.recipe.FluidLockedOreDrops::onBlockDrops);
+        NeoForge.EVENT_BUS.addListener(dev.world.level.levelgen.OreDepositFeature::onCompactChunkLoad);
     }
 
     private void addCreativeTabItems(BuildCreativeModeTabContentsEvent event) {

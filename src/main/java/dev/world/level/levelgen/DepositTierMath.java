@@ -10,7 +10,8 @@ final class DepositTierMath {
      * Four monotone curves replace a per-tier range table. Their global endpoints and sigmoid shape were
      * calibrated so the four currently ordered tiers resolve to the requested generation contract:
      * blocks 1-2, 2-6, 72-168, 320-720 and ore 1-4, 8-16, 4000-10000, 40000-160000.
-     * The larger MEDIUM/LARGE block budgets expand their derived radii on X/Z while tier depth stays fixed.
+     * MEDIUM/LARGE retain these profiles only for spawn calibration and spacing. Their physical sizes
+     * and reserves now come from CompactDepositGeometry; keeping the curves preserves TINY/SMALL shares.
      * A tier is still evaluated only from its normalized ordinal position, so the implementation does not
      * accumulate TINY_MIN_*, SMALL_MAX_* constants and remains well-defined if another tier is inserted.
      */
@@ -232,6 +233,13 @@ final class DepositTierMath {
         return clamp(expected * safeCellSize * safeCellSize * multiplier, 0.0D, 1.0D);
     }
 
+    /** Retain fewer small-tier candidates even when their original cell chance saturated at one. */
+    static double retainedTierCandidateProbability(DepositTier tier, double probability, double smallTierRetention) {
+        double chance = clamp(probability, 0.0D, 1.0D);
+        return tier.ordinal() < DepositTier.MEDIUM.ordinal()
+                ? chance * clamp(smallTierRetention, 0.0D, 1.0D) : chance;
+    }
+
     static OreRange oreRange(int actualBlockCount, TierProfile profile) {
         int safeBlockCount = Math.max(1, actualBlockCount);
         double sizeRatio = safeBlockCount / profile.characteristicBlockCount();
@@ -314,7 +322,13 @@ final class DepositTierMath {
         }
         double weight = maximumEffectiveFrequency * Math.pow(relativeFrequency, adaptiveExponent);
         weight = Math.min(maximumEffectiveFrequency, weight);
-        weight = Math.max(maximumEffectiveFrequency * parameters.minimumRelativeWeight(), weight);
+        // A constant floor would give every rare small-tier ore the same weight and mask stronger
+        // penalties. Keep a positive floor proportional to its source frequency in small tiers only.
+        double minimumWeight = maximumEffectiveFrequency * parameters.minimumRelativeWeight();
+        if (smallInfluence > 0.0D) {
+            minimumWeight *= relativeFrequency;
+        }
+        weight = Math.max(minimumWeight, weight);
         return new RarityWeight(relativeFrequency, rareTail, baseExponent, adaptiveExponent, weight);
     }
 
@@ -371,6 +385,57 @@ final class DepositTierMath {
         return amounts;
     }
 
+    /** Capacity-aware allocation for compact deposits; the legacy small-tier allocator stays unchanged. */
+    static int[] distributeOre(int totalOre, double[] weights, int maximumPerBlock) {
+        int count = weights.length;
+        if (count == 0) return new int[0];
+        int capacity = Math.max(1, maximumPerBlock);
+        int target = (int) Math.max(count, Math.min((long) totalOre, (long) count * capacity));
+        int[] amounts = new int[count];
+        Arrays.fill(amounts, 1);
+        double[] normalized = new double[count];
+        double maximumWeight = Arrays.stream(weights).filter(w -> Double.isFinite(w) && w > 0).max().orElse(1);
+        for (int i = 0; i < count; i++) normalized[i] = Double.isFinite(weights[i]) && weights[i] > 0 ? weights[i] / maximumWeight : 0;
+        int remainder = target - count;
+        while (remainder > 0) {
+            double sum = 0;
+            for (int i = 0; i < count; i++) if (amounts[i] < capacity) sum += normalized[i];
+            boolean equal = sum <= 0;
+            if (equal) for (int amount : amounts) if (amount < capacity) sum++;
+            int available = remainder;
+            boolean saturated = false;
+            // Saturated blocks leave the weighting pool; redistribute their unused share afterwards.
+            for (int i = 0; i < count; i++) {
+                int room = capacity - amounts[i];
+                if (room <= 0) continue;
+                double share = available * (equal ? 1 : normalized[i]) / sum;
+                if (share >= room) {
+                    amounts[i] += room;
+                    remainder -= room;
+                    saturated = true;
+                }
+            }
+            if (saturated) continue;
+            double[] fractions = new double[count];
+            Integer[] order = new Integer[count];
+            for (int i = 0; i < count; i++) {
+                order[i] = i;
+                if (amounts[i] >= capacity) { fractions[i] = -1; continue; }
+                double share = available * (equal ? 1 : normalized[i]) / sum;
+                int integral = (int) Math.floor(share);
+                amounts[i] += integral;
+                remainder -= integral;
+                fractions[i] = share - integral;
+            }
+            Arrays.sort(order, Comparator.comparingDouble((Integer i) -> fractions[i]).reversed());
+            for (int i : order) {
+                if (remainder == 0) break;
+                if (amounts[i] < capacity) { amounts[i]++; remainder--; }
+            }
+        }
+        return amounts;
+    }
+
     static double geometricInterpolate(double minimum, double maximum, double position) {
         double safeMinimum = Math.max(Double.MIN_NORMAL, minimum);
         double safeMaximum = Math.max(safeMinimum, maximum);
@@ -387,8 +452,8 @@ final class DepositTierMath {
     }
 
     /**
-     * MEDIUM/LARGE deposits deliberately stay shallow: their extra blocks expand the X/Z footprint rather
-     * than turning the deposit into a vertical column.
+     * Legacy lens helper retained for the small-tier path and spawn-profile diagnostics.
+     * Compact MEDIUM/LARGE placement overrides these dimensions using its independent Y surfaces.
      */
     static int verticalLayersForTier(int tier, double tierPosition, int maximumDepth) {
         int safeMaximumDepth = Math.max(1, maximumDepth);

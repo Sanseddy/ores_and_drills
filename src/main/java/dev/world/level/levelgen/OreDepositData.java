@@ -422,8 +422,10 @@ public final class OreDepositData {
         }
         ItemStack tool = player.getMainHandItem();
         BlockState oreState = oreState(oreBlockId);
-        if (!oreState.canHarvestBlock(level, pos, player)) {
-            // Matches vanilla: mining ore with too weak a tool still wastes that unit of the vein, no drop, no XP.
+        if (dev.recipe.DrillMiningRecipes.requiresFluidForPlayer(level, oreState)
+                || !oreState.canHarvestBlock(level, pos, player)) {
+            // Fluid-locked ore and weak tools waste only one unit, with no drop or XP.
+            // Keep the same depletion path for ordinary breaking and area-mining tools.
             depleteWithoutDrop(level, pos);
             if (damageTool) {
                 tool.mineBlock(level, state, pos, player);
@@ -471,6 +473,11 @@ public final class OreDepositData {
         return mineOne(level, pos, null, ItemStack.EMPTY, canAccept);
     }
 
+    /** A recipe may replace the loot without replacing the deposit's reserve accounting. */
+    public static ItemStack mineOneIfAccepted(ServerLevel level, BlockPos pos, @Nullable ItemStack result, Predicate<ItemStack> canAccept) {
+        return mineOne(level, pos, null, ItemStack.EMPTY, canAccept, result);
+    }
+
     private static ItemStack mineOne(
             ServerLevel level,
             BlockPos pos,
@@ -478,6 +485,11 @@ public final class OreDepositData {
             ItemStack tool,
             Predicate<ItemStack> canAccept
     ) {
+        return mineOne(level, pos, player, tool, canAccept, null);
+    }
+
+    private static ItemStack mineOne(ServerLevel level, BlockPos pos, @Nullable Player player, ItemStack tool,
+                                     Predicate<ItemStack> canAccept, @Nullable ItemStack recipeResult) {
         ChunkAccess chunk = chunk(level, pos);
         OreDepositChunkData.Entry entry = entry(level, pos, true);
         OreDepositChunkData data = chunk.getExistingDataOrNull(ModAttachments.ORE_DEPOSITS);
@@ -489,7 +501,7 @@ public final class OreDepositData {
         if (oreBlockId == null) {
             return ItemStack.EMPTY;
         }
-        ItemStack result = dropFor(level, pos, oreBlockId, player, tool);
+        ItemStack result = recipeResult == null ? dropFor(level, pos, oreBlockId, player, tool) : recipeResult.copy();
         if (result.isEmpty()) {
             return ItemStack.EMPTY;
         }
@@ -511,7 +523,7 @@ public final class OreDepositData {
         return result;
     }
 
-    /** Wastes one unit of the vein with no drop and no XP, matching vanilla's "wrong tool" harvest semantics. */
+    /** Wastes one unit without loot or XP; the physical deposit remains until its reserve is exhausted. */
     private static void depleteWithoutDrop(ServerLevel level, BlockPos pos) {
         ChunkAccess chunk = chunk(level, pos);
         OreDepositChunkData.Entry entry = entry(level, pos, true);

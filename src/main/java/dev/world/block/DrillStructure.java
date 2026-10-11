@@ -170,7 +170,8 @@ public final class DrillStructure {
                 for (int depth = 0; depth < OreScanner.SCAN_DEPTH; depth++) {
                     BlockPos pos = columnTop.below(depth);
                     BlockState state = level.getBlockState(pos);
-                    if (OreTags.isOre(state) && tier.canHarvest(harvestCheckState(level, pos, state))) {
+                    if ((OreTags.isOre(state) || dev.recipe.DrillMiningRecipes.find(level.getRecipeManager(), state) != null)
+                            && tier.canHarvest(harvestCheckState(level, pos, state))) {
                         return true;
                     }
                 }

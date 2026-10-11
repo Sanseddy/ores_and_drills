@@ -1,6 +1,7 @@
 package dev.compat.jade;
 
 import dev.OresAndDrillsMod;
+import dev.recipe.DrillMiningRecipes;
 import dev.registry.ModBlocks;
 import dev.world.block.AbstractDrillBlock;
 import dev.world.block.AbstractDrillPartBlock;
@@ -62,6 +63,8 @@ public class FactoryExpansionJadePlugin implements IWailaPlugin {
     );
     private static final String ORE_BLOCK_KEY = "OreBlock";
     private static final String ORE_REMAINING_KEY = "OreRemaining";
+    private static final ResourceLocation FLUID_LOCKED_ORE_UID = ResourceLocation.fromNamespaceAndPath(
+            OresAndDrillsMod.MOD_ID, "fluid_locked_ore");
 
     private static final MiningDrillProvider PROVIDER = new MiningDrillProvider();
     private static final OreDepositProvider ORE_DEPOSIT_PROVIDER = new OreDepositProvider();
@@ -83,6 +86,7 @@ public class FactoryExpansionJadePlugin implements IWailaPlugin {
         registration.registerBlockComponent(PROVIDER, AbstractDrillPartBlock.class);
         registration.registerBlockIcon(PROVIDER, AbstractDrillPartBlock.class);
         registration.registerBlockComponent(ORE_DEPOSIT_PROVIDER, OreDepositBlock.class);
+        registration.registerBlockComponent(new FluidLockedOreProvider(), Block.class);
         registration.usePickedResult(ModBlocks.ORE_DEPOSIT.get());
         registration.usePickedResult(ModBlocks.EXHAUSTED_ORE_DEPOSIT.get());
     }
@@ -192,6 +196,10 @@ public class FactoryExpansionJadePlugin implements IWailaPlugin {
             }
 
             BlockState oreState = oreBlock.defaultBlockState();
+            if (requiresMiningFluid(accessor, oreState)) {
+                appendFluidLockedTooltip(tooltip);
+                return;
+            }
             if (oreState.requiresCorrectToolForDrops()) {
                 ItemStack requiredTool = minimumTool(oreState);
                 appendHarvestIndicator(tooltip, accessor, oreState, requiredTool);
@@ -270,6 +278,33 @@ public class FactoryExpansionJadePlugin implements IWailaPlugin {
         public ResourceLocation getUid() {
             return ORE_DEPOSIT_UID;
         }
+    }
+
+    /** Ordinary ore blocks follow the same fluid-recipe policy as ore_deposit containers. */
+    private static class FluidLockedOreProvider implements IBlockComponentProvider {
+        @Override
+        public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
+            // The deposit provider resolves the stored ore and keeps the reserve line above the warning.
+            if (!(accessor.getBlock() instanceof OreDepositBlock) && requiresMiningFluid(accessor, accessor.getBlockState())) {
+                appendFluidLockedTooltip(tooltip);
+            }
+        }
+
+        @Override
+        public ResourceLocation getUid() { return FLUID_LOCKED_ORE_UID; }
+    }
+
+    private static boolean requiresMiningFluid(BlockAccessor accessor, BlockState oreState) {
+        return DrillMiningRecipes.requiresFluidForPlayer(accessor.getLevel().getRecipeManager(), oreState);
+    }
+
+    private static void appendFluidLockedTooltip(ITooltip tooltip) {
+        // Jade's vanilla tool provider runs before these providers; its checkmark only tests tool tiers.
+        tooltip.remove(JadeIds.MC_HARVEST_TOOL);
+        tooltip.add(Component.translatable("tooltip.ores_and_drills.ore_deposit.manual_mining_unavailable")
+                .withStyle(ChatFormatting.RED));
+        tooltip.add(Component.translatable("tooltip.ores_and_drills.ore_deposit.requires_fluid_drill")
+                .withStyle(ChatFormatting.GRAY));
     }
 
     /**

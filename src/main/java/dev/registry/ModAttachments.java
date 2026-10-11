@@ -22,9 +22,6 @@ import net.neoforged.neoforge.registries.NeoForgeRegistries;
 import org.jetbrains.annotations.Nullable;
 
 public final class ModAttachments {
-    private static final String TAG_KEYS = "Keys";
-    private static final String TAG_VALUES = "Values";
-    private static final String TAG_RICHNESS_REFERENCES = "RichnessReferences";
     private static final StreamCodec<RegistryFriendlyByteBuf, OreDepositChunkData> ORE_DEPOSIT_SYNC_CODEC = new StreamCodec<>() {
         @Override
         public OreDepositChunkData decode(RegistryFriendlyByteBuf buffer) {
@@ -72,7 +69,7 @@ public final class ModAttachments {
                         @Override
                         public OreDepositChunkData read(IAttachmentHolder holder, CompoundTag tag, HolderLookup.Provider provider) {
                             OreDepositChunkData data = new OreDepositChunkData();
-                            data.load(tag.getIntArray(TAG_KEYS), tag.getLongArray(TAG_VALUES), tag.getIntArray(TAG_RICHNESS_REFERENCES));
+                            data.loadTag(tag);
                             return data;
                         }
 
@@ -84,10 +81,7 @@ public final class ModAttachments {
                                 return null;
                             }
 
-                            CompoundTag tag = new CompoundTag();
-                            tag.putIntArray(TAG_KEYS, snapshot.keys());
-                            tag.putLongArray(TAG_VALUES, snapshot.values());
-                            return tag;
+                            return data.saveTag();
                         }
                     })
                     .sync(ORE_DEPOSIT_SYNC_CODEC)

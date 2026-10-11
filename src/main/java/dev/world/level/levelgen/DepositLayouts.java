@@ -18,8 +18,8 @@ public final class DepositLayouts {
         return switch (tier) {
             case TINY -> new DepositTierLayout(16, 8, 1, 16, 32, 0.50D);
             case SMALL -> new DepositTierLayout(32, 14, 1, 32, 56, 0.55D);
-            case MEDIUM -> new DepositTierLayout(mediumChunks * 16, 24, 1, 56, 96, 0.60D);
-            case LARGE -> new DepositTierLayout(largeChunks * 16, 32, 1, 96, 160, 0.65D);
+            case MEDIUM -> new DepositTierLayout(mediumChunks * 16, 26, 1, 56, 96, 0.60D);
+            case LARGE -> new DepositTierLayout(largeChunks * 16, 36, 1, 96, 160, 0.65D);
         };
     }
 

@@ -20,6 +20,10 @@ sourceSets.main.resources {
 
 repositories {
     mavenCentral()
+    maven {
+        url = 'https://maven.blamejared.com'
+        content { includeGroup 'mezz.jei' }
+    }
     exclusiveContent {
         forRepository {
             maven {
@@ -62,6 +66,7 @@ neoForge {
 
         data {
             data()
+            gameDirectory = project.file('build/recipe-datagen')
             programArguments.addAll '--mod', project.mod_id, '--all',
                     '--output', file('src/generated/resources/').absolutePath,
                     '--existing', file('src/main/resources/').absolutePath
@@ -86,14 +91,39 @@ configurations {
 }
 
 dependencies {
+    // Optional integration fixture using the same Alex's Caves/Citadel jars as the development client.
+    if (providers.gradleProperty('alexCavesGameTests').isPresent()) {
+        localRuntime fileTree('run/mods') { include 'alexscaves-*.jar', 'citadel-*.jar' }
+    }
     implementation "software.bernie.geckolib:geckolib-neoforge-1.21.1:${geckolib_version}"
     compileOnly "maven.modrinth:jade:15.10.0+neoforge"
+    compileOnly 'mezz.jei:jei-1.21.1-common-api:19.32.0.359'
+    compileOnly 'mezz.jei:jei-1.21.1-neoforge-api:19.32.0.359'
     testImplementation platform('org.junit:junit-bom:5.11.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'
 }
 
 tasks.named('test', Test) {
     useJUnitPlatform()
+}
+
+// Opt-in integration tests run in an isolated world and stay out of the published mod jar.
+// ./gradlew runGameTestServer -PcompactGameTests
+if (providers.gradleProperty('compactGameTests').isPresent()) {
+    def gameTests = sourceSets.create('gameTest') {
+        compileClasspath += sourceSets.main.compileClasspath + sourceSets.main.output
+        runtimeClasspath += sourceSets.main.runtimeClasspath + sourceSets.main.output
+    }
+    neoForge.mods.named(project.mod_id) {
+        sourceSet gameTests
+    }
+    neoForge.runs.create('gameTestServer') {
+        type = 'gameTestServer'
+        sourceSet = gameTests
+        gameDirectory = project.file('build/compact-gametest')
+        systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        jvmArgument '-Xmx2G'
+    }
 }
 
 def generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {

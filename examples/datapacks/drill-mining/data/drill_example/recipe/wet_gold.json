@@ -1,0 +1,10 @@
+{
+  "type": "ores_and_drills:drill_mining",
+  "input": "#c:ores/gold",
+  "fluid": {"id": "minecraft:water", "amount": 100},
+  "minimum_drill_tier": 3,
+  "priority": 10,
+  "conditions": [
+    {"type": "ores_and_drills:dimension", "dimension": "minecraft:overworld"}
+  ]
+}

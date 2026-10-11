@@ -1,0 +1,8 @@
+{
+  "type": "ores_and_drills:drill_mining",
+  "input": ["minecraft:diamond_ore"],
+  "minimum_drill_tier": 4,
+  "priority": 10,
+  "conditions": [{"type": "ores_and_drills:dimension", "dimension": "minecraft:overworld"}],
+  "result": {"id": "minecraft:diamond", "count": 1}
+}

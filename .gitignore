@@ -7,7 +7,9 @@ build/
 run/
 run-server/
 run-data/
-src/generated/
+src/generated/*
+!src/generated/resources/
+src/generated/resources/.cache/
 out/
 .idea/
 *.iml

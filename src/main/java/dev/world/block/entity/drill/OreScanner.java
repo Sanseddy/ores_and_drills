@@ -1,6 +1,8 @@
 package dev.world.block.entity.drill;
 
 import dev.registry.ModBlocks;
+import dev.recipe.DrillMiningRecipe;
+import dev.recipe.DrillMiningRecipes;
 import dev.world.block.DrillStructure;
 import dev.world.block.MiningDrillTier;
 import dev.world.level.levelgen.OreDepositData;
@@ -17,19 +19,21 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
 public final class OreScanner {
     private static final int DROP_RANGE_SAMPLES = 64;
     /** Vertical range scanned below the drill per column; comfortably covers the deepest possible vein (see {@link OreDepositFeature#MAX_UNDERGROUND_DEPTH}). */
     public static final int SCAN_DEPTH = OreDepositFeature.MAX_UNDERGROUND_DEPTH + 4;
-    private static final Map<ResourceLocation, DropRange> DROP_RANGE_CACHE = new HashMap<>();
+    private static final Map<ResourceLocation, DropRange> DROP_RANGE_CACHE = new ConcurrentHashMap<>();
 
     private OreScanner() {
     }
+
+    public static void clearDropRangeCache() { DROP_RANGE_CACHE.clear(); }
 
     /** @param remainingInVein how much ore is still left at this exact deposit block, or 1 for a plain ore block */
     public record Target(BlockPos pos, ItemStack result, int minCount, int maxCount, int remainingInVein) {
@@ -71,7 +75,8 @@ public final class OreScanner {
         for (int depth = SCAN_DEPTH - 1; depth >= 0; depth--) {
             BlockPos targetPos = columnTop.below(depth);
             BlockState targetState = level.getBlockState(targetPos);
-            if (!OreTags.isOre(targetState) || !tier.canHarvest(harvestCheckState(level, targetPos, targetState))) {
+            BlockState source = harvestCheckState(level, targetPos, targetState);
+            if ((!OreTags.isOre(targetState) && DrillMiningRecipes.find(level, source) == null) || !tier.canHarvest(source)) {
                 continue;
             }
 
@@ -123,6 +128,9 @@ public final class OreScanner {
     }
 
     private static ItemStack miningResultFor(ServerLevel level, BlockPos targetPos, BlockState targetState) {
+        DrillMiningRecipe recipe = DrillMiningRecipes.find(level, harvestCheckState(level, targetPos, targetState));
+        if (recipe == null) return ItemStack.EMPTY;
+        if (recipe.result().isPresent()) return recipe.result().get().copy();
         if (targetState.is(ModBlocks.ORE_DEPOSIT.get())) {
             return OreDepositData.previewResult(level, targetPos);
         }
@@ -137,6 +145,8 @@ public final class OreScanner {
     }
 
     private static DropRange dropRangeFor(ServerLevel level, BlockPos targetPos, BlockState targetState, ItemStack expected) {
+        DrillMiningRecipe recipe = DrillMiningRecipes.find(level, harvestCheckState(level, targetPos, targetState));
+        if (recipe != null && recipe.result().isPresent()) return new DropRange(expected.copy(), expected.getCount(), expected.getCount());
         ResourceLocation cacheKey = dropRangeCacheKey(level, targetPos, targetState);
         DropRange cached = DROP_RANGE_CACHE.get(cacheKey);
         if (cached != null && sameResult(cached.result(), expected)) {

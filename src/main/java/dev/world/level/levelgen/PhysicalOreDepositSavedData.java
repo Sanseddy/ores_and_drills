@@ -27,8 +27,6 @@ public final class PhysicalOreDepositSavedData extends SavedData {
     private static final String TAG_CHUNKS = "Chunks";
     private static final String TAG_CHUNK_X = "ChunkX";
     private static final String TAG_CHUNK_Z = "ChunkZ";
-    private static final String TAG_KEYS = "Keys";
-    private static final String TAG_VALUES = "Values";
     private static final SavedData.Factory<PhysicalOreDepositSavedData> FACTORY =
             new SavedData.Factory<>(PhysicalOreDepositSavedData::new, PhysicalOreDepositSavedData::load);
 
@@ -163,7 +161,7 @@ public final class PhysicalOreDepositSavedData extends SavedData {
         for (int index = 0; index < chunks.size(); index++) {
             CompoundTag chunkTag = chunks.getCompound(index);
             OreDepositChunkData data = new OreDepositChunkData();
-            data.load(chunkTag.getIntArray(TAG_KEYS), chunkTag.getLongArray(TAG_VALUES));
+            data.loadTag(chunkTag);
             if (!data.isEmpty()) {
                 result.entriesByChunk.put(ChunkPos.asLong(
                         chunkTag.getInt(TAG_CHUNK_X),
@@ -183,11 +181,9 @@ public final class PhysicalOreDepositSavedData extends SavedData {
                 return;
             }
             ChunkPos chunkPos = new ChunkPos(mapEntry.getLongKey());
-            CompoundTag chunkTag = new CompoundTag();
+            CompoundTag chunkTag = mapEntry.getValue().saveTag();
             chunkTag.putInt(TAG_CHUNK_X, chunkPos.x);
             chunkTag.putInt(TAG_CHUNK_Z, chunkPos.z);
-            chunkTag.putIntArray(TAG_KEYS, snapshot.keys());
-            chunkTag.putLongArray(TAG_VALUES, snapshot.values());
             chunks.add(chunkTag);
         });
         tag.put(TAG_CHUNKS, chunks);

@@ -19,13 +19,23 @@ public record DepositCandidate(
         @Nullable Direction wallDirection,
         int expectedBlocks,
         int sourceChunkX,
-        int sourceChunkZ
+        int sourceChunkZ,
+        float geometrySize
 ) {
+    public DepositCandidate(long depositId, ResourceLocation oreId, OreDepositTier tier, BlockPos center,
+            int radiusX, int radiusZ, int verticalRadius, long shapeSeed, @Nullable Direction wallDirection,
+            int expectedBlocks, int sourceChunkX, int sourceChunkZ) {
+        this(depositId, oreId, tier, center, radiusX, radiusZ, verticalRadius, shapeSeed, wallDirection,
+                expectedBlocks, sourceChunkX, sourceChunkZ, 1.0F);
+    }
     public DepositCandidate {
         if (oreId == null || tier == null || center == null) {
             throw new IllegalArgumentException("Deposit identity, tier and center are required");
         }
         center = center.immutable();
+        if (!Float.isFinite(geometrySize) || geometrySize <= 0) {
+            throw new IllegalArgumentException("Finite positive geometry size required");
+        }
         if (radiusX < 1 || radiusZ < 1 || verticalRadius < 1 || expectedBlocks < 1) {
             throw new IllegalArgumentException("Deposit dimensions and expected block count must be positive");
         }
@@ -34,13 +44,18 @@ public record DepositCandidate(
         }
     }
 
+    public DepositCandidate withExpectedBlocks(int blocks) {
+        return new DepositCandidate(depositId,oreId,tier,center,radiusX,radiusZ,verticalRadius,shapeSeed,
+                wallDirection,blocks,sourceChunkX,sourceChunkZ,geometrySize);
+    }
+
     public DepositCandidate withWallAnchor(CaveWallAnchor anchor) {
         if (!tier.prefersCaveWall()) {
             return this;
         }
         return new DepositCandidate(
                 depositId, oreId, tier, anchor.position(), radiusX, radiusZ, verticalRadius,
-                shapeSeed, anchor.inwardDirection(), expectedBlocks, sourceChunkX, sourceChunkZ
+                shapeSeed, anchor.inwardDirection(), expectedBlocks, sourceChunkX, sourceChunkZ, geometrySize
         );
     }
 
@@ -48,7 +63,7 @@ public record DepositCandidate(
     public DepositCandidate withUndergroundCenter(BlockPos undergroundCenter) {
         return new DepositCandidate(
                 depositId, oreId, tier, undergroundCenter, radiusX, radiusZ, verticalRadius,
-                shapeSeed, null, expectedBlocks, sourceChunkX, sourceChunkZ
+                shapeSeed, null, expectedBlocks, sourceChunkX, sourceChunkZ, geometrySize
         );
     }
 }

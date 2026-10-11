@@ -1,6 +1,9 @@
 package dev.world.block.entity;
 
 import dev.registry.ModBlocks;
+import dev.recipe.DrillMiningInput;
+import dev.recipe.DrillMiningRecipe;
+import dev.recipe.DrillMiningRecipes;
 import dev.world.block.DrillStructure;
 import dev.world.block.MiningDrillTier;
 import dev.world.block.entity.drill.OreScanner;
@@ -37,6 +40,8 @@ import software.bernie.geckolib.util.GeckoLibUtil;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 
 public abstract class AbstractDrillBlockEntity extends BlockEntity implements GeoBlockEntity, DrillStatusProvider {
     protected static final RawAnimation DRILL_WORK = RawAnimation.begin().thenLoop("drill_work");
@@ -198,7 +203,8 @@ public abstract class AbstractDrillBlockEntity extends BlockEntity implements Ge
 
     protected static boolean canOutputTargets(AbstractDrillBlockEntity be, List<OreScanner.Target> mineable) {
         for (OreScanner.Target target : mineable) {
-            if (be.outputSlot.canAccept(be.outputStackForInsertion(maxExpectedDrop(target)))) {
+            if (be.canMineTarget(target)
+                    && be.outputSlot.canAccept(be.outputStackForInsertion(maxExpectedDrop(target)))) {
                 return true;
             }
         }
@@ -240,6 +246,7 @@ public abstract class AbstractDrillBlockEntity extends BlockEntity implements Ge
 
     private static int mineCycle(AbstractDrillBlockEntity be, Level level, List<OreScanner.Target> mineable) {
         int minedUnits = 0;
+        Set<DrillMiningRecipe> paidRecipes = new HashSet<>();
         List<TargetCursor> cursors = targetCursors(mineable);
         while (minedUnits < be.tier.oreUnitsPerCycle() && hasRemainingTarget(cursors)) {
             int minedThisPass = 0;
@@ -252,12 +259,19 @@ public abstract class AbstractDrillBlockEntity extends BlockEntity implements Ge
                 }
 
                 OreScanner.Target target = cursor.target();
+                if (!(level instanceof ServerLevel serverLevel)) return minedUnits;
+                BlockState source = DrillMiningRecipes.sourceState(serverLevel, target.pos());
+                DrillMiningRecipe recipe = DrillMiningRecipes.find(serverLevel, source);
+                if (!be.meetsRecipeConditions(recipe, source, target.pos())
+                        || !paidRecipes.contains(recipe) && !be.hasMiningFluid(recipe.fluid().orElse(null))) {
+                    continue;
+                }
                 ItemStack expectedOutput = be.outputStackForInsertion(maxExpectedDrop(target));
                 if (!be.outputSlot.canAccept(expectedOutput)) {
                     continue;
                 }
 
-                ItemStack mined = mineTarget(be, level, target);
+                ItemStack mined = mineTarget(be, level, target, recipe);
                 if (mined.isEmpty()) {
                     cursor.exhaust();
                     continue;
@@ -271,6 +285,7 @@ public abstract class AbstractDrillBlockEntity extends BlockEntity implements Ge
 
                 be.outputSlot.insert(output);
                 be.onOutputInserted(mined);
+                if (paidRecipes.add(recipe)) be.consumeMiningFluid(recipe.fluid().orElse(null));
                 cursor.consumeOne();
                 minedUnits++;
                 minedThisPass++;
@@ -309,12 +324,13 @@ public abstract class AbstractDrillBlockEntity extends BlockEntity implements Ge
         return stack;
     }
 
-    private static ItemStack mineTarget(AbstractDrillBlockEntity be, Level level, OreScanner.Target target) {
+    private static ItemStack mineTarget(AbstractDrillBlockEntity be, Level level, OreScanner.Target target, DrillMiningRecipe recipe) {
         if (level instanceof ServerLevel serverLevel
                 && level.getBlockState(target.pos()).is(ModBlocks.ORE_DEPOSIT.get())) {
             return OreDepositData.mineOneIfAccepted(
                     serverLevel,
                     target.pos(),
+                    recipe.result().orElse(null),
                     stack -> be.outputSlot.canAccept(be.outputStackForInsertion(stack))
             );
         }
@@ -322,9 +338,24 @@ public abstract class AbstractDrillBlockEntity extends BlockEntity implements Ge
         if (!be.outputSlot.canAccept(be.outputStackForInsertion(target.result()))) {
             return ItemStack.EMPTY;
         }
-        level.setBlock(target.pos(), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+        if (!level.setBlock(target.pos(), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL)) return ItemStack.EMPTY;
         return target.result();
     }
+
+    private boolean canMineTarget(OreScanner.Target target) {
+        if (!(level instanceof ServerLevel serverLevel)) return false;
+        BlockState source = DrillMiningRecipes.sourceState(serverLevel, target.pos());
+        DrillMiningRecipe recipe = DrillMiningRecipes.find(serverLevel, source);
+        return meetsRecipeConditions(recipe, source, target.pos()) && hasMiningFluid(recipe.fluid().orElse(null));
+    }
+
+    private boolean meetsRecipeConditions(DrillMiningRecipe recipe, BlockState source, BlockPos orePos) {
+        return recipe != null && level instanceof ServerLevel serverLevel && tier.canHarvest(source)
+                && recipe.matches(new DrillMiningInput(source, worldPosition, orePos, tier.recipeLevel()), serverLevel);
+    }
+
+    protected boolean hasMiningFluid(dev.recipe.DrillMiningFluid required) { return required == null; }
+    protected boolean consumeMiningFluid(dev.recipe.DrillMiningFluid required) { return required == null; }
 
     protected ItemStack outputStackForInsertion(ItemStack stack) {
         return stack.copy();

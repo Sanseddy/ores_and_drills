@@ -115,6 +115,20 @@ class DepositTierMathTest {
     }
 
     @Test
+    void finalSmallTierRetentionAlsoReducesSaturatedCommonOreCandidates() {
+        for (DepositTier tier : DepositTier.values()) {
+            for (double expected : new double[]{0.0D, 0.01D, 0.5D, 20.0D}) {
+                double original = DepositTierMath.cellCandidateProbability(expected, 2, 6.0D);
+                double retained = DepositTierMath.retainedTierCandidateProbability(tier, original, 0.5D);
+                assertEquals(original * (tier.ordinal() < DepositTier.MEDIUM.ordinal() ? 0.5D : 1.0D),
+                        retained, EPSILON);
+            }
+        }
+        assertEquals(0.5D, DepositTierMath.retainedTierCandidateProbability(DepositTier.TINY, 1.0D, 0.5D), EPSILON);
+        assertEquals(0.5D, DepositTierMath.retainedTierCandidateProbability(DepositTier.SMALL, 1.0D, 0.5D), EPSILON);
+    }
+
+    @Test
     void smallTierWorkloadBudgetHasAHardMaximum() {
         assertEquals(8, DepositTierMath.smallAttemptBudget(8.0D, 12));
         assertEquals(12, DepositTierMath.smallAttemptBudget(48.0D, 12));

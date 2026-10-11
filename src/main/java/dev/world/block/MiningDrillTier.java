@@ -11,8 +11,17 @@ import net.minecraft.world.level.block.state.BlockState;
  *                            {@link ItemStack#EMPTY} for a tier that ignores tool-tier restrictions entirely.
  */
 public record MiningDrillTier(
-        int size, int miningDuration, int oreUnitsPerCycle, ItemStack representativeTool, int miningAreaMargin
+        int size, int miningDuration, int oreUnitsPerCycle, ItemStack representativeTool, int miningAreaMargin, int recipeLevel
 ) {
+    /** Existing drills keep stable levels; future drills can supply an independent recipe level. */
+    public MiningDrillTier(int size, int miningDuration, int oreUnitsPerCycle, ItemStack tool, int miningAreaMargin) {
+        this(size, miningDuration, oreUnitsPerCycle, tool, miningAreaMargin, size <= 2 ? 1 : size <= 3 ? 2 : size <= 5 ? 3 : 4);
+    }
+
+    public MiningDrillTier {
+        if (recipeLevel < 1) throw new IllegalArgumentException("Drill recipe level must be positive");
+    }
+
     public boolean canHarvest(BlockState state) {
         return representativeTool.isEmpty() || !state.requiresCorrectToolForDrops() || representativeTool.isCorrectToolForDrops(state);
     }

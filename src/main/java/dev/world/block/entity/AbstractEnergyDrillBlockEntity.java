@@ -55,8 +55,8 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
         this.energyProfile = energyProfile;
         this.energyBuffer = new EnergyBuffer(energyProfile.capacity(), energyProfile.capacity(), this::setChanged);
         this.productivityPercent = productivityPercent;
-        this.fluidTanks = fluidCapacity > 0 ? new FluidTank[]{new InputFluidTank(fluidCapacity), new InputFluidTank(fluidCapacity)} : new FluidTank[0];
-        this.fluidHandler = fluidCapacity > 0 ? new RoutedFluidHandler(false) : null;
+        this.fluidTanks = fluidCapacity > 0 ? new FluidTank[]{new DrillFluidTank(fluidCapacity), new DrillFluidTank(fluidCapacity)} : new FluidTank[0];
+        this.fluidHandler = fluidCapacity > 0 ? new RoutedFluidHandler() : null;
     }
 
     @Override
@@ -92,7 +92,7 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
             return false;
         }
 
-        if (FluidUtil.interactWithFluidHandler(player, hand, new RoutedFluidHandler(true))) {
+        if (FluidUtil.interactWithFluidHandler(player, hand, fluidHandler)) {
             return true;
         }
 
@@ -104,7 +104,7 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
             return carried;
         }
 
-        RoutedFluidHandler routed = new RoutedFluidHandler(true);
+        IFluidHandler routed = fluidHandler;
 
         FluidActionResult fillResult = FluidUtil.tryFillContainer(carried, routed, FluidType.BUCKET_VOLUME, player, true);
         if (fillResult.isSuccess()) {
@@ -161,27 +161,32 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
         return Math.min(99, productivityProgress + currentCycleProgress);
     }
 
-    protected boolean hasFluid(FluidStack required) {
-        if (required.isEmpty()) {
-            return true;
-        }
-
-        int tank = findTankContaining(required);
-        return tank >= 0 && fluidTanks[tank].getFluidAmount() >= required.getAmount();
+    @Override
+    protected boolean hasMiningFluid(dev.recipe.DrillMiningFluid required) {
+        return required == null || findMiningFluidTank(required) >= 0;
     }
 
-    protected boolean consumeFluid(FluidStack required) {
-        if (required.isEmpty()) {
+    private int findMiningFluidTank(dev.recipe.DrillMiningFluid required) {
+        for (int tank = 0; tank < fluidTanks.length; tank++) {
+            if (required.test(fluidTanks[tank].getFluid())) return tank;
+        }
+        return -1;
+    }
+
+    @Override
+    protected boolean consumeMiningFluid(dev.recipe.DrillMiningFluid required) {
+        if (required == null) {
             return true;
         }
 
-        int tank = findTankContaining(required);
-        if (tank < 0 || fluidTanks[tank].getFluidAmount() < required.getAmount()) {
+        int tank = findMiningFluidTank(required);
+        if (tank < 0) {
             return false;
         }
 
-        int remaining = fluidTanks[tank].getFluidAmount() - required.getAmount();
+        int remaining = fluidTanks[tank].getFluidAmount() - required.amount();
         fluidTanks[tank].setFluid(remaining > 0 ? fluidTanks[tank].getFluid().copyWithAmount(remaining) : FluidStack.EMPTY);
+        setChanged();
         return true;
     }
 
@@ -193,12 +198,12 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
         ServerLevel serverLevel = (ServerLevel) level;
         Direction facing = state.getValue(AbstractDrillBlock.FACING);
         ScanResult scan = scanAndPreview(serverLevel, pos, facing, be);
-        boolean canMine = !scan.mineable().isEmpty();
-        boolean outputReady = canOutputTargets(be, scan.mineable());
-        int cost = be.energyProfile.energyPerTick();
         boolean changed = scan.changed();
         changed |= be.chargeFromEnergyItem();
         changed |= be.pullFluidsFromInputs(serverLevel, pos, facing);
+        boolean canMine = !scan.mineable().isEmpty();
+        boolean outputReady = canOutputTargets(be, scan.mineable());
+        int cost = be.energyProfile.energyPerTick();
         boolean poweredAndMining = canMine && outputReady && be.energyBuffer.hasEnergy(cost);
 
         if (poweredAndMining) {
@@ -312,6 +317,7 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
         if (action.execute()) {
             int remaining = fluidTanks[tank].getFluidAmount() - drained;
             fluidTanks[tank].setFluid(remaining > 0 ? fluidTanks[tank].getFluid().copyWithAmount(remaining) : FluidStack.EMPTY);
+            setChanged();
         }
 
         return result;
@@ -424,19 +430,9 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
         setChanged();
     }
 
-    private final class InputFluidTank extends FluidTank {
-        private InputFluidTank(int capacity) {
+    private final class DrillFluidTank extends FluidTank {
+        private DrillFluidTank(int capacity) {
             super(capacity);
-        }
-
-        @Override
-        public FluidStack drain(FluidStack resource, FluidAction action) {
-            return FluidStack.EMPTY;
-        }
-
-        @Override
-        public FluidStack drain(int maxDrain, FluidAction action) {
-            return FluidStack.EMPTY;
         }
 
         @Override
@@ -446,12 +442,6 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
     }
 
     private final class RoutedFluidHandler implements IFluidHandler {
-        private final boolean allowDrain;
-
-        private RoutedFluidHandler(boolean allowDrain) {
-            this.allowDrain = allowDrain;
-        }
-
         @Override
         public int getTanks() {
             return fluidTanks.length;
@@ -497,7 +487,7 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
 
         @Override
         public FluidStack drain(FluidStack resource, FluidAction action) {
-            if (!allowDrain || resource.isEmpty()) {
+            if (resource.isEmpty()) {
                 return FluidStack.EMPTY;
             }
 
@@ -507,7 +497,7 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
 
         @Override
         public FluidStack drain(int maxDrain, FluidAction action) {
-            if (!allowDrain || maxDrain <= 0) {
+            if (maxDrain <= 0) {
                 return FluidStack.EMPTY;
             }
 

@@ -3,6 +3,8 @@ package dev.world.level.levelgen;
 import it.unimi.dsi.fastutil.ints.Int2LongMap;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 
 import java.util.function.BiConsumer;
 
@@ -14,10 +16,6 @@ public final class OreDepositChunkData {
     private static final int ORE_SHIFT = TIER_SHIFT + 2;
     private static final int TIER_BITS = 2;
     private static final long TIER_MASK = (1L << TIER_BITS) - 1L;
-    // Read-only compatibility constants for chunks saved before fill_stage became absolute.
-    private static final int LEGACY_RICHNESS_REFERENCE_RICHNESS_SHIFT = 24;
-    private static final int LEGACY_RICHNESS_REFERENCE_TIER_SHIFT = LEGACY_RICHNESS_REFERENCE_RICHNESS_SHIFT + 4;
-    private static final int MAX_RICHNESS = 7;
     private static final int ORE_BITS = 8;
     private static final long ORE_MASK = (1L << ORE_BITS) - 1L;
     private static final int BASE_SHIFT = ORE_SHIFT + ORE_BITS;
@@ -26,6 +24,7 @@ public final class OreDepositChunkData {
 
     private final Int2LongOpenHashMap entries = new Int2LongOpenHashMap();
     private Snapshot cachedSnapshot;
+    private DiskSnapshot cachedDiskSnapshot;
 
     public OreDepositChunkData() {
         entries.defaultReturnValue(MISSING);
@@ -34,7 +33,7 @@ public final class OreDepositChunkData {
     public synchronized Entry get(BlockPos pos) {
         int key = localKey(pos);
         long packed = entries.get(key);
-        return packed == MISSING ? null : unpack(packed, 0);
+        return packed == MISSING ? null : unpack(packed);
     }
 
     public synchronized void put(BlockPos pos, int baseIndex, int oreIndex, int remainingOre, int initialOre, int initialRichness) {
@@ -83,6 +82,7 @@ public final class OreDepositChunkData {
             return false;
         }
         cachedSnapshot = null;
+        cachedDiskSnapshot = null;
         return true;
     }
 
@@ -97,6 +97,7 @@ public final class OreDepositChunkData {
 
     synchronized boolean putGeneratedBatchIfChanged(Iterable<OreDepositData.GeneratedDeposit> deposits) {
         boolean changed = false;
+        if(deposits instanceof java.util.Collection<?> batch)entries.ensureCapacity(entries.size()+batch.size());
         for (OreDepositData.GeneratedDeposit deposit : deposits) {
             BlockPos pos = deposit.pos();
             int amount = Math.max(0, deposit.amount());
@@ -106,6 +107,7 @@ public final class OreDepositChunkData {
         }
         if (changed) {
             cachedSnapshot = null;
+            cachedDiskSnapshot = null;
         }
         return changed;
     }
@@ -116,6 +118,7 @@ public final class OreDepositChunkData {
             return false;
         }
         cachedSnapshot = null;
+        cachedDiskSnapshot = null;
         return true;
     }
 
@@ -135,7 +138,7 @@ public final class OreDepositChunkData {
             if (packed == MISSING) {
                 continue;
             }
-            consumer.accept(posFromKey(chunkX, chunkZ, key), unpack(packed, 0));
+            consumer.accept(posFromKey(chunkX, chunkZ, key), unpack(packed));
         }
     }
 
@@ -163,7 +166,9 @@ public final class OreDepositChunkData {
         int[] keys = new int[size];
         long[] values = new long[size];
         int index = 0;
-        for (Int2LongMap.Entry entry : entries.int2LongEntrySet()) {
+        var iterator=entries.int2LongEntrySet().fastIterator();
+        while(iterator.hasNext()) {
+            Int2LongMap.Entry entry=iterator.next();
             keys[index] = entry.getIntKey();
             values[index] = entry.getLongValue();
             index++;
@@ -173,20 +178,81 @@ public final class OreDepositChunkData {
     }
 
     public synchronized void load(int[] keys, long[] values) {
-        load(keys, values, new int[0]);
-    }
-
-    public synchronized void load(int[] keys, long[] values, int[] richnessReferenceValues) {
         entries.clear();
         cachedSnapshot = null;
+        cachedDiskSnapshot = null;
         int size = Math.min(keys.length, values.length);
+        entries.ensureCapacity(size);
         for (int index = 0; index < size; index++) {
             if (values[index] != MISSING) {
-                long migrated = migrateLegacyTier(values[index], index < richnessReferenceValues.length ? richnessReferenceValues[index] : 0);
-                entries.put(keys[index], migrated);
+                entries.put(keys[index], values[index]);
             }
         }
     }
+
+    /** Disk format only; the attachment network protocol stays unchanged. */
+    public synchronized CompoundTag saveTag() {
+        if(cachedDiskSnapshot==null)cachedDiskSnapshot=encodeDisk(snapshot());
+        DiskSnapshot disk=cachedDiskSnapshot;
+        CompoundTag tag=new CompoundTag();
+        tag.putInt("Format",1);
+        tag.putByteArray("PackedKeys",disk.keys());
+        if(disk.indices()==null)tag.putLongArray("Values",disk.values());
+        else {
+            tag.putLongArray("ValuePalette",disk.values());
+            tag.putByteArray("ValueIndices",disk.indices());
+        }
+        return tag;
+    }
+
+    public synchronized void loadTag(CompoundTag tag) {
+        if(tag.getInt("Format")!=1||!tag.contains("PackedKeys",Tag.TAG_BYTE_ARRAY))
+            throw new IllegalArgumentException("Unsupported ore deposit data format; a new world is required");
+        byte[] packed=tag.getByteArray("PackedKeys");
+        if(packed.length%3!=0)throw new IllegalArgumentException("Invalid ore deposit positions");
+        int[] keys=new int[packed.length/3];
+        for(int i=0;i<keys.length;i++)keys[i]=(packed[i*3]&255)|((packed[i*3+1]&255)<<8)|((packed[i*3+2]&255)<<16);
+        long[] values;
+        if(tag.contains("ValuePalette",Tag.TAG_LONG_ARRAY)) {
+            long[] palette=tag.getLongArray("ValuePalette");byte[] indices=tag.getByteArray("ValueIndices");
+            int width=indexBytes(palette.length);
+            if(indices.length!=(long)keys.length*width)throw new IllegalArgumentException("Invalid ore deposit value indices");
+            values=new long[keys.length];
+            for(int i=0;i<values.length;i++) {
+                int index=0;
+                for(int b=0;b<width;b++)index|=(indices[i*width+b]&255)<<(b*8);
+                if(index<0||index>=palette.length)throw new IllegalArgumentException("Invalid ore deposit value palette");
+                values[i]=palette[index];
+            }
+        } else values=tag.getLongArray("Values");
+        if(values.length!=keys.length)throw new IllegalArgumentException("Invalid ore deposit values");
+        load(keys,values);
+    }
+
+    private static DiskSnapshot encodeDisk(Snapshot snapshot) {
+        int[] keys=snapshot.keys();long[] values=snapshot.values();
+        byte[] packedKeys=new byte[keys.length*3];
+        for(int i=0;i<keys.length;i++)for(int b=0;b<3;b++)packedKeys[i*3+b]=(byte)(keys[i]>>>(b*8));
+        var paletteIndices=new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap();
+        paletteIndices.defaultReturnValue(-1);
+        var palette=new it.unimi.dsi.fastutil.longs.LongArrayList();
+        for(long value:values)if(paletteIndices.get(value)<0) {
+            paletteIndices.put(value,palette.size());palette.add(value);
+        }
+        int width=indexBytes(palette.size());
+        // High-entropy, partially mined chunks can be smaller without a palette.
+        if((long)palette.size()*8+(long)values.length*width>=values.length*8L)
+            return new DiskSnapshot(packedKeys,values,null);
+        byte[] indices=new byte[values.length*width];
+        for(int i=0;i<values.length;i++) {
+            int index=paletteIndices.get(values[i]);
+            for(int b=0;b<width;b++)indices[i*width+b]=(byte)(index>>>(b*8));
+        }
+        return new DiskSnapshot(packedKeys,palette.toLongArray(),indices);
+    }
+
+    private static int indexBytes(int paletteSize) {return paletteSize<=256?1:paletteSize<=65536?2:4;}
+    private record DiskSnapshot(byte[] keys,long[] values,byte[] indices) {}
 
     private static int localKey(BlockPos pos) {
         return (pos.getX() & 15) | ((pos.getZ() & 15) << 4) | ((pos.getY() & 0xFFFF) << 8);
@@ -205,7 +271,7 @@ public final class OreDepositChunkData {
                 | (base << BASE_SHIFT);
     }
 
-    private static Entry unpack(long packed, int ignoredLegacyReference) {
+    private static Entry unpack(long packed) {
         int remaining = (int)(packed & AMOUNT_MASK);
         int initial = (int)((packed >> INITIAL_SHIFT) & AMOUNT_MASK);
         int tier = (int)((packed >> TIER_SHIFT) & TIER_MASK);
@@ -216,16 +282,6 @@ public final class OreDepositChunkData {
 
     private static long clampAmount(int amount) {
         return Math.max(0L, Math.min(AMOUNT_MASK, amount));
-    }
-
-    private static long migrateLegacyTier(long packed, int legacyReference) {
-        if (legacyReference == 0) {
-            return packed;
-        }
-
-        int encodedTier = (legacyReference >> LEGACY_RICHNESS_REFERENCE_TIER_SHIFT) & 15;
-        int tier = encodedTier > 0 ? encodedTier - 1 : 0;
-        return (packed & ~(TIER_MASK << TIER_SHIFT)) | ((long)Math.min(TIER_MASK, tier) << TIER_SHIFT);
     }
 
     public record Entry(int baseIndex, int oreIndex, int remainingOre, int initialOre, int initialRichness, int richnessReferenceAmount, int tier) {

@@ -22,6 +22,21 @@ public final class TieredDepositSampler implements DepositSampler {
         );
         Map<BlockPos, Integer> points = new LinkedHashMap<>(sampleCount * 2);
         BlockPos center = candidate.center();
+        if (candidate.tier().index() >= OreDepositFeature.TIER_MEDIUM) {
+            CompactDepositGeometry geometry = new CompactDepositGeometry(candidate.shapeSeed(),
+                    candidate.tier() == OreDepositTier.LARGE, candidate.geometrySize());
+            List<CompactDepositGeometry.Cell> body = CompactDepositGeometry.selectOreCells(geometry.cells(),
+                    CompactDepositGeometry.oreBlockBudget(CompactDepositGeometry.totalOre(candidate.shapeSeed(),
+                            candidate.tier() == OreDepositTier.LARGE, 0, 1)),center.getX(),center.getZ());
+            int stride = Math.max(1, body.size() / sampleCount);
+            for (int i = 0; i < body.size() && points.size() < sampleCount; i += stride) {
+                CompactDepositGeometry.Cell cell = body.get(i);
+                add(points, candidate, center.offset(cell.x(), cell.y(), cell.z()));
+            }
+            List<SamplePoint> result = new ArrayList<>(points.size());
+            points.forEach((pos, section) -> result.add(new SamplePoint(pos, section)));
+            return List.copyOf(result);
+        }
         add(points, candidate, center);
 
         double[] shells = switch (candidate.tier()) {

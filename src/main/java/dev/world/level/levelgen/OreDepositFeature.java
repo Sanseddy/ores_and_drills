@@ -29,6 +29,7 @@ import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.NoiseColumn;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
@@ -81,7 +82,7 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
     /** Vanilla 1.21.1 ChunkPyramid configures FEATURES with blockStateWriteRadius(1). */
     static final int FEATURE_WRITE_RADIUS_CHUNKS = 1;
     /** A persisted point may lie at either edge of a lens, so its complete footprint can span two radii. */
-    public static final int MAX_DEPOSIT_FOOTPRINT_DIAMETER = MAX_UNDERGROUND_RADIUS * 2;
+    public static final int MAX_DEPOSIT_FOOTPRINT_DIAMETER = Math.max(MAX_UNDERGROUND_RADIUS * 2, CompactDepositGeometry.MAX_HORIZONTAL_REACH * 2);
     private static final int MAX_UNDERGROUND_BLOCKS = 720;
     /**
      * Compatibility guard for extreme per-ore sliders. A single chunk can receive blocks from several
@@ -464,7 +465,18 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
             BlockPos center,
             float sizeMultiplier
     ) {
+        if (tier >= TIER_MEDIUM) {
+            Block ore = BuiltInRegistries.BLOCK.get(oreId);
+            oreId = BuiltInRegistries.BLOCK.getKey(OreUnifier.canonicalMaterialBlockFor(ore).orElse(ore));
+        }
         long shapeSeed = depositPlanSeedValue(level, center, tier, oreId);
+        if (tier >= TIER_MEDIUM) {
+            CompactDepositGeometry geometry = compactGeometry(shapeSeed, tier, sizeMultiplier);
+            long depositId = mix64(shapeSeed ^ center.asLong() ^ ((long) tier << 56));
+            return new DepositCandidate(depositId, oreId, OreDepositTier.fromIndex(tier).orElseThrow(), center,
+                    geometry.radiusX(), geometry.radiusZ(), geometry.radiusY(), shapeSeed, null,
+                    geometry.cells().size(), chunkX, chunkZ, sizeMultiplier);
+        }
         RandomSource random = RandomSource.create(shapeSeed);
         DepositTierMath.TierProfile profile = tierProfile(tier);
         int maximumSafeBlocks = tierParameters().maximumSafeDepositBlocks();
@@ -550,6 +562,14 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
                 level, center.getX() >> 4, center.getZ() >> 4,
                 tier, oreId, center, settings.sizeMultiplier()
         );
+        if (tier >= TIER_MEDIUM) {
+            // Include the rule/slot seed even if two slots happen to select the same quart-cell center.
+            long shapeSeed = SeedMixer.mix(candidate.shapeSeed() ^ seed);
+            CompactDepositGeometry geometry = compactGeometry(shapeSeed, tier, settings.sizeMultiplier());
+            candidate = new DepositCandidate(SeedMixer.mix(shapeSeed ^ center.asLong()), candidate.oreId(), publicTier,
+                    center, geometry.radiusX(), geometry.radiusZ(), geometry.radiusY(), shapeSeed, null,
+                    geometry.cells().size(), center.getX() >> 4, center.getZ() >> 4, settings.sizeMultiplier());
+        }
         if (DATA_DRIVEN_CANDIDATE_CACHE.size() >= MAX_DATA_DRIVEN_CANDIDATE_CACHE_ENTRIES) {
             DATA_DRIVEN_CANDIDATE_CACHE.clear();
         }
@@ -828,12 +848,13 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
             int tier,
             DataDrivenSettings settings
     ) {
-        if (settings.chance() >= 1.0D) {
+        double chance = settings.forced() ? settings.chance() : retainedSpawnChance(tier, settings.chance());
+        if (chance >= 1.0D) {
             return true;
         }
         long seed = dataDrivenSeed(level, cellX, cellZ, biomeId, oreId, tier, settings)
                 ^ 0x4652455155454E43L;
-        return RandomSource.create(SeedMixer.mix(seed)).nextDouble() < settings.chance();
+        return RandomSource.create(SeedMixer.mix(seed)).nextDouble() < chance;
     }
 
     private static long dataDrivenSeed(
@@ -938,6 +959,11 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
             return OreDepositConfig.LARGE_DEPOSIT_FREQUENCY_MULTIPLIER;
         }
         return 1.0D;
+    }
+
+    private static double retainedSpawnChance(int tier, double chance) {
+        return DepositTierMath.retainedTierCandidateProbability(DepositTier.byIndex(tier), chance,
+                OreDepositConfig.TINY_SMALL_SPAWN_RETENTION);
     }
 
     private static boolean isTierAnchorChunk(int chunkX, int chunkZ, int tier) {
@@ -1073,9 +1099,10 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
                     level.dimension().location(), biomeId
             );
             if (entries.isEmpty()) {
-                // Real TINY/SMALL placement also fails open when bootstrap scanning produced no weight
-                // data at all. Predict conservatively so /locate verifies actual chunks in that state.
-                return !OreGenerationWeights.hasRecordedData(level.dimension().location(), biomeId);
+                // Bootstrap without weights still uses the same final retention as real placement.
+                return !OreGenerationWeights.hasRecordedData(level.dimension().location(), biomeId)
+                        && passesSmallTierRetentionGate(level,chunkX,chunkZ,tier,materialKey,biomeId,
+                                retainedSpawnChance(tier,1.0D));
             }
             double maximum = OreGenerationWeights.maxOriginalFrequency(entries);
             for (OreGenerationWeights.OreGenerationData entry : entries) {
@@ -1106,6 +1133,7 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
                         layout.cellSizeChunks(),
                         liveFrequencyMultiplier(block)
                 );
+                gateProbability = retainedSpawnChance(tier, gateProbability);
                 return passesSmallTierRetentionGate(
                         level, chunkX, chunkZ, tier, materialKey, biomeId, gateProbability
                 );
@@ -1131,18 +1159,593 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
                 if (tier < TIER_MEDIUM) {
                     return true;
                 }
-                // Match the real feature's conservative spacing pre-check before /locate generates the
-                // candidate chunk.
-                // The predictor samples the chunk center while the placed feature may start anywhere inside
-                // it, hence the additional center-to-corner allowance.
-                BlockPos predictedOrigin = chunkSamplePos(chunkX, chunkZ, chunkSampleY(level));
-                return LargeDepositSpatialIndex.get(level).canPossiblyFit(
-                        predictedOrigin, tier,
-                        CHUNK_CENTER_TO_CORNER_DISTANCE + MAX_TAGGED_STONE_RELOCATION_RADIUS
-                );
+                // The same seed-only arbitration is used by the receiving-chunk decoration pass.
+                return compactSpacingAllows(level, chunkX, chunkZ, tier);
             }
         }
         return false;
+    }
+
+    private record CompactGeometryKey(long seed, int tier, int size) {}
+    private static final BoundedLoadingCache<CompactGeometryKey, CompactDepositGeometry> COMPACT_GEOMETRIES =
+            new BoundedLoadingCache<>(24);
+    private record CompactPlanKey(Configuration config, int cellX, int cellZ, int size) {}
+    record CompactPlan(DepositCandidate candidate, List<CompactDepositGeometry.Cell> cells,
+            List<OreConfiguration.TargetBlockState> targets, int[] amounts, Map<Long,int[]> slices,int totalOre) {
+        CompactPlan(DepositCandidate candidate,List<CompactDepositGeometry.Cell> cells,
+                List<OreConfiguration.TargetBlockState> targets,int[] amounts) {
+            this(candidate,cells,targets,amounts,indexSlices(candidate,cells),java.util.Arrays.stream(amounts).sum());
+        }
+        private static final int[] NO_CELLS=new int[0];
+        int[] indices(ChunkPos chunk) {return slices.getOrDefault(chunk.toLong(),NO_CELLS);}
+        private static Map<Long,int[]> indexSlices(DepositCandidate c,List<CompactDepositGeometry.Cell> cells) {
+            var lists=new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<it.unimi.dsi.fastutil.ints.IntArrayList>();
+            for(int i=0;i<cells.size();i++) {
+                var cell=cells.get(i);
+                long key=ChunkPos.asLong(Math.floorDiv(c.center().getX()+cell.x(),16),Math.floorDiv(c.center().getZ()+cell.z(),16));
+                lists.computeIfAbsent(key,ignored -> new it.unimi.dsi.fastutil.ints.IntArrayList()).add(i);
+            }
+            Map<Long,int[]> result=new java.util.HashMap<>();
+            lists.long2ObjectEntrySet().forEach(entry -> result.put(entry.getLongKey(),entry.getValue().toIntArray()));
+            return Map.copyOf(result);
+        }
+    }
+    private static final Map<ServerLevel, BoundedLoadingCache<CompactPlanKey, Optional<CompactPlan>>> COMPACT_PLANS =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+    // Keep cheap absent/distant candidates from evicting full, terrain-filtered plans.
+    private static final Map<ServerLevel,BoundedLoadingCache<CompactPlanKey,Optional<DepositCandidate>>> COMPACT_CANDIDATES =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
+    private static CompactDepositGeometry compactGeometry(long seed, int tier, float size) {
+        CompactGeometryKey key = new CompactGeometryKey(seed, tier, Float.floatToIntBits(size));
+        return COMPACT_GEOMETRIES.get(key, () -> new CompactDepositGeometry(seed, tier == TIER_LARGE, size));
+    }
+
+    static Optional<CompactPlan> cachedCompactPlan(ServerLevel level, Configuration config, int x, int z) {
+        Optional<DepositCandidate> candidate=cachedCompactCandidate(level,config,x,z);
+        if(candidate.isEmpty())return Optional.empty();
+        BoundedLoadingCache<CompactPlanKey, Optional<CompactPlan>> cache;
+        synchronized (COMPACT_PLANS) { cache = COMPACT_PLANS.computeIfAbsent(level, ignored -> new BoundedLoadingCache<>(96)); }
+        float size = config.dataDriven().map(DataDrivenSettings::sizeMultiplier)
+                .orElseGet(() -> liveSizeMultiplier(config.targets().getFirst().state.getBlock()));
+        return cache.get(new CompactPlanKey(config,x,z,Float.floatToIntBits(size)), () -> Optional.ofNullable(buildCompactPlanAt(level,config,candidate.get())));
+    }
+
+    private static Optional<DepositCandidate> cachedCompactCandidate(ServerLevel level,Configuration config,int x,int z) {
+        BoundedLoadingCache<CompactPlanKey,Optional<DepositCandidate>> cache;
+        synchronized(COMPACT_CANDIDATES) {cache=COMPACT_CANDIDATES.computeIfAbsent(level,ignored -> new BoundedLoadingCache<>(2048));}
+        float size=config.dataDriven().map(DataDrivenSettings::sizeMultiplier)
+                .orElseGet(() -> liveSizeMultiplier(config.targets().getFirst().state.getBlock()));
+        return cache.get(new CompactPlanKey(config,x,z,Float.floatToIntBits(size)),
+                () -> Optional.ofNullable(createCompactCandidate(level,config,x,z)));
+    }
+
+    static long[] compactPlanCacheStatistics(ServerLevel level) {
+        synchronized (COMPACT_PLANS) {
+            var cache = COMPACT_PLANS.get(level);
+            return cache == null ? new long[]{0,0,0} : new long[]{cache.size(),cache.hits(),cache.misses()};
+        }
+    }
+
+    /**
+     * Seed-only spacing arbitration. The former SavedData reservation let an already generated neighbour
+     * suppress a later slice of the SAME vein. Compare priorities of potential lattice sites instead;
+     * even an empty site reserves space. This is deliberately conservative and independent of load order.
+     */
+    private static boolean compactSpacingAllows(ServerLevel level, int chunkX, int chunkZ, int tier) {
+        int minimum = OreDepositConfig.MIN_LARGE_DEPOSIT_SPACING.get();
+        int maximum = Math.max(minimum, OreDepositConfig.MAX_LARGE_DEPOSIT_SPACING.get());
+        long priority = compactSiteSeed(level, chunkX, chunkZ, tier);
+        for (int otherTier = TIER_MEDIUM; otherTier <= TIER_LARGE; otherTier++) {
+            OreDepositTier publicTier = OreDepositTier.fromIndex(otherTier).orElseThrow();
+            int cellChunks = DepositLayouts.forTier(publicTier).cellSizeChunks();
+            int search = (maximum + 31) / 16;
+            int minX = Math.floorDiv(chunkX - search, cellChunks), maxX = Math.floorDiv(chunkX + search, cellChunks);
+            int minZ = Math.floorDiv(chunkZ - search, cellChunks), maxZ = Math.floorDiv(chunkZ + search, cellChunks);
+            for (int cx = minX; cx <= maxX; cx++) {
+                for (int cz = minZ; cz <= maxZ; cz++) {
+                    long anchor = DepositLayouts.anchorChunkKey(publicTier, cx, cz);
+                    int ax = DepositLayouts.chunkX(anchor), az = DepositLayouts.chunkZ(anchor);
+                    if (ax == chunkX && az == chunkZ && otherTier == tier) continue;
+                    long other = compactSiteSeed(level, ax, az, otherTier);
+                    if (Long.compareUnsigned(other, priority) >= 0) continue;
+                    DepositSpacingMath.SpacingBounds bounds = DepositSpacingMath.tierPairBounds(
+                            tier, otherTier, TIER_MEDIUM, TIER_LARGE, minimum, maximum);
+                    double required = DepositSpacingMath.requiredDistance(
+                            CompactDepositGeometry.unit(priority, 1), CompactDepositGeometry.unit(other, 1),
+                            bounds.minimum(), bounds.maximum(), OreDepositConfig.LARGE_DEPOSIT_SPACING_CURVE,
+                            OreDepositConfig.LARGE_DEPOSIT_SPACING_VARIATION,
+                            CompactDepositGeometry.unit(priority ^ other, 2) * 2 - 1).requiredDistance();
+                    // Centers are inside their source chunks; allow for their independent XZ offsets.
+                    double dx = (ax - chunkX) * 16.0, dz = (az - chunkZ) * 16.0;
+                    if (Math.hypot(dx, dz) < required + 23) return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private static long compactSiteSeed(ServerLevel level, int chunkX, int chunkZ, int tier) {
+        return DepositSeedMath.cellSeed(level.getSeed(), level.dimension().location().toString(), "", "",
+                DepositLayouts.tierSalt(tier), chunkX, chunkZ, 0, DEPOSIT_PLAN_SALT, ANCHOR_SEED_X, ANCHOR_SEED_Z);
+    }
+
+    /** Called by the existing decoration hook. Only the current chunk's blocks and attachments are written. */
+    static void placeCompactDeposits(WorldGenLevel level, ChunkPos receivingChunk, Configuration config) {
+        if (config.targets().isEmpty() || !depositStatesRegistered()) return;
+        DataDrivenSettings settings = config.dataDriven().orElse(null);
+        if (settings != null && (!settings.matchesDimension(level.getLevel().dimension().location()) || settings.forced())) return;
+        OreDepositTier tier = OreDepositTier.fromIndex(config.sizeTier()).orElseThrow();
+        int cellBlocks = DepositLayouts.forTier(tier).cellSizeBlocks();
+        int reach = CompactDepositGeometry.MAX_HORIZONTAL_REACH + (settings==null?MAX_TAGGED_STONE_RELOCATION_RADIUS:0);
+        int minCellX = Math.floorDiv(receivingChunk.getMinBlockX() - reach, cellBlocks);
+        int maxCellX = Math.floorDiv(receivingChunk.getMaxBlockX() + reach, cellBlocks);
+        int minCellZ = Math.floorDiv(receivingChunk.getMinBlockZ() - reach, cellBlocks);
+        int maxCellZ = Math.floorDiv(receivingChunk.getMaxBlockZ() + reach, cellBlocks);
+        for (int cx = minCellX; cx <= maxCellX; cx++) {
+            for (int cz = minCellZ; cz <= maxCellZ; cz++) {
+                if (settings == null) {
+                    long source = DepositLayouts.anchorChunkKey(tier, cx, cz);
+                    int sx = DepositLayouts.chunkX(source) * 16, sz = DepositLayouts.chunkZ(source) * 16;
+                    if (sx + 15 + reach < receivingChunk.getMinBlockX() || sx - reach > receivingChunk.getMaxBlockX()
+                            || sz + 15 + reach < receivingChunk.getMinBlockZ() || sz - reach > receivingChunk.getMaxBlockZ()) continue;
+                }
+                Optional<DepositCandidate> candidate=cachedCompactCandidate(level.getLevel(),config,cx,cz);
+                if(candidate.isEmpty()||!intersectsCompactChunk(candidate.get(),receivingChunk))continue;
+                Optional<CompactPlan> plan = cachedCompactPlan(level.getLevel(), config, cx, cz);
+                if (plan.isPresent() && intersectsCompactChunk(plan.get().candidate(),receivingChunk)
+                        && compactPlanWins(level.getLevel(),plan.get()))
+                    placeCompactSlice(level, receivingChunk, plan.get(), settings == null);
+            }
+        }
+    }
+
+    private static boolean intersectsCompactChunk(DepositCandidate c,ChunkPos chunk) {
+        return c.center().getX()+c.radiusX()>=chunk.getMinBlockX()&&c.center().getX()-c.radiusX()<=chunk.getMaxBlockX()
+                &&c.center().getZ()+c.radiusZ()>=chunk.getMinBlockZ()&&c.center().getZ()-c.radiusZ()<=chunk.getMaxBlockZ();
+    }
+
+    static boolean compactPlanWins(ServerLevel level, CompactPlan plan) {
+        DepositCandidate candidate = plan.candidate();
+        int reach = CompactDepositGeometry.MAX_HORIZONTAL_REACH * 2 + 1 + MAX_TAGGED_STONE_RELOCATION_RADIUS;
+        List<Configuration> configurations = new ArrayList<>(ReplaceOreFeaturesBiomeModifier.compactConfigurationsForChunk(
+                level,new ChunkPos(candidate.center()),reach));
+        configurations.addAll(DataDrivenOreDepositBiomeModifier.compactConfigurations());
+        for(CompactPlan forced:ConfirmedDepositIndex.get(level).forcedPlansNear(candidate)) {
+            if(candidate.depositId()!=forced.candidate().depositId()
+                    && (!compactPlanWinsAgainst(plan,forced)||!compactPlanWinsAgainst(forced,plan)))return false;
+        }
+        for (Configuration config : configurations) {
+            DataDrivenSettings settings = config.dataDriven().orElse(null);
+            if (settings != null && !settings.matchesDimension(level.dimension().location())) continue;
+            int cellSize = DepositLayouts.forTier(OreDepositTier.fromIndex(config.sizeTier()).orElseThrow()).cellSizeBlocks();
+            for (int x = Math.floorDiv(candidate.center().getX()-reach,cellSize); x <= Math.floorDiv(candidate.center().getX()+reach,cellSize); x++) {
+                for (int z = Math.floorDiv(candidate.center().getZ()-reach,cellSize); z <= Math.floorDiv(candidate.center().getZ()+reach,cellSize); z++) {
+                    Optional<DepositCandidate> otherCandidate=cachedCompactCandidate(level,config,x,z);
+                    if(otherCandidate.isEmpty()||compactCandidateWinsAgainst(candidate,otherCandidate.get()))continue;
+                    Optional<CompactPlan> other = cachedCompactPlan(level,config,x,z);
+                    if (other.isPresent() && !compactPlanWinsAgainst(plan,other.get())) return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /** Conservative AABB arbitration also leaves one block of host rock between independent bodies. */
+    static boolean compactPlanWinsAgainst(CompactPlan plan, CompactPlan other) {
+        return compactCandidateWinsAgainst(plan.candidate(),other.candidate());
+    }
+
+    private static boolean compactCandidateWinsAgainst(DepositCandidate a,DepositCandidate b) {
+        if (a.depositId() == b.depositId()) return true;
+        boolean touches = Math.abs((long)a.center().getX()-b.center().getX()) <= a.radiusX()+b.radiusX()+1
+                && Math.abs((long)a.center().getY()-b.center().getY()) <= a.verticalRadius()+b.verticalRadius()+1
+                && Math.abs((long)a.center().getZ()-b.center().getZ()) <= a.radiusZ()+b.radiusZ()+1;
+        return !touches || Long.compareUnsigned(a.depositId(), b.depositId()) < 0;
+    }
+
+    private static DepositCandidate createCompactCandidate(ServerLevel level, Configuration config, int cellX, int cellZ) {
+        int tier = config.sizeTier();
+        ResourceLocation oreId = BuiltInRegistries.BLOCK.getKey(config.targets().getFirst().state.getBlock());
+        ResourceLocation biome = config.sourceBiome().orElse(null);
+        DataDrivenSettings settings = config.dataDriven().orElse(null);
+        DepositCandidate candidate;
+        float size = settings == null ? liveSizeMultiplier(config.targets().getFirst().state.getBlock()) : settings.sizeMultiplier();
+        if (settings == null) {
+            long anchor = DepositLayouts.anchorChunkKey(OreDepositTier.fromIndex(tier).orElseThrow(), cellX, cellZ);
+            int ax = DepositLayouts.chunkX(anchor), az = DepositLayouts.chunkZ(anchor);
+            String material = OreUnifier.materialKeyFor(config.targets().getFirst().state.getBlock());
+            if (!matchesAutomaticSourceBiome(level, ax, az, biome)
+                    || !predictsMaterialForChunk(level, ax, az, tier, material, biome)) return null;
+            candidate = createPlannedCandidate(level, ax, az, tier, oreId, material, size, biome);
+            if (biome != null) {
+                candidate = relocatePredictedCandidateToSourceBiome(level, candidate, biome,
+                        config.targets().stream().map(target -> target.target).toList());
+                if (candidate == null) return null;
+            }
+        } else {
+            if (biome == null || !passesDataDrivenFrequency(level, cellX, cellZ, biome, oreId, tier, settings)) return null;
+            candidate = createDataDrivenCandidate(level, cellX, cellZ, biome, oreId, tier, settings);
+            if (!isNoiseBiome(level, candidate.center(), biome)) return null;
+        }
+        return fitCompactCandidate(level,config,candidate);
+    }
+
+    private static DepositCandidate fitCompactCandidate(ServerLevel level,Configuration config,DepositCandidate candidate) {
+        ResourceLocation biome=config.sourceBiome().orElse(null);
+        CompactDepositGeometry geometry = compactGeometry(candidate.shapeSeed(), config.sizeTier(), candidate.geometrySize());
+        java.util.OptionalInt fittedY = geometry.fitOriginY(candidate.center().getY(),
+                level.getMinBuildHeight() + BEDROCK_CLEARANCE, level.getMaxBuildHeight());
+        if (fittedY.isEmpty()) return null;
+        if (fittedY.getAsInt() != candidate.center().getY()) {
+            candidate = candidate.withUndergroundCenter(new BlockPos(candidate.center().getX(),fittedY.getAsInt(),candidate.center().getZ()));
+            if (biome != null && !isNoiseBiome(level,candidate.center(),biome)) return null;
+        }
+        return candidate;
+    }
+
+    static CompactPlan buildCompactPlanAt(ServerLevel level,Configuration config,DepositCandidate candidate) {
+        candidate=fitCompactCandidate(level,config,candidate);
+        if(candidate==null)return null;
+        int tier=config.sizeTier();
+        DataDrivenSettings settings=config.dataDriven().orElse(null);
+        CompactDepositGeometry geometry=compactGeometry(candidate.shapeSeed(),tier,candidate.geometrySize());
+        ServerChunkCache source = level.getChunkSource();
+        Map<CompactDepositGeometry.Cell, OreConfiguration.TargetBlockState> targets = new IdentityHashMap<>();
+        List<CompactDepositGeometry.Cell> eligible = new ArrayList<>();
+        BlockPos center = candidate.center();
+        int quantity=compactTotalOre(candidate.shapeSeed(),tier,0,
+                settings==null?config.richnessMultiplier():settings.richnessMultiplier());
+        List<CompactDepositGeometry.Cell> physical=CompactDepositGeometry.selectOreCells(geometry.cells(),
+                CompactDepositGeometry.oreBlockBudget(quantity),center.getX(),center.getZ());
+        if(physical.isEmpty())return null;
+        BlockState[] terrain = CompactDepositTerrain.sample(source.getGenerator(), source.randomState(), level, center, physical);
+        List<OreConfiguration.TargetBlockState> lateTargets=DataDrivenOreDepositBiomeModifier.lateReplacementTargets(level,config);
+        Map<Long,Boolean> predictedBiomes=new java.util.HashMap<>();
+        RandomSource targetRandom=RandomSource.create(0);
+        for (int cellIndex = 0; cellIndex < physical.size(); cellIndex++) {
+            CompactDepositGeometry.Cell cell = physical.get(cellIndex);
+            int x = center.getX() + cell.x(), y = center.getY() + cell.y(), z = center.getZ() + cell.z();
+            if (y < level.getMinBuildHeight() + BEDROCK_CLEARANCE || y >= level.getMaxBuildHeight()) continue;
+            BlockState state = terrain[cellIndex];
+            targetRandom.setSeed(candidate.shapeSeed() ^ BlockPos.asLong(x,y,z));
+            OreConfiguration.TargetBlockState target = matchingTarget(config.targets(), state,targetRandom, settings == null);
+            if(target==null && !lateTargets.isEmpty() && state.getFluidState().isEmpty() && state.is(ModBlockTags.STONES)) {
+                // Remote base columns predate cave-mod rock conversion. This grants planning eligibility only;
+                // compactHostIsUncut/placeCompactSlice still require the exact configured host in real terrain.
+                int qx=QuartPos.fromBlock(x),qy=QuartPos.fromBlock(y),qz=QuartPos.fromBlock(z);
+                long key=BlockPos.asLong(qx,qy,qz);
+                // Forced centers already came from the chunk's actual biome palette. Cave mods may not
+                // expose that biome through the remote noise source; do not reject that verified center.
+                if(settings.forced() || predictedBiomes.computeIfAbsent(key,ignored -> DataDrivenOreDepositBiomeModifier.matchesPlannedBiome(
+                        level,new BlockPos(QuartPos.toBlock(qx),QuartPos.toBlock(qy),QuartPos.toBlock(qz)),config.sourceBiome().orElseThrow())))
+                    target=lateTargets.getFirst();
+            }
+            if (target != null && state.getFluidState().isEmpty()) {
+                eligible.add(cell);
+                targets.put(cell, target);
+            }
+        }
+        List<CompactDepositGeometry.Cell> connected = CompactDepositGeometry.connected(eligible, geometry.cells().size());
+        if (connected.size() < Math.max(4, physical.size() * 0.60)) {
+            OresAndDrillsMod.LOGGER.debug("Compact ore patch {} rejected during terrain planning: {} connected/{} physical blocks; source biome={}, late targets={}",
+                    Long.toUnsignedString(candidate.depositId()),connected.size(),physical.size(),config.sourceBiome(),lateTargets.size());
+            return null;
+        }
+        int diameter=Math.max(connected.stream().mapToInt(CompactDepositGeometry.Cell::x).max().orElseThrow()
+                -connected.stream().mapToInt(CompactDepositGeometry.Cell::x).min().orElseThrow()+1,
+                connected.stream().mapToInt(CompactDepositGeometry.Cell::z).max().orElseThrow()
+                -connected.stream().mapToInt(CompactDepositGeometry.Cell::z).min().orElseThrow()+1);
+        if(diameter<CompactDepositGeometry.minimumDiameter(tier==TIER_LARGE))return null;
+        int total = compactTotalOre(candidate.shapeSeed(), tier, connected.size(),
+                settings == null ? config.richnessMultiplier() : settings.richnessMultiplier());
+        // Filtering host rock must never silently truncate the configured reserve.
+        if ((long) connected.size() * CompactDepositGeometry.MAX_UNITS_PER_BLOCK < total) return null;
+        int[] amounts = DepositTierMath.distributeOre(total, connected.stream().mapToDouble(CompactDepositGeometry.Cell::weight).toArray(), CompactDepositGeometry.maximumBlockReserve(total,connected.size()));
+        return new CompactPlan(candidate.withExpectedBlocks(connected.size()), connected, connected.stream().map(targets::get).toList(), amounts);
+    }
+
+    private static int compactTotalOre(long seed, int tier, int blocks, float richness) {
+        return CompactDepositGeometry.totalOre(seed, tier == TIER_LARGE, blocks, richness);
+    }
+
+    private boolean placeForcedCompact(FeaturePlaceContext<Configuration> context) {
+        Configuration config=context.config();WorldGenLevel level=context.level();
+        DataDrivenSettings settings=config.dataDriven().orElseThrow();
+        if(config.targets().isEmpty()||config.sourceBiome().isEmpty()||!depositStatesRegistered()
+                ||!settings.matchesDimension(level.getLevel().dimension().location()))return false;
+        ChunkPos chunk=level instanceof WorldGenRegion region?region.getCenter():new ChunkPos(context.origin());
+        DepositCandidate candidate=reserveForcedDeposit(level,chunk.x,chunk.z,config.sizeTier(),
+                BuiltInRegistries.BLOCK.getKey(config.targets().getFirst().state.getBlock()),config.sourceBiome().get(),
+                settings,DepositLayouts.forTier(OreDepositTier.fromIndex(config.sizeTier()).orElseThrow()));
+        if(candidate==null)return false;
+        CompactPlan plan=buildCompactPlanAt(level.getLevel(),config,candidate);
+        if(plan==null||!compactPlanWins(level.getLevel(),plan))return false;
+        ConfirmedDepositIndex index=ConfirmedDepositIndex.get(level.getLevel());
+        if(!index.tryBeginSlice(candidate.depositId(),chunk))return false;
+        try {
+            if(!compactHostIsUncut(level,plan,false)||!index.registerStartingForcedPlan(plan))return false;
+            try {
+                placeClaimedCompactSlice(level,chunk,plan,false,index);
+            } finally {
+                if(!index.hasSlice(candidate.depositId(),chunk))index.removeForcedPlan(candidate.depositId());
+            }
+            if(!index.hasSlice(candidate.depositId(),chunk))return false;
+        } finally {
+            index.endSlice(candidate.depositId(),chunk);
+        }
+        // Only already FULL chunks may receive late forced slices, on the server thread.
+        // No getChunk/create=true, no writes into neighbours during FEATURES.
+        ServerLevel server=level.getLevel();
+        server.getServer().tell(new net.minecraft.server.TickTask(server.getServer().getTickCount()+1,() -> {
+            Set<ChunkPos> chunks=new java.util.HashSet<>();
+            for(var c:plan.cells())chunks.add(new ChunkPos(plan.candidate().center().offset(c.x(),c.y(),c.z())));
+            for(ChunkPos pos:chunks)if(server.getChunkSource().getChunkNow(pos.x,pos.z)!=null)
+                placePendingForcedSlices(server,pos);
+        }));
+        return true;
+    }
+
+    static void placePendingForcedSlices(WorldGenLevel level,ChunkPos chunk) {
+        ConfirmedDepositIndex index=ConfirmedDepositIndex.get(level.getLevel());
+        for(CompactPlan plan:index.forcedPlansFor(chunk))
+            if(index.forcedPlanReady(plan.candidate().depositId()))placeCompactSlice(level,chunk,plan,false);
+    }
+
+    public static void onCompactChunkLoad(net.neoforged.neoforge.event.level.ChunkEvent.Load event) {
+        if(event.getLevel() instanceof ServerLevel level) {
+            ChunkPos pos=event.getChunk().getPos();
+            level.getServer().tell(new net.minecraft.server.TickTask(level.getServer().getTickCount()+1,() -> {
+                if(level.getChunkSource().getChunkNow(pos.x,pos.z)!=null)placePendingForcedSlices(level,pos);
+            }));
+        }
+    }
+
+    static net.minecraft.nbt.CompoundTag saveCompactPlan(CompactPlan plan,net.minecraft.core.HolderLookup.Provider registries) {
+        var tag=new net.minecraft.nbt.CompoundTag();var c=plan.candidate();
+        tag.putLong("Id",c.depositId());tag.putString("Ore",c.oreId().toString());tag.putInt("Tier",c.tier().index());
+        tag.putLong("Center",c.center().asLong());tag.putLong("Seed",c.shapeSeed());tag.putFloat("Size",c.geometrySize());
+        tag.putIntArray("Radii",new int[]{c.radiusX(),c.radiusZ(),c.verticalRadius()});
+        List<OreConfiguration.TargetBlockState> palette=new ArrayList<>();
+        int[] coordinates=new int[plan.cells().size()*4];
+        for(int i=0;i<plan.cells().size();i++) {
+            var cell=plan.cells().get(i);var target=plan.targets().get(i);
+            int targetIndex=palette.indexOf(target);if(targetIndex<0){targetIndex=palette.size();palette.add(target);}
+            coordinates[i*4]=cell.x();coordinates[i*4+1]=cell.y();coordinates[i*4+2]=cell.z();coordinates[i*4+3]=targetIndex;
+        }
+        boolean compact=palette.size()<=256;
+        for(int i=0;i<coordinates.length;i++)if((i&3)!=3 && (coordinates[i]<-128||coordinates[i]>127))compact=false;
+        if(compact) {
+            byte[] packed=new byte[coordinates.length],amounts=new byte[plan.amounts().length*2];
+            for(int i=0;i<coordinates.length;i++)packed[i]=(byte)coordinates[i];
+            for(int i=0;i<plan.amounts().length;i++) {
+                amounts[i*2]=(byte)plan.amounts()[i];amounts[i*2+1]=(byte)(plan.amounts()[i]>>>8);
+            }
+            tag.putByteArray("PackedCells",packed);tag.putByteArray("PackedAmounts",amounts);
+        } else throw new IllegalArgumentException("Compact plan exceeds packed format bounds");
+        tag.putInt("Format",1);
+        tag.put("Targets",OreConfiguration.TargetBlockState.CODEC.listOf().encodeStart(
+                registries.createSerializationContext(net.minecraft.nbt.NbtOps.INSTANCE),palette).getOrThrow());
+        return tag;
+    }
+
+    static CompactPlan loadCompactPlan(net.minecraft.nbt.CompoundTag tag,net.minecraft.core.HolderLookup.Provider registries) {
+        if(tag.getInt("Format")!=1)throw new IllegalArgumentException("Unsupported compact plan format");
+        int[] coords,amounts,radii=tag.getIntArray("Radii");
+        if(tag.contains("PackedCells",net.minecraft.nbt.Tag.TAG_BYTE_ARRAY)) {
+            byte[] packed=tag.getByteArray("PackedCells"),reserves=tag.getByteArray("PackedAmounts");
+            if(packed.length%4!=0 || reserves.length!=(long)packed.length/2)throw new IllegalArgumentException("Invalid packed compact plan");
+            coords=new int[packed.length];amounts=new int[reserves.length/2];
+            for(int i=0;i<packed.length;i++)coords[i]=(i&3)==3?packed[i]&255:packed[i];
+            for(int i=0;i<amounts.length;i++)amounts[i]=(reserves[i*2]&255)|((reserves[i*2+1]&255)<<8);
+        } else throw new IllegalArgumentException("Missing packed compact plan");
+        if(radii.length!=3||coords.length!=amounts.length*4||amounts.length<1||amounts.length>24_000)
+            throw new IllegalArgumentException("Invalid compact plan arrays");
+        var palette=OreConfiguration.TargetBlockState.CODEC.listOf().parse(
+                registries.createSerializationContext(net.minecraft.nbt.NbtOps.INSTANCE),tag.get("Targets")).getOrThrow();
+        BlockPos center=BlockPos.of(tag.getLong("Center"));
+        var candidate=new DepositCandidate(tag.getLong("Id"),ResourceLocation.parse(tag.getString("Ore")),
+                OreDepositTier.fromIndex(tag.getInt("Tier")).orElseThrow(),center,radii[0],radii[1],radii[2],tag.getLong("Seed"),
+                null,amounts.length,center.getX()>>4,center.getZ()>>4,tag.getFloat("Size"));
+        List<CompactDepositGeometry.Cell> cells=new ArrayList<>();List<OreConfiguration.TargetBlockState> targets=new ArrayList<>();
+        for(int i=0;i<amounts.length;i++) {
+            if(amounts[i]<1||amounts[i]>CompactDepositGeometry.MAX_UNITS_PER_BLOCK)throw new IllegalArgumentException("Invalid reserve");
+            cells.add(new CompactDepositGeometry.Cell(coords[i*4],coords[i*4+1],coords[i*4+2],1));
+            targets.add(palette.get(coords[i*4+3]));
+        }
+        return new CompactPlan(candidate,List.copyOf(cells),List.copyOf(targets),amounts);
+    }
+
+    static void placeCompactSlice(WorldGenLevel level, ChunkPos chunk, CompactPlan plan, boolean stoneFallback) {
+        ConfirmedDepositIndex index = ConfirmedDepositIndex.get(level.getLevel());
+        long id=plan.candidate().depositId();
+        // Duplicate/reentrant commits skip immediately. Other chunks can still consult the
+        // index while a block callback waits for their generation (e.g. Sable physics).
+        if(!index.tryBeginSlice(id,chunk))return;
+        try {
+            placeClaimedCompactSlice(level,chunk,plan,stoneFallback,index);
+        } finally {
+            index.endSlice(id,chunk);
+        }
+    }
+
+    private static void placeClaimedCompactSlice(WorldGenLevel level, ChunkPos chunk, CompactPlan plan,
+            boolean stoneFallback, ConfirmedDepositIndex index) {
+        DepositWorldgenGuard.protectPlan(level.getLevel(),plan,chunk);
+        DepositCandidate candidate = plan.candidate();
+        if (candidate.center().getX() + candidate.radiusX() < chunk.getMinBlockX()
+                || candidate.center().getX() - candidate.radiusX() > chunk.getMaxBlockX()
+                || candidate.center().getZ() + candidate.radiusZ() < chunk.getMinBlockZ()
+                || candidate.center().getZ() - candidate.radiusZ() > chunk.getMaxBlockZ()) return;
+        // Base-column planning predates gravel, caves and structures added by decoration.
+        // Clip individual invalid hosts instead of discarding a whole chunk of the patch.
+        OreDepositPaletteData palette = OreDepositPaletteData.get(level.getLevel());
+        Map<Block, Integer> ores = new IdentityHashMap<>(), bases = new IdentityHashMap<>();
+        List<OreDepositData.GeneratedDeposit> generated = new ArrayList<>();
+        List<BlockState> originalHosts = new ArrayList<>();
+        List<CompactDepositGeometry.Cell> accepted = new ArrayList<>();
+        List<BoundingBox> structures = plannedStructureBoxes(level);
+        Map<Long,Map<Long,BlockState>> gravelHosts = new java.util.HashMap<>();
+        Map<String,Integer> clipped = new java.util.LinkedHashMap<>();
+        int plannedBlocks = 0, sliceReserve = 0;
+        BlockState depositState = ModBlocks.ORE_DEPOSIT.get().defaultBlockState();
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        RandomSource targetRandom=RandomSource.create(0);
+        for (int i : plan.indices(chunk)) {
+            CompactDepositGeometry.Cell cell = plan.cells().get(i);
+            pos.set(candidate.center().getX() + cell.x(), candidate.center().getY() + cell.y(), candidate.center().getZ() + cell.z());
+            plannedBlocks++;
+            sliceReserve += plan.amounts()[i];
+            BlockState host = level.getBlockState(pos);
+            BlockState originalHost = host;
+            if(host.is(Blocks.GRAVEL))host=baseHostBeforeGravel(level,pos,plan,gravelHosts);
+            String reason = host.is(ModBlocks.ORE_DEPOSIT.get()) ? "existing_deposit"
+                    : !host.getFluidState().isEmpty() ? "fluid" : null;
+            if (reason == null) for (BoundingBox structure : structures) if (structure.isInside(pos)) {
+                reason = "structure"; break;
+            }
+            OreConfiguration.TargetBlockState target = plan.targets().get(i);
+            targetRandom.setSeed(candidate.shapeSeed() ^ pos.asLong());
+            if (reason == null && matchingTarget(List.of(target), host,targetRandom, stoneFallback) == null)
+                reason = "host:" + BuiltInRegistries.BLOCK.getKey(host.getBlock());
+            if (reason != null) { clipped.merge(reason,1,Integer::sum); continue; }
+            int ore = ores.computeIfAbsent(target.state.getBlock(), palette::oreIndex);
+            int base = bases.computeIfAbsent(host.getBlock(), block -> {
+                int baseIndex = palette.baseIndex(block);
+                return baseIndex >= 0 ? baseIndex : OreDepositStonePalette.nearestByMapColor(level.getLevel(), target.state.getMapColor(level, pos).col);
+            });
+            if (ore < 0 || base < 0 || !level.ensureCanWrite(pos)) {
+                OresAndDrillsMod.LOGGER.debug("Compact ore patch {} chunk [{},{}] rejected: palette or write bounds at {}",
+                        Long.toUnsignedString(candidate.depositId()),chunk.x,chunk.z,pos);
+                return;
+            }
+            generated.add(new OreDepositData.GeneratedDeposit(pos.immutable(), base, ore, plan.amounts()[i], candidate.tier().index()));
+            originalHosts.add(originalHost);
+            accepted.add(cell);
+        }
+        if (plannedBlocks == 0) return;
+        if (generated.isEmpty() || (long)generated.size() * CompactDepositGeometry.MAX_UNITS_PER_BLOCK < sliceReserve) {
+            OresAndDrillsMod.LOGGER.debug("Compact ore patch {} chunk [{},{}] rejected: {} valid/{} planned blocks cannot hold {} units; clipped={}",
+                    Long.toUnsignedString(candidate.depositId()),chunk.x,chunk.z,generated.size(),plannedBlocks,sliceReserve,clipped);
+            return;
+        }
+        ChunkAccess owner=level.getChunk(chunk.x,chunk.z);
+        OreDepositChunkData existing=owner.getExistingDataOrNull(ModAttachments.ORE_DEPOSITS);
+        int compactLimit=CompactDepositGeometry.MAX_ORE_BLOCKS_PER_CHUNK + MAX_DEPOSIT_ENTRIES_PER_CHUNK;
+        if (generated.size() + (existing==null?0:existing.size()) > compactLimit) {
+            OresAndDrillsMod.LOGGER.debug("Compact ore patch {} chunk [{},{}] rejected: attachment capacity {}",
+                    Long.toUnsignedString(candidate.depositId()),chunk.x,chunk.z,compactLimit);
+            return;
+        }
+        if (!clipped.isEmpty()) {
+            // Keep the chunk's immutable share of Q. Other chunks retain their own shares,
+            // so clipping cannot duplicate reserves or depend on their generation order.
+            int[] amounts=DepositTierMath.distributeOre(sliceReserve,
+                    accepted.stream().mapToDouble(CompactDepositGeometry.Cell::weight).toArray(),CompactDepositGeometry.MAX_UNITS_PER_BLOCK);
+            for(int i=0;i<generated.size();i++) {
+                var entry=generated.get(i);
+                generated.set(i,new OreDepositData.GeneratedDeposit(entry.pos(),entry.baseIndex(),entry.oreIndex(),amounts[i],entry.tier()));
+            }
+            OresAndDrillsMod.LOGGER.debug("Compact ore patch {} chunk [{},{}] clipped {} of {} blocks: {}; redistributed {} units",
+                    Long.toUnsignedString(candidate.depositId()),chunk.x,chunk.z,plannedBlocks-generated.size(),plannedBlocks,clipped,sliceReserve);
+        }
+        // Prepare the complete current-chunk batch before any mutation. Unexpected write failure
+        // rolls back that batch; no partial resources or confirmation are committed.
+        int updateFlags=level instanceof ServerLevel?Block.UPDATE_CLIENTS:Block.UPDATE_NONE;
+        for (int i = 0; i < generated.size(); i++) {
+            if (!level.setBlock(generated.get(i).pos(), depositState, updateFlags)) {
+                for (int j = i - 1; j >= 0; j--) level.setBlock(generated.get(j).pos(), originalHosts.get(j), updateFlags);
+                OresAndDrillsMod.LOGGER.debug("Compact ore patch {} chunk [{},{}] rolled back: block write failed at {}",
+                        Long.toUnsignedString(candidate.depositId()),chunk.x,chunk.z,generated.get(i).pos());
+                return;
+            }
+        }
+        OreDepositData.setGeneratedBatch(level, generated);
+        if (!generated.isEmpty()) {
+            if(level instanceof ServerLevel server)server.getChunk(chunk.x,chunk.z).syncData(ModAttachments.ORE_DEPOSITS);
+            int occupiedSections = (int)generated.stream().mapToLong(entry -> net.minecraft.core.SectionPos.asLong(entry.pos())).distinct().count();
+            index.confirmSlice(candidate, generated.size(), chunk, occupiedSections);
+            OresAndDrillsMod.LOGGER.debug("Compact ore patch {} {} chunk [{},{}]: {}/{} blocks, {} units (complete plan: {} blocks, {} units)",
+                    Long.toUnsignedString(candidate.depositId()), candidate.tier(), chunk.x, chunk.z,
+                    generated.size(), plan.cells().size(), generated.stream().mapToInt(OreDepositData.GeneratedDeposit::amount).sum(),
+                    plan.cells().size(), plan.totalOre());
+        }
+    }
+
+    private static BlockState baseHostBeforeGravel(WorldGenLevel level,BlockPos pos,CompactPlan plan,
+            Map<Long,Map<Long,BlockState>> chunks) {
+        // Forced centers are chosen after earlier decoration. Their gravel was not yet
+        // protected by a known plan; recover only the predicted base rock at this cell.
+        long chunkKey=ChunkPos.asLong(pos.getX()>>4,pos.getZ()>>4);
+        Map<Long,BlockState> hosts=chunks.computeIfAbsent(chunkKey,ignored -> {
+            List<CompactDepositGeometry.Cell> gravel=new ArrayList<>();
+            BlockPos center=plan.candidate().center();
+            BlockPos.MutableBlockPos cursor=new BlockPos.MutableBlockPos();
+            for(int i:plan.indices(new ChunkPos(chunkKey))) {
+                var cell=plan.cells().get(i);
+                cursor.set(center.getX()+cell.x(),center.getY()+cell.y(),center.getZ()+cell.z());
+                if(level.getBlockState(cursor).is(Blocks.GRAVEL))gravel.add(cell);
+            }
+            ServerChunkCache source=level.getLevel().getChunkSource();
+            BlockState[] terrain=CompactDepositTerrain.sample(source.getGenerator(),source.randomState(),level.getLevel(),center,gravel);
+            Map<Long,BlockState> recovered=new java.util.HashMap<>();
+            for(int i=0;i<gravel.size();i++) {
+                var cell=gravel.get(i);BlockState base=terrain[i];
+                if(base.getFluidState().isEmpty() && base.is(ModBlockTags.STONES))
+                    recovered.put(BlockPos.asLong(center.getX()+cell.x(),center.getY()+cell.y(),center.getZ()+cell.z()),base);
+            }
+            return recovered;
+        });
+        return hosts.getOrDefault(pos.asLong(),Blocks.GRAVEL.defaultBlockState());
+    }
+
+    private static boolean compactHostIsUncut(WorldGenLevel level, CompactPlan plan, boolean stoneFallback) {
+        ChunkPos receiving=level instanceof WorldGenRegion region?region.getCenter():new ChunkPos(plan.candidate().center());
+        return compactHostIsUncut(level,plan,stoneFallback,receiving);
+    }
+
+    private static boolean compactHostIsUncut(WorldGenLevel level, CompactPlan plan, boolean stoneFallback,ChunkPos receiving) {
+        DepositCandidate candidate = plan.candidate();
+        ConfirmedDepositIndex index = ConfirmedDepositIndex.get(level.getLevel());
+        OreDepositPaletteData palette = OreDepositPaletteData.get(level.getLevel());
+        Map<Block, Integer> oreIndices = new IdentityHashMap<>();
+        List<BoundingBox> structures = plannedStructureBoxes(level);
+        Map<Long,Map<Long,BlockState>> gravelHosts = new java.util.HashMap<>();
+        Map<Long, Integer> newPerChunk = new java.util.HashMap<>();
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        for (int i = 0; i < plan.cells().size(); i++) {
+            CompactDepositGeometry.Cell cell = plan.cells().get(i);
+            pos.set(candidate.center().getX() + cell.x(), candidate.center().getY() + cell.y(), candidate.center().getZ() + cell.z());
+            if (index.hasSlice(candidate.depositId(), pos.getX() >> 4, pos.getZ() >> 4)) continue;
+            // Far chunks in FEATURES may have only reached BIOMES/NOISE. Never require their
+            // carved terrain or upgrade their status: each chunk validates only its own slice.
+            if(!(level instanceof ServerLevel) && ((pos.getX()>>4)!=receiving.x||(pos.getZ()>>4)!=receiving.z))continue;
+            if (level instanceof WorldGenRegion region && !region.hasChunk(pos.getX() >> 4, pos.getZ() >> 4)) continue;
+            if (level instanceof ServerLevel server && server.getChunkSource().getChunkNow(pos.getX() >> 4,pos.getZ() >> 4)==null) continue;
+            BlockState state = level.getBlockState(pos);
+            if(state.is(Blocks.GRAVEL))state=baseHostBeforeGravel(level,pos,plan,gravelHosts);
+            if (!state.getFluidState().isEmpty()) return false;
+            for (BoundingBox structure : structures) if (structure.isInside(pos)) return false;
+            ChunkAccess owner = level.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+            OreDepositChunkData data = owner.getExistingDataOrNull(ModAttachments.ORE_DEPOSITS);
+            OreConfiguration.TargetBlockState target = plan.targets().get(i);
+            int oreIndex = oreIndices.computeIfAbsent(target.state.getBlock(), palette::oreIndex);
+            if (oreIndex < 0) return false;
+            if (state.is(ModBlocks.ORE_DEPOSIT.get())) {
+                // Matching ore/amount alone cannot identify an independently generated deposit.
+                // Our completed slices were skipped by their persistent identity above.
+                return false;
+            }
+            if (matchingTarget(List.of(target), state,
+                    RandomSource.create(candidate.shapeSeed() ^ pos.asLong()), stoneFallback) == null) return false;
+            long key = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
+            int additions = newPerChunk.merge(key, 1, Integer::sum);
+            // A complete LARGE column occupies at most seven layers. Keep the legacy
+            // TINY/SMALL allowance in addition to this compact body's bounded volume.
+            int compactLimit = CompactDepositGeometry.MAX_ORE_BLOCKS_PER_CHUNK + MAX_DEPOSIT_ENTRIES_PER_CHUNK;
+            if (additions + (data == null ? 0 : data.size()) > compactLimit) return false;
+        }
+        return true;
     }
 
     private static boolean depositStatesRegistered() {
@@ -1180,6 +1783,14 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
     }
 
     private boolean placeAttempt(FeaturePlaceContext<Configuration> context) {
+        if(context.config().sizeTier()>=TIER_MEDIUM && context.config().dataDriven().map(DataDrivenSettings::forced).orElse(false))
+            return placeForcedCompact(context);
+        if (context.config().sizeTier() >= TIER_MEDIUM
+                && !context.config().dataDriven().map(DataDrivenSettings::forced).orElse(false)) {
+            // The existing decoration tail runs this category once per receiving chunk. A source
+            // feature must not also write the complete deposit into its neighbours.
+            return false;
+        }
         WorldGenLevel level = context.level();
         RandomSource random = context.random();
         Configuration config = context.config();
@@ -1351,6 +1962,15 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
         int radiusX = shape.radiusX();
         int radiusZ = shape.radiusZ();
         int maxDepth = shape.depth();
+        CompactDepositGeometry compactShape = tier >= TIER_MEDIUM
+                ? compactGeometry(plannedCandidate.shapeSeed(), tier, sizeMultiplier) : null;
+        if (compactShape != null) {
+            targetBlocks = compactShape.cells().size();
+            requiredMinBlocks = Math.max(4, (int) Math.ceil(targetBlocks * 0.60));
+            radiusX = compactShape.radiusX();
+            radiusZ = compactShape.radiusZ();
+            maxDepth = compactShape.radiusY();
+        }
 
         BlockPos undergroundSearchOrigin = origin;
         CaveWallAnchor wallAnchor = null;
@@ -1402,10 +2022,11 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
             }
             // Caves are carved before features and structures may still be built over this area, so a
             // lens placed blindly is cut by them or by the write bounds. Move it to an uncut spot instead.
-            origin = uncutLensOrigin(
+            origin = compactShape == null ? uncutLensOrigin(
                     level, taggedStoneOrigin, targets, radiusX, radiusZ, maxDepth, dataSettings == null,
                     plannedCandidate.shapeSeed()
-            );
+            ) : uncutCompactOrigin(level, taggedStoneOrigin, targets, compactShape, plannedCandidate.shapeSeed());
+            if (origin == null) return rejectAttempt(claim, "no_uncut_compact_host");
             plannedCandidate = plannedCandidate.withUndergroundCenter(origin);
         }
 
@@ -1417,7 +2038,9 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
             return rejectAttempt(claim, "large_spacing_precheck");
         }
 
-        List<DepositPosition> positions = wallAnchor == null
+        List<DepositPosition> positions = compactShape != null
+                ? collectCompactPositions(level, origin, targets, compactShape, plannedCandidate.shapeSeed())
+                : wallAnchor == null
                 ? collectDepositPositions(
                         level, planRandom, origin, targets, radiusX, radiusZ, maxDepth, targetBlocks,
                         dataSettings == null
@@ -1447,7 +2070,12 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
                     dataSettings == null
             );
         }
+        int untrimmedBlocks = positions.size();
         positions = limitByChunkCompatibilityBudget(level, positions);
+        if (compactShape != null && positions.size() != untrimmedBlocks) {
+            // A forced slot can be retried elsewhere. Arbitrarily trimming it would cut its core.
+            return rejectAttempt(claim, "compact_chunk_capacity");
+        }
         if (positions.size() > targetBlocks) {
             positions = positions.subList(0, targetBlocks);
         }
@@ -1524,6 +2152,9 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
                 Integer.MAX_VALUE,
                 Math.max(positions.size(), Math.round(sampledBaseTotalOre * richnessMultiplier))
         );
+        if (compactShape != null) {
+            totalOre = compactTotalOre(plannedCandidate.shapeSeed(), tier, positions.size(), richnessMultiplier);
+        }
 
         // Only burn this attempt slot once we know a vein will actually be placed. Claiming it up front
         // (before knowing whether a nearby cave wall / enough valid positions exist) would mean a single
@@ -1588,7 +2219,17 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
             }
         }
 
-        int[] amounts = distributeOre(positions, origin, radiusX, radiusZ, totalOre);
+        int[] amounts;
+        if (compactShape == null) {
+            amounts = distributeOre(positions, origin, radiusX, radiusZ, totalOre);
+        } else {
+            Map<CompactDepositGeometry.Key, Double> weights = new java.util.HashMap<>();
+            for (CompactDepositGeometry.Cell cell : compactShape.cells()) weights.put(cell.key(), cell.weight());
+            BlockPos weightOrigin = origin;
+            amounts = DepositTierMath.distributeOre(totalOre, positions.stream().mapToDouble(position -> weights.getOrDefault(
+                    new CompactDepositGeometry.Key(position.pos().getX() - weightOrigin.getX(), position.pos().getY() - weightOrigin.getY(),
+                            position.pos().getZ() - weightOrigin.getZ()), 0.25)).toArray(), CompactDepositGeometry.maximumBlockReserve(totalOre,positions.size()));
+        }
         List<OreDepositData.GeneratedDeposit> generatedDeposits = new ArrayList<>(positions.size());
         // A deposit normally has one ore block and crosses only a handful of host stones. Resolve their
         // synchronized persistent-palette lookups once per block type instead of twice for every position.
@@ -2107,10 +2748,61 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
     }
 
     /**
-     * Nearest origin (searched outward in rings, the original spot first) whose full MEDIUM/LARGE lens lies
+     * Nearest origin (searched outward in rings, the original spot first) whose full MEDIUM/LARGE patch lies
      * inside the write bounds, in host rock without fluids or cave air, and outside every structure that is
-     * already planned around it. When no fully clear spot exists the least-cut one is kept.
+     * already planned around it. A forced slot is released when no completely clear spot exists.
      */
+    static BlockPos uncutCompactOrigin(WorldGenLevel level, BlockPos origin,
+            List<OreConfiguration.TargetBlockState> targets, CompactDepositGeometry geometry, long seed) {
+        List<BoundingBox> structures = plannedStructureBoxes(level);
+        // Forced rules retain their existing per-biome-instance ledger. Their compact bodies fit in
+        // one chunk, so find an uncut center inside this chunk instead of writing its neighbours.
+        ChunkPos sourceChunk = level instanceof WorldGenRegion region ? region.getCenter() : new ChunkPos(origin);
+        GenerationWriteBounds bounds = GenerationWriteBounds.around(sourceChunk.x, sourceChunk.z, 0);
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        int evaluations = 0;
+        for (int ring = 0; ring <= MAX_LENS_SHIFT; ring += LENS_SHIFT_STEP) {
+            for (int dx = -ring; dx <= ring; dx += LENS_SHIFT_STEP) {
+                for (int dz = -ring; dz <= ring; dz += LENS_SHIFT_STEP) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != ring) continue;
+                    for (int dy : LENS_SHIFT_HEIGHTS) {
+                        BlockPos center = origin.offset(dx, dy, dz);
+                        boolean valid = true;
+                        for (CompactDepositGeometry.Cell cell : geometry.cells()) {
+                            pos.set(center.getX() + cell.x(), center.getY() + cell.y(), center.getZ() + cell.z());
+                            if (!canHoldLensCell(level, pos, targets, false, structures,
+                                    RandomSource.create(seed ^ pos.asLong()), bounds,
+                                    level.getMinBuildHeight() + BEDROCK_CLEARANCE, level.getMaxBuildHeight())) {
+                                valid = false;
+                                break;
+                            }
+                        }
+                        if (valid) return center;
+                        if (++evaluations >= MAX_LENS_SHIFT_EVALUATIONS) return null;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private static List<DepositPosition> collectCompactPositions(WorldGenLevel level, BlockPos origin,
+            List<OreConfiguration.TargetBlockState> targets, CompactDepositGeometry geometry, long seed) {
+        Map<CompactDepositGeometry.Key, OreConfiguration.TargetBlockState> selected = new java.util.HashMap<>();
+        List<CompactDepositGeometry.Cell> eligible = new ArrayList<>();
+        for (CompactDepositGeometry.Cell cell : geometry.cells()) {
+            BlockPos pos = origin.offset(cell.x(), cell.y(), cell.z());
+            BlockState state = level.getBlockState(pos);
+            OreConfiguration.TargetBlockState target = matchingTarget(targets, state, RandomSource.create(seed ^ pos.asLong()), false);
+            if (target != null && state.getFluidState().isEmpty() && level.ensureCanWrite(pos)) {
+                eligible.add(cell);
+                selected.put(cell.key(), target);
+            }
+        }
+        return CompactDepositGeometry.connected(eligible, geometry.cells().size()).stream().map(cell -> new DepositPosition(
+                origin.offset(cell.x(), cell.y(), cell.z()), selected.get(cell.key()))).toList();
+    }
+
     private static BlockPos uncutLensOrigin(
             WorldGenLevel level,
             BlockPos origin,
@@ -2658,7 +3350,7 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
             }
 
             double totalAttempts = totalDepositAttempts(level, biomeId);
-            OresAndDrillsMod.LOGGER.debug("Ore deposits: tier table (total_deposit_attempts_per_chunk={})",
+            OresAndDrillsMod.LOGGER.debug("Ore deposits: spawn-calibration tier table (MEDIUM/LARGE physical shapes and reserves use compact patches; total_deposit_attempts_per_chunk={})",
                     String.format(java.util.Locale.ROOT, "%.6f", totalAttempts));
             ResourceLocation dimension = level.dimension().location();
             for (int tier = 0; tier < TIER_COUNT; tier++) {

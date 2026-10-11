@@ -59,6 +59,13 @@ public record DataDrivenOreDepositBiomeModifier(
     private static final Map<ResourceLocation, List<ConfiguredFeature<?, ?>>> DECORATION_FEATURES =
             new java.util.concurrent.ConcurrentHashMap<>();
 
+    static List<OreDepositFeature.Configuration> compactConfigurations() {
+        return DECORATION_FEATURES.values().stream().flatMap(List::stream)
+                .map(feature -> (OreDepositFeature.Configuration)feature.config())
+                .filter(config -> config.sizeTier() >= OreDepositFeature.TIER_MEDIUM
+                        && config.dataDriven().isPresent() && !config.dataDriven().get().forced()).toList();
+    }
+
     public static final MapCodec<DataDrivenOreDepositBiomeModifier> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             Codec.STRING.listOf().fieldOf("ores").forGetter(DataDrivenOreDepositBiomeModifier::ores),
             Codec.STRING.listOf().optionalFieldOf("biomes", List.of("#minecraft:is_overworld"))
@@ -155,9 +162,19 @@ public record DataDrivenOreDepositBiomeModifier(
      * each rule still places only from its planned source chunk and only when the planned center is in its biome.
      */
     public static void decorate(WorldGenLevel level, ChunkAccess chunk, ChunkGenerator generator) {
+        OreDepositFeature.placePendingForcedSlices(level,chunk.getPos());
+        ReplaceOreFeaturesBiomeModifier.decorateCompactDeposits(level, chunk);
         if (DECORATION_FEATURES.isEmpty()) {
             return;
         }
+        // Frequency-based MEDIUM/LARGE plans can cross into a chunk with no source biome at all.
+        DECORATION_FEATURES.entrySet().stream().sorted(Map.Entry.comparingByKey())
+                .flatMap(entry -> entry.getValue().stream())
+                .filter(feature -> feature.config() instanceof OreDepositFeature.Configuration config
+                        && config.sizeTier() >= OreDepositFeature.TIER_MEDIUM
+                        && config.dataDriven().isPresent() && !config.dataDriven().get().forced())
+                .forEach(feature -> OreDepositFeature.placeCompactDeposits(
+                        level, chunk.getPos(), (OreDepositFeature.Configuration) feature.config()));
         // Like vanilla decoration, a rule runs when its biome is in this chunk or a neighbour: its planned
         // center may sit just outside the real biome and is then moved onto it (see OreDepositFeature).
         Set<Holder<Biome>> biomes = new java.util.HashSet<>();
@@ -468,6 +485,34 @@ public record DataDrivenOreDepositBiomeModifier(
         return List.copyOf(result);
     }
 
+    /** Targets whose host is installed by the cave mod after the base noise terrain is sampled. */
+    static List<OreConfiguration.TargetBlockState> lateReplacementTargets(ServerLevel level, OreDepositFeature.Configuration config) {
+        if (config.dataDriven().isEmpty() || config.sourceBiome().isEmpty() || config.targets().isEmpty()) return List.of();
+        ResourceLocation biome = config.sourceBiome().get();
+        if (biome.getNamespace().equals("minecraft")) return List.of();
+        long salt = config.dataDriven().get().ruleSalt();
+        for (var rule : loadedRules(level)) {
+            if (rule.stableSignature() != salt) continue;
+            List<OreConfiguration.TargetBlockState> result = new ArrayList<>();
+            RandomSource random = RandomSource.create(0);
+            for (String selector : rule.replaceables()) {
+                if (!isLateReplacement(biome, selector)) continue;
+                ResourceLocation id = ResourceLocation.tryParse(selector);
+                if (!BuiltInRegistries.BLOCK.containsKey(id)) continue;
+                BlockState host = BuiltInRegistries.BLOCK.get(id).defaultBlockState();
+                for (var target : config.targets()) if (target.target.test(host, random) && !result.contains(target)) result.add(target);
+            }
+            return List.copyOf(result);
+        }
+        return List.of();
+    }
+
+    private static boolean isLateReplacement(ResourceLocation biome, String selector) {
+        if (selector.startsWith("#")) return false;
+        ResourceLocation id = ResourceLocation.tryParse(selector);
+        return id != null && id.getNamespace().equals(biome.getNamespace());
+    }
+
     private static RuleTest ruleTest(String selector) {
         if (selector.startsWith("#")) {
             ResourceLocation id = ResourceLocation.tryParse(selector.substring(1));
@@ -581,13 +626,7 @@ public record DataDrivenOreDepositBiomeModifier(
          * {@link #matchesReplacement(BlockState)} against the finished chunk and remains strict.
          */
         java.util.function.BiPredicate<BlockPos, BlockState> predictedReplacement(ServerLevel level) {
-            boolean ownsLateReplacement = replaceables.stream().anyMatch(selector -> {
-                        if (selector.startsWith("#")) {
-                            return false;
-                        }
-                        ResourceLocation id = ResourceLocation.tryParse(selector);
-                        return id != null && id.getNamespace().equals(biomeId.getNamespace());
-                    });
+            boolean ownsLateReplacement = replaceables.stream().anyMatch(selector -> isLateReplacement(biomeId, selector));
             return (pos, state) -> matchesReplacement(state)
                     || ownsLateReplacement
                     && state.getFluidState().isEmpty()

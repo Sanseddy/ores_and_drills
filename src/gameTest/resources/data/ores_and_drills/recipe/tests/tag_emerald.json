@@ -1,0 +1,7 @@
+{
+  "type": "ores_and_drills:drill_mining",
+  "input": ["minecraft:emerald_ore", "minecraft:deepslate_emerald_ore"],
+  "fluid": {"tag": "ores_and_drills:test_mining_fluids", "amount": 100},
+  "minimum_drill_tier": 3,
+  "result": {"id": "minecraft:emerald", "count": 1}
+}

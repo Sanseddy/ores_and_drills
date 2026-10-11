@@ -48,6 +48,10 @@ public final class OreDepositConfig {
     // RU: Дополнительный множитель частоты только для SMALL: меньше 1.0 — SMALL реже, TINY не меняется.
     public static final double SMALL_DEPOSIT_FREQUENCY_MULTIPLIER = 0.5D;
 
+    // EN: Final TINY/SMALL spawn retention, applied after chance saturation; 0.5 halves candidates.
+    // RU: Итоговая доля появления TINY/SMALL после ограничения шанса: 0.5 оставляет половину кандидатов.
+    public static final double TINY_SMALL_SPAWN_RETENTION = 0.5D;
+
     // EN: Extra frequency multiplier for LARGE deposits only; above 1.0 makes LARGE more common without touching MEDIUM.
     // RU: Дополнительный множитель частоты только для LARGE: больше 1.0 — LARGE чаще, MEDIUM не меняется.
     public static final double LARGE_DEPOSIT_FREQUENCY_MULTIPLIER = 2.0D;
@@ -62,15 +66,15 @@ public final class OreDepositConfig {
 
     // EN: Minimum combined TINY/SMALL frequency share so rare ores never disappear completely.
     // RU: Минимальная суммарная доля частоты для TINY/SMALL, чтобы редкая руда не исчезла полностью.
-    public static final double MIN_SMALL_DEPOSIT_FREQUENCY_SHARE = 0.005D;
+    public static final double MIN_SMALL_DEPOSIT_FREQUENCY_SHARE = 0.00125D;
 
     // EN: Base rare-ore penalty in small deposits; a higher value makes rare ores less common.
     // RU: Базовый штраф редких руд в маленьких залежах: больше число — редкие руды встречаются реже.
-    public static final double SMALL_DEPOSIT_RARITY_PENALTY = 3.5D;
+    public static final double SMALL_DEPOSIT_RARITY_PENALTY = 4.5D;
 
     // EN: Additional penalty for the very rarest ores in small deposits.
     // RU: Дополнительный штраф для самых редких руд в маленьких залежах.
-    public static final double VERY_RARE_ORE_PENALTY = 15.0D;
+    public static final double VERY_RARE_ORE_PENALTY = 18.0D;
 
     // EN: Additional-penalty curve; a higher value targets only the rarest ores more strongly.
     // RU: Кривая дополнительного штрафа: больше число сильнее выделяет только самые редкие руды.

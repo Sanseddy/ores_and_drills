@@ -1,4 +1,8 @@
 {
+  "recipe.ores_and_drills.drill_mining": "Добыча буром",
+  "recipe.ores_and_drills.minimum_tier": "Минимальный уровень бура: %s",
+  "recipe.ores_and_drills.ore_loot": "Дроп исходной руды",
+  "recipe.ores_and_drills.conditions": "Дополнительных условий: %s",
   "commands.ores_and_drills.locate.catalog_not_loaded": "Серверный каталог руд ещё не загружен.",
   "commands.ores_and_drills.locate.unknown_ore": "Блок %s не является рудой или отсутствует в теге #c:ores.",
   "commands.ores_and_drills.locate.unknown_tier": "Неизвестный размер месторождения %s. Допустимые значения: tiny, small, medium, large.",
@@ -62,6 +66,9 @@
   "tooltip.ores_and_drills.mining_drill.decimal_separator": ",",
   "tooltip.ores_and_drills.ore_deposit.amount": "Руды в блоке: %s",
   "tooltip.ores_and_drills.ore_deposit.special_tool": "особый инструмент",
+  "tooltip.ores_and_drills.ore_deposit.manual_mining_unavailable": "✕ Нельзя добыть вручную",
+  "tooltip.ores_and_drills.ore_deposit.requires_fluid_drill": "Нужен бур с жидкостью",
+  "config.jade.plugin_ores_and_drills.fluid_locked_ore": "Руды, требующие жидкость",
   "config.jade.plugin_ores_and_drills.mining_drill": "Бур",
   "config.jade.plugin_ores_and_drills.ore_deposit": "Месторождение руды",
   "gui.ores_and_drills.ore_settings.open_button": "Настройки руды",

@@ -51,6 +51,49 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
     private static final Set<ResourceLocation> LOGGED_DISABLED_ORES = ConcurrentHashMap.newKeySet();
     private static final Set<ResourceLocation> LOGGED_PRESET_DISABLED_ORES = ConcurrentHashMap.newKeySet();
     private static final Set<ResourceLocation> LOGGED_UNREPRESENTABLE_ORES = ConcurrentHashMap.newKeySet();
+    private static final Map<ResourceLocation, List<OreDepositFeature.Configuration>> COMPACT_CONFIGS = new ConcurrentHashMap<>();
+
+    static List<OreDepositFeature.Configuration> compactConfigurations() {
+        return COMPACT_CONFIGS.values().stream().flatMap(List::stream).toList();
+    }
+
+    static void decorateCompactDeposits(net.minecraft.world.level.WorldGenLevel level,
+            net.minecraft.world.level.chunk.ChunkAccess chunk) {
+        compactConfigurationsForChunk(level.getLevel(),chunk.getPos())
+                .forEach(config -> OreDepositFeature.placeCompactDeposits(level, chunk.getPos(), config));
+    }
+
+    static List<OreDepositFeature.Configuration> compactConfigurationsForChunk(
+            net.minecraft.server.level.ServerLevel level, net.minecraft.world.level.ChunkPos chunk) {
+        return compactConfigurationsForChunk(level,chunk,
+                CompactDepositGeometry.MAX_HORIZONTAL_REACH+OreDepositFeature.MAX_TAGGED_STONE_RELOCATION_RADIUS);
+    }
+
+    static List<OreDepositFeature.Configuration> compactConfigurationsForChunk(
+            net.minecraft.server.level.ServerLevel level,net.minecraft.world.level.ChunkPos chunk,int reach) {
+        // Run in every chunk, including the far side of a biome boundary. Source-biome checks belong
+        // to the immutable candidate, not to the biome of the chunk receiving its continuation.
+        Set<ResourceLocation> sources = new java.util.HashSet<>();
+        for (int index = OreDepositFeature.TIER_MEDIUM; index <= OreDepositFeature.TIER_LARGE; index++) {
+            OreDepositTier tier = OreDepositTier.fromIndex(index).orElseThrow();
+            int size = DepositLayouts.forTier(tier).cellSizeBlocks();
+            for (int x = Math.floorDiv(chunk.getMinBlockX() - reach, size);
+                    x <= Math.floorDiv(chunk.getMaxBlockX() + reach, size); x++) {
+                for (int z = Math.floorDiv(chunk.getMinBlockZ() - reach, size);
+                        z <= Math.floorDiv(chunk.getMaxBlockZ() + reach, size); z++) {
+                    long anchor = DepositLayouts.anchorChunkKey(tier, x, z);
+                    level.getUncachedNoiseBiome(
+                            net.minecraft.core.QuartPos.fromBlock(DepositLayouts.chunkX(anchor) * 16 + 8),
+                            net.minecraft.core.QuartPos.fromBlock(Math.max(level.getMinBuildHeight(), Math.min(level.getMaxBuildHeight() - 1, 64))),
+                            net.minecraft.core.QuartPos.fromBlock(DepositLayouts.chunkZ(anchor) * 16 + 8))
+                            .unwrapKey().ifPresent(key -> sources.add(key.location()));
+                }
+            }
+        }
+        return COMPACT_CONFIGS.entrySet().stream().filter(entry -> sources.contains(entry.getKey())).sorted(Map.Entry.comparingByKey())
+                .flatMap(entry -> entry.getValue().stream())
+                .toList();
+    }
 
     @Override
     public void modify(Holder<Biome> biome, Phase phase, ModifiableBiomeInfo.BiomeInfo.Builder builder) {
@@ -62,6 +105,9 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
 
         if (phase != Phase.REMOVE && phase != Phase.AFTER_EVERYTHING) {
             return;
+        }
+        if (phase == Phase.REMOVE) {
+            biome.unwrapKey().ifPresent(key -> COMPACT_CONFIGS.remove(key.location()));
         }
 
         BiomeGenerationSettingsBuilder generation = builder.getGenerationSettings();
@@ -577,6 +623,27 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
                 targets, tier, sourceProbability, frequencyMultiplier,
                 sizeMultiplier, richnessMultiplier, sourceBiomeId
         );
+        if (tier >= OreDepositFeature.TIER_MEDIUM && sourceBiomeId.isPresent()) {
+            COMPACT_CONFIGS.compute(sourceBiomeId.get(), (id, old) -> {
+                List<OreDepositFeature.Configuration> values = old == null ? new ArrayList<>() : new ArrayList<>(old);
+                String material = OreUnifier.materialKeyFor(targets.getFirst().state.getBlock());
+                for (int i = 0; i < values.size(); i++) {
+                    OreDepositFeature.Configuration existing = values.get(i);
+                    if (existing.sizeTier() != tier || !material.equals(OreUnifier.materialKeyFor(existing.targets().getFirst().state.getBlock()))) continue;
+                    List<OreConfiguration.TargetBlockState> merged = new ArrayList<>(existing.targets());
+                    for (OreConfiguration.TargetBlockState target : targets) {
+                        String signature = stableRuleTestKey(target.target) + "->" + BuiltInRegistries.BLOCK.getKey(target.state.getBlock());
+                        if (merged.stream().noneMatch(t -> signature.equals(stableRuleTestKey(t.target) + "->" + BuiltInRegistries.BLOCK.getKey(t.state.getBlock())))) merged.add(target);
+                    }
+                    merged.sort(java.util.Comparator.comparing(t -> stableRuleTestKey(t.target) + "->" + BuiltInRegistries.BLOCK.getKey(t.state.getBlock())));
+                    values.set(i, new OreDepositFeature.Configuration(merged, tier, 1.0F, frequencyMultiplier,
+                            sizeMultiplier, richnessMultiplier, sourceBiomeId));
+                    return List.copyOf(values);
+                }
+                values.add(config);
+                return List.copyOf(values);
+            });
+        }
         replacements.add(new PlacedFeature(Holder.direct(configuredDeposit(config)), placement));
     }
 
