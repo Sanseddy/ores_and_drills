@@ -16,6 +16,7 @@ import dev.world.block.MiningDrillTier;
 import dev.world.block.entity.drill.OreScanner;
 import dev.world.level.levelgen.OreDepositData;
 import dev.world.level.levelgen.OreDepositOrePalette;
+import dev.world.level.levelgen.OreDepositRemovalGuard;
 import dev.world.level.levelgen.OreDepositStonePalette;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
@@ -51,6 +52,28 @@ import java.util.List;
 @GameTestHolder(OresAndDrillsMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class DrillMiningRecipeGameTests {
+    @GameTest(template = "empty", timeoutTicks = 200)
+    public static void unknownDirectRemovalIsRejectedWithoutLoot(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos pos = helper.absolutePos(new BlockPos(1, 1, 1));
+        deposit(level, pos, Blocks.IRON_ORE, 3);
+
+        boolean removed = level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+        helper.assertTrue(!removed
+                        && level.getBlockState(pos).is(ModBlocks.ORE_DEPOSIT.get())
+                        && OreDepositData.remainingOreAt(level, pos) == 3
+                        && level.getEntitiesOfClass(ItemEntity.class, new AABB(pos).inflate(0.75D)).isEmpty(),
+                "Unknown direct removal erased, depleted, or dropped a persistent deposit");
+
+        boolean authorized = OreDepositRemovalGuard.runAuthorized(level, pos,
+                () -> level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL)
+        );
+        helper.assertTrue(authorized && level.getBlockState(pos).isAir()
+                        && OreDepositData.remainingOreAt(level, pos) == 0,
+                "Explicitly authorized removal was blocked or retained deposit metadata");
+        helper.succeed();
+    }
+
     @GameTest(template = "empty", timeoutTicks = 200)
     public static void jsonNetworkReloadAndRecipePriority(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -187,8 +210,11 @@ public final class DrillMiningRecipeGameTests {
         deposit(level, ore, Blocks.GOLD_ORE, 5);
         TestDrill drill = new TestDrill(ore.above(2), level, 3);
         helper.assertTrue(OreScanner.scan(level, ore.above(2), Direction.NORTH, ModBlocks.ADVANCED_STRUCTURE, AdvancedMiningDrill.TIER)
-                .stream().anyMatch(target -> target.pos().equals(ore) && target.result().is(Items.RAW_GOLD)),
-                "Scanner did not resolve the underlying ore recipe inside a deposit");
+                .stream().anyMatch(target -> target.pos().equals(ore) && target.result().is(Items.RAW_GOLD)
+                        && target.requiredFluid() != null
+                        && target.requiredFluid().displayStacks().stream().anyMatch(fluid ->
+                                fluid.is(Fluids.WATER) && fluid.getAmount() == 100)),
+                "Scanner did not expose the underlying ore recipe and its fluid requirement");
         var targets = List.of(new OreScanner.Target(ore, new ItemStack(Items.RAW_GOLD), 1, 1, 5));
         helper.assertTrue(!AbstractDrillBlockEntity.canOutputTargets(drill, targets), "Dry tank allowed wet mining");
         drill.getFluidHandler().fill(new FluidStack(Fluids.LAVA, 500), IFluidHandler.FluidAction.EXECUTE);

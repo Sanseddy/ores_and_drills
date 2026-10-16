@@ -2,8 +2,6 @@ package dev.world.level.levelgen;
 
 import dev.OresAndDrillsMod;
 import dev.config.OreDepositConfig;
-import dev.registry.ModAttachments;
-import dev.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -13,8 +11,6 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.level.chunk.ChunkAccess;
-import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.saveddata.SavedData;
 import org.jetbrains.annotations.Nullable;
 
@@ -28,7 +24,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 /** Persistent spatial hash shared by MEDIUM and LARGE deposits in one dimension. */
 public final class LargeDepositSpatialIndex extends SavedData {
     private static final String FILE_ID = OresAndDrillsMod.MOD_ID + "_large_deposit_index";
-    private static final String TAG_DEPOSITS = "Deposits";
     private static final String TAG_DATA_VERSION = "DataVersion";
     private static final String TAG_MATERIALS = "Materials";
     private static final String TAG_LARGE_X = "LargeX";
@@ -41,20 +36,7 @@ public final class LargeDepositSpatialIndex extends SavedData {
     private static final String TAG_LARGE_MIN_Z = "LargeMinZ";
     private static final String TAG_LARGE_MAX_Z = "LargeMaxZ";
     private static final String TAG_LARGE_REMAINING_BLOCKS = "LargeRemainingBlocks";
-    /**
-     * Version 3 replaced the one-CompoundTag-per-record list (which duplicated the material string and an
-     * always-zero Scale field on every TINY/SMALL entry) with packed primitive arrays plus a deduplicated
-     * material pool. On worlds explored for a long time this list only ever grows (TINY/SMALL records are
-     * never pruned automatically), so the old format made every autosave/quit re-serialize a huge number of
-     * individually-allocated NBT compounds. Loading still understands the old format so existing worlds
-     * migrate in place on the next save.
-     *
-     * Version 4 stops persisting TINY/SMALL locate hints. They do not participate in spacing and the
-     * command already has a bounded deterministic predictor for them. Keeping every such hint forever
-     * made this file grow with every explored chunk, so its complete re-serialization dominated Save and
-     * Quit in long-lived worlds.
-     */
-    /** Version 5 adds a tracked footprint so a depleted deposit releases its spacing reservation exactly. */
+    /** Current format stores compact arrays and an exact footprint for every spacing record. */
     private static final int CURRENT_DATA_VERSION = 5;
     private static final int TIER_BITS = 4;
     private static final int TIER_MASK = (1 << TIER_BITS) - 1;
@@ -149,7 +131,7 @@ public final class LargeDepositSpatialIndex extends SavedData {
                 pos, MAX_RECORD_CENTER_TO_FOOTPRINT_DISTANCE, tier, materialKey
         );
         for (DepositRecord record : matches) {
-            if (!record.isTracked() || !record.contains(pos)) {
+            if (!record.contains(pos)) {
                 continue;
             }
             remove(record);
@@ -160,68 +142,11 @@ public final class LargeDepositSpatialIndex extends SavedData {
         }
     }
 
-    /**
-     * Pre-v5 worlds have no persisted footprint/count. A /locate that already loaded every possible
-     * footprint chunk can still safely drop a record when none of those chunks contains a live matching
-     * deposit. Missing chunks deliberately keep the reservation: guessing would allow overlapping veins.
-     */
-    public synchronized boolean pruneLegacyRecordIfExhausted(ServerLevel level, DepositRecord record) {
-        if (record.isTracked()) {
-            return false;
-        }
-        List<net.minecraft.resources.ResourceLocation> ores = OreDepositPaletteData.get(level).ores();
-        int chunkRadius = (MAX_RECORD_CENTER_TO_FOOTPRINT_DISTANCE + 15) / 16;
-        int centerChunkX = record.center().getX() >> 4;
-        int centerChunkZ = record.center().getZ() >> 4;
-        for (int offsetX = -chunkRadius; offsetX <= chunkRadius; offsetX++) {
-            for (int offsetZ = -chunkRadius; offsetZ <= chunkRadius; offsetZ++) {
-                ChunkAccess chunk = level.getChunkSource().getChunk(
-                        centerChunkX + offsetX, centerChunkZ + offsetZ, ChunkStatus.FULL, false
-                );
-                if (chunk == null) {
-                    return false;
-                }
-                OreDepositChunkData data = chunk.getExistingDataOrNull(ModAttachments.ORE_DEPOSITS);
-                if (data == null) {
-                    continue;
-                }
-                boolean[] liveMatch = {false};
-                data.forEach(centerChunkX + offsetX, centerChunkZ + offsetZ, (pos, entry) -> {
-                    if (entry.tier() != record.tier() || entry.remainingOre() <= 0
-                            || !chunk.getBlockState(pos).is(ModBlocks.ORE_DEPOSIT.get())) {
-                        return;
-                    }
-                    if (entry.oreIndex() >= 0 && entry.oreIndex() < ores.size()) {
-                        var ore = net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(ores.get(entry.oreIndex()));
-                        liveMatch[0] |= record.materialKey().equals(OreUnifier.materialKeyFor(ore));
-                    }
-                });
-                if (liveMatch[0]) {
-                    return false;
-                }
-            }
-        }
-        return remove(record);
-    }
-
     private void addRecord(DepositRecord record) {
         int cellX = Math.floorDiv(record.center().getX(), CELL_SIZE);
         int cellZ = Math.floorDiv(record.center().getZ(), CELL_SIZE);
         largeDepositsByRegion.computeIfAbsent(regionKey(cellX, cellZ), ignored -> new ArrayList<>()).add(record);
         setDirty();
-    }
-
-    /**
-     * TINY/SMALL deposits are found through the command's bounded predictor rather than retained in
-     * SavedData forever. Kept as a no-op bridge so worlds/mod integrations compiled against older builds
-     * continue to load cleanly.
-     */
-    public synchronized void recordUnrestricted(
-            BlockPos center,
-            int tier,
-            String materialKey
-    ) {
-        // Intentionally not persisted: this was an unbounded /locate-only cache.
     }
 
     /** Removes a persisted locate record after its center and complete footprint were verified as depleted. */
@@ -340,17 +265,10 @@ public final class LargeDepositSpatialIndex extends SavedData {
     private static LargeDepositSpatialIndex load(CompoundTag tag, HolderLookup.Provider registries) {
         LargeDepositSpatialIndex data = new LargeDepositSpatialIndex();
         int version = tag.getInt(TAG_DATA_VERSION);
-        if (version >= 3) {
-            loadCompact(data, tag);
-        } else {
-            loadLegacy(data, tag, version);
+        if (version != CURRENT_DATA_VERSION) {
+            throw new IllegalArgumentException("Unsupported large deposit index format; a new world is required");
         }
-        // Version 4 deliberately drops the old unbounded TINY/SMALL /locate cache. Mark an existing
-        // version-3 file dirty immediately so its next normal save compacts it even if no new large
-        // deposit happens to generate before the player exits.
-        if (version < CURRENT_DATA_VERSION) {
-            data.setDirty();
-        }
+        loadCompact(data, tag);
         return data;
     }
 
@@ -361,15 +279,12 @@ public final class LargeDepositSpatialIndex extends SavedData {
             materials.add(materialsTag.getString(index));
         }
 
-        boolean hasTrackedFootprints = tag.contains(TAG_LARGE_REMAINING_BLOCKS, Tag.TAG_INT_ARRAY);
         loadCompactRecords(data.largeDepositsByRegion, materials,
                 tag.getIntArray(TAG_LARGE_X), tag.getIntArray(TAG_LARGE_Y), tag.getIntArray(TAG_LARGE_Z),
                 tag.getIntArray(TAG_LARGE_TIER_MATERIAL), tag.getLongArray(TAG_LARGE_SCALE),
-                hasTrackedFootprints ? tag.getIntArray(TAG_LARGE_MIN_X) : null,
-                hasTrackedFootprints ? tag.getIntArray(TAG_LARGE_MAX_X) : null,
-                hasTrackedFootprints ? tag.getIntArray(TAG_LARGE_MIN_Z) : null,
-                hasTrackedFootprints ? tag.getIntArray(TAG_LARGE_MAX_Z) : null,
-                hasTrackedFootprints ? tag.getIntArray(TAG_LARGE_REMAINING_BLOCKS) : null);
+                tag.getIntArray(TAG_LARGE_MIN_X), tag.getIntArray(TAG_LARGE_MAX_X),
+                tag.getIntArray(TAG_LARGE_MIN_Z), tag.getIntArray(TAG_LARGE_MAX_Z),
+                tag.getIntArray(TAG_LARGE_REMAINING_BLOCKS));
     }
 
     private static void loadCompactRecords(
@@ -379,12 +294,12 @@ public final class LargeDepositSpatialIndex extends SavedData {
             int[] ys,
             int[] zs,
             int[] tierMaterials,
-            @Nullable long[] scaleBits,
-            @Nullable int[] minXs,
-            @Nullable int[] maxXs,
-            @Nullable int[] minZs,
-            @Nullable int[] maxZs,
-            @Nullable int[] remainingBlocks
+            long[] scaleBits,
+            int[] minXs,
+            int[] maxXs,
+            int[] minZs,
+            int[] maxZs,
+            int[] remainingBlocks
     ) {
         int size = Math.min(xs.length, Math.min(ys.length, Math.min(zs.length, tierMaterials.length)));
         for (int index = 0; index < size; index++) {
@@ -395,50 +310,21 @@ public final class LargeDepositSpatialIndex extends SavedData {
                 continue;
             }
             BlockPos center = new BlockPos(xs[index], ys[index], zs[index]);
-            double scale = scaleBits != null && index < scaleBits.length
+            double scale = index < scaleBits.length
                     ? Mth.clamp(Double.longBitsToDouble(scaleBits[index]), 0.0D, 1.0D)
                     : 0.0D;
-            int remaining = remainingBlocks != null && index < remainingBlocks.length
+            int remaining = index < remainingBlocks.length
                     ? Math.max(0, remainingBlocks[index])
-                    : DepositRecord.UNKNOWN_REMAINING_BLOCKS;
-            int minX = minXs != null && index < minXs.length ? minXs[index] : center.getX();
-            int maxX = maxXs != null && index < maxXs.length ? maxXs[index] : center.getX();
-            int minZ = minZs != null && index < minZs.length ? minZs[index] : center.getZ();
-            int maxZ = maxZs != null && index < maxZs.length ? maxZs[index] : center.getZ();
+                    : 0;
+            int minX = index < minXs.length ? minXs[index] : center.getX();
+            int maxX = index < maxXs.length ? maxXs[index] : center.getX();
+            int minZ = index < minZs.length ? minZs[index] : center.getZ();
+            int maxZ = index < maxZs.length ? maxZs[index] : center.getZ();
             int cellX = Math.floorDiv(center.getX(), CELL_SIZE);
             int cellZ = Math.floorDiv(center.getZ(), CELL_SIZE);
             target.computeIfAbsent(regionKey(cellX, cellZ), ignored -> new ArrayList<>())
                     .add(new DepositRecord(center, tier, scale, materials.get(materialIndex), minX, maxX, minZ, maxZ, remaining));
         }
-    }
-
-    /** Reads the pre-3 one-CompoundTag-per-record format so existing worlds migrate on their next save. */
-    private static void loadLegacy(LargeDepositSpatialIndex data, CompoundTag tag, int version) {
-        boolean migrateLegacySpacingScale = version < 2;
-        ListTag records = tag.getList(TAG_DEPOSITS, Tag.TAG_COMPOUND);
-        for (int index = 0; index < records.size(); index++) {
-            CompoundTag recordTag = records.getCompound(index);
-            int tier = recordTag.getInt("Tier");
-            double scale = recordTag.getDouble("Scale");
-            String materialKey = recordTag.getString("Material");
-            if (tier < 0 || tier >= OreDepositFeature.TIER_COUNT || !Double.isFinite(scale)) {
-                continue;
-            }
-            BlockPos center = new BlockPos(recordTag.getInt("X"), recordTag.getInt("Y"), recordTag.getInt("Z"));
-            int cellX = Math.floorDiv(center.getX(), CELL_SIZE);
-            int cellZ = Math.floorDiv(center.getZ(), CELL_SIZE);
-            if (tier < OreDepositFeature.TIER_MEDIUM) {
-                continue;
-            }
-            Map<Long, List<DepositRecord>> target = data.largeDepositsByRegion;
-            double persistedScale = migrateLegacySpacingScale
-                    ? migrateLegacySpacingScale()
-                    : Mth.clamp(scale, 0.0D, 1.0D);
-            target.computeIfAbsent(regionKey(cellX, cellZ), ignored -> new ArrayList<>())
-                    .add(DepositRecord.untracked(center, tier, persistedScale, materialKey));
-        }
-        // Always resave in the compact format, regardless of whether the scale itself needed migrating.
-        data.setDirty();
     }
 
     @Override
@@ -465,14 +351,6 @@ public final class LargeDepositSpatialIndex extends SavedData {
         tag.putIntArray(TAG_LARGE_MAX_Z, largeArrays.maxZ());
         tag.putIntArray(TAG_LARGE_REMAINING_BLOCKS, largeArrays.remainingBlocks());
         return tag;
-    }
-
-    /**
-     * Version 1 stored a scale calculated from block count and reserve. Neutralize those records when
-     * loading so newly generated deposits do not inherit slider-dependent spacing from old neighbours.
-     */
-    private static double migrateLegacySpacingScale() {
-        return 0.5D;
     }
 
     private static RecordArrays packRecords(
@@ -602,19 +480,6 @@ public final class LargeDepositSpatialIndex extends SavedData {
             int maxZ,
             int remainingBlocks
     ) {
-        static final int UNKNOWN_REMAINING_BLOCKS = -1;
-
-        static DepositRecord untracked(BlockPos center, int tier, double normalizedScale, String materialKey) {
-            return new DepositRecord(
-                    center, tier, normalizedScale, materialKey,
-                    center.getX(), center.getX(), center.getZ(), center.getZ(), UNKNOWN_REMAINING_BLOCKS
-            );
-        }
-
-        public boolean isTracked() {
-            return remainingBlocks > 0;
-        }
-
         public boolean contains(BlockPos pos) {
             return pos.getX() >= minX && pos.getX() <= maxX
                     && pos.getZ() >= minZ && pos.getZ() <= maxZ;

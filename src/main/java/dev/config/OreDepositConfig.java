@@ -104,6 +104,8 @@ public final class OreDepositConfig {
     public static final ModConfigSpec SPEC;
     public static final ModConfigSpec.IntValue MIN_LARGE_DEPOSIT_SPACING;
     public static final ModConfigSpec.IntValue MAX_LARGE_DEPOSIT_SPACING;
+    public static final ModConfigSpec.DoubleValue ORE_MINING_EXPONENTIAL_GROWTH;
+    public static final ModConfigSpec.DoubleValue ORE_MINING_MAX_EXPONENTIAL_MULTIPLIER;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> DISABLED_DEPOSIT_ORES;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> MOD_PRIORITIES;
     public static final ModConfigSpec.ConfigValue<String> ACTIVE_PRESET;
@@ -120,6 +122,14 @@ public final class OreDepositConfig {
                 .comment("Максимальное расстояние в блоках между крупными залежами MEDIUM/LARGE.")
                 .defineInRange("maximum_medium_large_spacing", MAX_LARGE_DEPOSIT_SPACING_LIMIT,
                         MIN_LARGE_DEPOSIT_SPACING_LIMIT, MAX_LARGE_DEPOSIT_SPACING_LIMIT);
+        ORE_MINING_EXPONENTIAL_GROWTH = builder
+                .comment("Exponential growth coefficient for manual mining time of concentrated ore deposits.",
+                        "0 disables the exponential addition while preserving linear scaling.")
+                .defineInRange("ore_mining_exponential_growth", 0.04D, 0.0D, 1.0D);
+        ORE_MINING_MAX_EXPONENTIAL_MULTIPLIER = builder
+                .comment("Maximum additional exponential multiplier for manual ore-deposit mining time.",
+                        "The linear ore-count multiplier is always applied separately.")
+                .defineInRange("ore_mining_max_exponential_multiplier", 4.0D, 1.0D, 100.0D);
         DISABLED_DEPOSIT_ORES = builder
                 .comment("ID блоков руды или теги блоков, исключённые из генерации залежей.",
                         "Исключённые руды продолжают генерироваться обычными ванильными жилами.",

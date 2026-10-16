@@ -273,6 +273,10 @@ public final class OreSpawnDimensions {
             return;
         }
 
+        Collection<ResourceLocation> resolvedDimensionIds = dimensionIds.isEmpty()
+                ? inferredDimensionIds(biome)
+                : dimensionIds;
+
         for (OreConfiguration.TargetBlockState target : oreData.targets()) {
             if (!OreTags.isOre(target.state)) {
                 continue;
@@ -283,8 +287,8 @@ public final class OreSpawnDimensions {
                     .ifPresent(canonical -> {
                         record(sourceOre, biome);
                         record(canonical, biome);
-                        recordDimensionIds(sourceOre, dimensionIds);
-                        recordDimensionIds(canonical, dimensionIds);
+                        recordDimensionIds(sourceOre, resolvedDimensionIds);
+                        recordDimensionIds(canonical, resolvedDimensionIds);
                         OreGenerationWeights.recordObservation(
                                 canonical,
                                 biome,
@@ -297,6 +301,19 @@ public final class OreSpawnDimensions {
                         );
                     });
         }
+    }
+
+    /**
+     * Cave-biome mods can inject a biome into a dimension without exposing it from the dimension biome source's
+     * possible-biome set. In that case the standard dimension biome tags remain the authoritative fallback.
+     */
+    private static Set<ResourceLocation> inferredDimensionIds(Holder<Biome> biome) {
+        return switch (dimensionFor(biome)) {
+            case OVERWORLD -> Set.of(ResourceLocation.withDefaultNamespace("overworld"));
+            case NETHER -> Set.of(ResourceLocation.withDefaultNamespace("the_nether"));
+            case END -> Set.of(ResourceLocation.withDefaultNamespace("the_end"));
+            case UNKNOWN -> Set.of();
+        };
     }
 
     static SpawnDimension dimensionFor(Holder<Biome> biome) {

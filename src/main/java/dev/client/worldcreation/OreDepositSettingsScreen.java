@@ -34,6 +34,12 @@ public final class OreDepositSettingsScreen extends Screen {
     private final Screen parent;
 
     private OreOverrideList oreOverrideList;
+    /** Unsaved edits kept while the mod priorities screen is open; returning rebuilds every row. */
+    private PendingEdits pending;
+
+    private record PendingEdits(Set<ResourceLocation> disabled, Map<ResourceLocation, OreOverrides.OreOverride> overrides,
+                                Set<String> dimensionDisabled) {
+    }
 
     public OreDepositSettingsScreen(Screen parent) {
         super(Component.translatable("gui.ores_and_drills.ore_settings.title"));
@@ -46,22 +52,58 @@ public final class OreDepositSettingsScreen extends Screen {
         int listHeight = Math.max(60, this.height - listY - 36);
         scanOreSpawnDimensions();
         List<Block> canonicalOres = canonicalOreBlocks();
+        // Edits are stored per ore member, so they still apply when a priority change picks another
+        // member of the same material as its canonical row.
         oreOverrideList = addRenderableWidget(new OreOverrideList(
                 this.minecraft,
                 this.width,
                 listHeight,
                 listY,
                 canonicalOres,
-                configuredOverrides(canonicalOres),
-                configuredDisabled(canonicalOres)
+                pending != null ? pending.overrides() : configuredOverrides(canonicalOres),
+                pending != null ? pending.disabled() : configuredDisabled(canonicalOres),
+                pending != null ? pending.dimensionDisabled() : null
         ));
 
+        addRenderableWidget(Button.builder(Component.translatable("gui.ores_and_drills.mod_priorities.open_button"), button -> openModPriorities())
+                .bounds(this.width / 2 - 155, this.height - 28, 100, 20)
+                .build());
         addRenderableWidget(Button.builder(Component.translatable("gui.ores_and_drills.ore_settings.done"), button -> onDone())
-                .bounds(this.width / 2 - 155, this.height - 28, 150, 20)
+                .bounds(this.width / 2 - 50, this.height - 28, 100, 20)
                 .build());
         addRenderableWidget(Button.builder(Component.translatable("gui.ores_and_drills.ore_settings.cancel"), button -> onClose())
-                .bounds(this.width / 2 + 5, this.height - 28, 150, 20)
+                .bounds(this.width / 2 + 55, this.height - 28, 100, 20)
                 .build());
+    }
+
+    private void openModPriorities() {
+        capturePending();
+        this.minecraft.setScreen(new ModPrioritiesScreen(this));
+    }
+
+    @Override
+    public void resize(net.minecraft.client.Minecraft minecraft, int width, int height) {
+        // Resizing re-runs init(); without this the rebuilt list would drop unsaved edits.
+        capturePending();
+        super.resize(minecraft, width, height);
+    }
+
+    private void capturePending() {
+        if (oreOverrideList == null) return;
+        Map<ResourceLocation, OreOverrides.OreOverride> overrides = new LinkedHashMap<>();
+        for (String entry : oreOverrideList.collectOverrides()) {
+            String[] parts = entry.split("\\|");
+            ResourceLocation id = parts.length == 4 ? ResourceLocation.tryParse(parts[0]) : null;
+            if (id == null) continue;
+            try {
+                overrides.put(id, new OreOverrides.OreOverride(
+                        Float.parseFloat(parts[1]), Float.parseFloat(parts[2]), Float.parseFloat(parts[3])));
+            } catch (NumberFormatException ignored) {
+                // collectOverrides only writes numbers; skip anything unexpected.
+            }
+        }
+        pending = new PendingEdits(oreOverrideList.collectDisabled(), overrides,
+                new LinkedHashSet<>(oreOverrideList.collectDimensionOverrides()));
     }
 
     /**
@@ -157,7 +199,8 @@ public final class OreDepositSettingsScreen extends Screen {
     private void onDone() {
         Set<ResourceLocation> disabled = oreOverrideList.collectDisabled();
         List<String> overrides = oreOverrideList.collectOverrides();
-        OreWorldSettingsApplier.applyOreWorldSettings(disabled, overrides);
+        List<String> dimensionOverrides = oreOverrideList.collectDimensionOverrides();
+        OreWorldSettingsApplier.applyOreWorldSettings(disabled, overrides, dimensionOverrides);
         this.minecraft.setScreen(parent);
     }
 

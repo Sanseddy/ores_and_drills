@@ -332,11 +332,11 @@ public record DataDrivenOreDepositBiomeModifier(
                 return;
             }
             TierSettings tierSettings = winner.settings(tier).orElseThrow();
-            if (tierSettings.forced()) {
-                // Forced deposits are counted per biome instance while chunks generate, so their positions
-                // are not seed-predictable; /locate returns them from the confirmed index once placed.
-                return;
-            }
+            // Forced rules still need seed plans for unexplored terrain. Real generation keeps the
+            // per-biome-instance ledger authoritative, while /locate uses these immutable slots as the
+            // coordinates that will be offered when their source chunk is decorated. Previously forced
+            // tiers were discarded here, which made rules such as #c:ores/uranium in a 3D cave biome
+            // impossible to locate until the player had already generated the deposit.
             int slots = tierSettings.candidateSlots();
             for (int slot = 0; slot < slots; slot++) {
                 double chance = tierSettings.chanceForSlot(slot);

@@ -10,7 +10,7 @@ public abstract class NoiseRouterDataMixin {
     private static final double FACTORY_EXPANSION_CAVE_CHEESE_SOLIDITY = 0.34D;
 
     @ModifyConstant(method = "underground", constant = @Constant(doubleValue = 0.27D))
-    private static double factoryExpansion$reduceLargeCheeseCaves(double original) {
+    private static double oresAndDrills$reduceLargeCheeseCaves(double original) {
         return FACTORY_EXPANSION_CAVE_CHEESE_SOLIDITY;
     }
 }

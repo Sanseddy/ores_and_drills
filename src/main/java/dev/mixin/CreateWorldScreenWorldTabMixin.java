@@ -31,7 +31,7 @@ public abstract class CreateWorldScreenWorldTabMixin {
             ),
             locals = LocalCapture.CAPTURE_FAILHARD
     )
-    private void factoryExpansion$addOreSettingsButton(
+    private void oresAndDrills$addOreSettingsButton(
             CreateWorldScreen createWorldScreen,
             CallbackInfo callbackInfo,
             GridLayout.RowHelper rowHelper,

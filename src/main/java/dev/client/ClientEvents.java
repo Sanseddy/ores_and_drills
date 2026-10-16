@@ -22,10 +22,21 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.event.RegisterSpriteSourceTypesEvent;
 import net.neoforged.neoforge.client.event.ModelEvent;
+import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.client.event.ScreenEvent;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.KeyMapping;
+import org.lwjgl.glfw.GLFW;
+import dev.client.map.OreMapIntegrations;
+import dev.client.map.OreMapMarkers;
 
 @EventBusSubscriber(modid = OresAndDrillsMod.MOD_ID, value = Dist.CLIENT)
 public final class ClientEvents {
     private static volatile int appliedOrePaletteRevision;
+    private static final KeyMapping TOGGLE_ORE_MAP = new KeyMapping(
+            "key.ores_and_drills.toggle_ore_map", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_O,
+            "key.categories.ores_and_drills"
+    );
 
     private ClientEvents() {
     }
@@ -47,6 +58,11 @@ public final class ClientEvents {
     }
 
     @SubscribeEvent
+    public static void registerKeyMappings(RegisterKeyMappingsEvent event) {
+        event.register(TOGGLE_ORE_MAP);
+    }
+
+    @SubscribeEvent
     public static void registerSpriteSourceTypes(RegisterSpriteSourceTypesEvent event) {
         event.register(OreSpeckTextureSource.ID, OreSpeckTextureSource.TYPE);
         OresAndDrillsMod.LOGGER.debug("Ore deposit: registered sprite source type {}", OreSpeckTextureSource.ID);
@@ -59,6 +75,7 @@ public final class ClientEvents {
             // supplies a translucent composite pass, while this opaque pass keeps depth/selection sane.
             ItemBlockRenderTypes.setRenderLayer(ModBlocks.ORE_DEPOSIT.get(), RenderType.solid());
             ItemBlockRenderTypes.setRenderLayer(ModBlocks.EXHAUSTED_ORE_DEPOSIT.get(), RenderType.solid());
+            OreMapIntegrations.init();
         });
     }
 
@@ -70,6 +87,11 @@ public final class ClientEvents {
     /** Regenerates pre-stitched ore speck sprites once the logical server has supplied real ores and loot-table drops. */
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
+        OreMapIntegrations.tick();
+        while (TOGGLE_ORE_MAP.consumeClick()) {
+            OreMapMarkers.toggle();
+        }
+
         int revision = OreDepositOrePalette.clientRevision();
         if (revision <= 0 || revision == appliedOrePaletteRevision) {
             return;
@@ -81,6 +103,18 @@ public final class ClientEvents {
                     "Ore deposit: applied synchronized loot-drop palette revision {} without a resource reload",
                     revision
             );
+        }
+    }
+
+    @SubscribeEvent
+    public static void renderOreMap(ScreenEvent.Render.Post event) {
+        OreMapIntegrations.renderScreen(event.getScreen(), event.getGuiGraphics(), event.getMouseX(), event.getMouseY());
+    }
+
+    @SubscribeEvent
+    public static void clickOreMapButton(ScreenEvent.MouseButtonPressed.Pre event) {
+        if (OreMapIntegrations.click(event.getScreen(), event.getMouseX(), event.getMouseY(), event.getButton())) {
+            event.setCanceled(true);
         }
     }
 }

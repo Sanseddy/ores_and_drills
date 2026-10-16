@@ -25,7 +25,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -171,10 +170,11 @@ public final class BurnerMiningDrill {
 
             ServerLevel serverLevel = (ServerLevel) level;
             Direction facing = state.getValue(AbstractDrillBlock.FACING);
+            boolean changed = exportOutput(serverLevel, pos, facing, blockEntity);
             ScanResult scan = scanAndPreview(serverLevel, pos, facing, blockEntity);
             boolean canMine = !scan.mineable().isEmpty();
             boolean outputReady = canOutputTargets(blockEntity, scan.mineable());
-            boolean changed = scan.changed();
+            changed |= scan.changed();
             FuelBurner fuelBurner = blockEntity.fuelBurner;
 
             // Like a furnace: new fuel is lit only when there is work, but lit fuel burns down every tick
@@ -202,9 +202,6 @@ public final class BurnerMiningDrill {
         @Override
         protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
             super.loadAdditional(tag, registries);
-            if (!tag.contains("Inventory", Tag.TAG_COMPOUND) && tag.contains("Fuel", Tag.TAG_LIST)) {
-                inventory.fromTag(tag.getList("Fuel", Tag.TAG_COMPOUND), registries);
-            }
             fuelBurner.load(tag);
         }
 

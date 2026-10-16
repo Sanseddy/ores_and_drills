@@ -34,10 +34,6 @@ public final class ModCapabilities {
                 ModBlocks.ULTIMATE_MINING_DRILL_PART.get()
         );
 
-        event.registerBlockEntity(Capabilities.EnergyStorage.BLOCK, ModBlockEntities.ELECTRIC_MINING_DRILL.get(), (be, side) -> be.getEnergyStorage());
-        event.registerBlockEntity(Capabilities.EnergyStorage.BLOCK, ModBlockEntities.ADVANCED_MINING_DRILL.get(), (be, side) -> be.getEnergyStorage());
-        event.registerBlockEntity(Capabilities.EnergyStorage.BLOCK, ModBlockEntities.ULTIMATE_MINING_DRILL.get(), (be, side) -> be.getEnergyStorage());
-
         event.registerBlock(
                 Capabilities.EnergyStorage.BLOCK,
                 ModCapabilities::findEnergyStorage,
@@ -68,8 +64,27 @@ public final class ModCapabilities {
     }
 
     private static IEnergyStorage findEnergyStorage(Level level, BlockPos pos, BlockState state, BlockEntity blockEntity, Direction side) {
+        if (!(state.getBlock() instanceof AbstractDrillPartBlock part) || !isEnergyPort(part, state, side)) {
+            return null;
+        }
+
         BlockEntity origin = originBlockEntity(level, pos, state);
         return origin instanceof AbstractEnergyDrillBlockEntity drillBlockEntity ? drillBlockEntity.getEnergyStorage() : null;
+    }
+
+    private static boolean isEnergyPort(AbstractDrillPartBlock part, BlockState state, Direction side) {
+        int size = part.structure().size();
+        int center = size / 2;
+        int portHeight = size == 3 ? 0 : 1;
+        int offsetX = state.getValue(part.structure().offsetXProperty());
+        int offsetY = state.getValue(part.structure().offsetYProperty());
+        int offsetZ = state.getValue(part.structure().offsetZProperty());
+        if (offsetX != center || offsetY != portHeight || offsetZ != size - 1) {
+            return false;
+        }
+
+        Direction rear = state.getValue(AbstractDrillBlock.FACING);
+        return side == null || side == rear;
     }
 
     private static IFluidHandler findFluidHandler(Level level, BlockPos pos, BlockState state, BlockEntity blockEntity, Direction side) {

@@ -1,5 +1,7 @@
 package dev.world.level.levelgen;
 
+import dev.config.OreDimensionOverrides;
+
 import dev.OresAndDrillsMod;
 import dev.config.OreDepositConfig;
 import dev.config.OreOverrides;
@@ -111,7 +113,7 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
      */
     static final int BEDROCK_CLEARANCE = 5;
 
-    /** Compatibility indices for persisted data and commands; all numeric behavior is ordinal-derived. */
+    /** Serialized tier indices used by deposit data and commands; numeric behavior is ordinal-derived. */
     public static final int TIER_TINY = DepositTier.TINY.ordinal();
     public static final int TIER_SMALL = DepositTier.SMALL.ordinal();
     public static final int TIER_MEDIUM = DepositTier.MEDIUM.ordinal();
@@ -1273,6 +1275,8 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
     /** Called by the existing decoration hook. Only the current chunk's blocks and attachments are written. */
     static void placeCompactDeposits(WorldGenLevel level, ChunkPos receivingChunk, Configuration config) {
         if (config.targets().isEmpty() || !depositStatesRegistered()) return;
+        if (OreDimensionOverrides.isDisabled(config.targets().getFirst().state.getBlock(),
+                level.getLevel().dimension().location())) return;
         DataDrivenSettings settings = config.dataDriven().orElse(null);
         if (settings != null && (!settings.matchesDimension(level.getLevel().dimension().location()) || settings.forced())) return;
         OreDepositTier tier = OreDepositTier.fromIndex(config.sizeTier()).orElseThrow();
@@ -1740,8 +1744,8 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
                     RandomSource.create(candidate.shapeSeed() ^ pos.asLong()), stoneFallback) == null) return false;
             long key = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
             int additions = newPerChunk.merge(key, 1, Integer::sum);
-            // A complete LARGE column occupies at most seven layers. Keep the legacy
-            // TINY/SMALL allowance in addition to this compact body's bounded volume.
+            // A complete LARGE column occupies at most seven layers. Keep the TINY/SMALL
+            // allowance in addition to this compact body's bounded volume.
             int compactLimit = CompactDepositGeometry.MAX_ORE_BLOCKS_PER_CHUNK + MAX_DEPOSIT_ENTRIES_PER_CHUNK;
             if (additions + (data == null ? 0 : data.size()) > compactLimit) return false;
         }
@@ -1783,6 +1787,12 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
     }
 
     private boolean placeAttempt(FeaturePlaceContext<Configuration> context) {
+        if (!context.config().targets().isEmpty()
+                && OreDimensionOverrides.isDisabled(
+                        context.config().targets().getFirst().state.getBlock(),
+                        context.level().getLevel().dimension().location())) {
+            return false;
+        }
         if(context.config().sizeTier()>=TIER_MEDIUM && context.config().dataDriven().map(DataDrivenSettings::forced).orElse(false))
             return placeForcedCompact(context);
         if (context.config().sizeTier() >= TIER_MEDIUM
@@ -1797,8 +1807,8 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
 
         // A local palette serializes each state through Block.BLOCK_STATE_REGISTRY. An id of -1 is
         // written verbatim and disconnects the client while it reads the chunk. This should never be
-        // possible after normal registry setup, but checking both refresh variants keeps a broken
-        // optional compatibility mixin (notably a chunk-container replacement) from poisoning a save.
+        // possible after normal registry setup, but checking the deposit state keeps a broken optional
+        // compatibility mixin (notably a chunk-container replacement) from poisoning a save.
         if (!depositStatesRegistered()) {
             if (INVALID_DEPOSIT_STATE_LOGGED.compareAndSet(false, true)) {
                 OresAndDrillsMod.LOGGER.debug(

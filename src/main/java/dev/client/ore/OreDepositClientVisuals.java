@@ -35,7 +35,7 @@ public final class OreDepositClientVisuals {
             return concreteLevel;
         }
         if (level instanceof RenderChunkRegion renderChunkRegion) {
-            return ((RenderChunkRegionAccessor)renderChunkRegion).factoryExpansion$level();
+            return ((RenderChunkRegionAccessor)renderChunkRegion).oresAndDrills$level();
         }
         return sodiumLevel(level);
     }

@@ -33,6 +33,7 @@ public final class ModBlocks {
 
     private static final BlockBehaviour.Properties ORE_DEPOSIT_PROPERTIES = BlockBehaviour.Properties.ofFullCopy(Blocks.STONE)
             .sound(SoundType.STONE)
+            .pushReaction(PushReaction.BLOCK)
             .requiresCorrectToolForDrops()
             .strength(3.0F, 3.0F);
 

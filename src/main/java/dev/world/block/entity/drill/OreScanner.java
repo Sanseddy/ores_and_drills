@@ -2,6 +2,7 @@ package dev.world.block.entity.drill;
 
 import dev.registry.ModBlocks;
 import dev.recipe.DrillMiningRecipe;
+import dev.recipe.DrillMiningFluid;
 import dev.recipe.DrillMiningRecipes;
 import dev.world.block.DrillStructure;
 import dev.world.block.MiningDrillTier;
@@ -36,7 +37,11 @@ public final class OreScanner {
     public static void clearDropRangeCache() { DROP_RANGE_CACHE.clear(); }
 
     /** @param remainingInVein how much ore is still left at this exact deposit block, or 1 for a plain ore block */
-    public record Target(BlockPos pos, ItemStack result, int minCount, int maxCount, int remainingInVein) {
+    public record Target(BlockPos pos, ItemStack result, int minCount, int maxCount, int remainingInVein,
+                         DrillMiningFluid requiredFluid) {
+        public Target(BlockPos pos, ItemStack result, int minCount, int maxCount, int remainingInVein) {
+            this(pos, result, minCount, maxCount, remainingInVein, null);
+        }
     }
 
     private record DropRange(ItemStack result, int minCount, int maxCount) {
@@ -60,11 +65,9 @@ public final class OreScanner {
         int margin = structure.miningAreaMargin();
         List<Target> targets = new ArrayList<>();
 
-        for (int offsetZ = -margin; offsetZ < size + margin; offsetZ++) {
-            for (int offsetX = -margin; offsetX < size + margin; offsetX++) {
-                BlockPos columnTop = structure.offset(origin, facing, offsetX, 0, offsetZ).below();
-                scanColumn(level, columnTop, tier, targets);
-            }
+        for (SpiralColumnOrder.Offset offset : SpiralColumnOrder.between(-margin, size + margin)) {
+            BlockPos columnTop = structure.offset(origin, facing, offset.x(), 0, offset.z()).below();
+            scanColumn(level, columnTop, tier, targets);
         }
 
         return targets;
@@ -87,7 +90,9 @@ public final class OreScanner {
 
             DropRange range = dropRangeFor(level, targetPos, targetState, result);
             int remainingInVein = remainingInVein(level, targetPos, targetState);
-            targets.add(new Target(targetPos, result, range.minCount(), range.maxCount(), remainingInVein));
+            DrillMiningRecipe recipe = DrillMiningRecipes.find(level, source);
+            targets.add(new Target(targetPos, result, range.minCount(), range.maxCount(), remainingInVein,
+                    recipe == null ? null : recipe.fluid().orElse(null)));
         }
     }
 

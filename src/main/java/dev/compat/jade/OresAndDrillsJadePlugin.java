@@ -46,7 +46,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @WailaPlugin(OresAndDrillsMod.MOD_ID)
-public class FactoryExpansionJadePlugin implements IWailaPlugin {
+public class OresAndDrillsJadePlugin implements IWailaPlugin {
     private static final ResourceLocation UID = ResourceLocation.fromNamespaceAndPath(
             OresAndDrillsMod.MOD_ID,
             "mining_drill"
@@ -347,12 +347,15 @@ public class FactoryExpansionJadePlugin implements IWailaPlugin {
         @Override
         public List<ViewGroup<CompoundTag>> getGroups(Accessor<?> accessor) {
             AbstractEnergyDrillBlockEntity drill = resolveEnergyDrill(accessor);
-            return drill == null ? List.of() : JadeForgeUtils.fromFluidHandler(drill.getFluidHandler());
+            return drill == null || !drill.hasFluidHandler()
+                    ? List.of()
+                    : JadeForgeUtils.fromFluidHandler(drill.getFluidHandler());
         }
 
         @Override
         public boolean shouldRequestData(Accessor<?> accessor) {
-            return resolveEnergyDrill(accessor) != null;
+            AbstractEnergyDrillBlockEntity drill = resolveEnergyDrill(accessor);
+            return drill != null && drill.hasFluidHandler();
         }
 
         @Override

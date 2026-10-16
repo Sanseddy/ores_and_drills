@@ -1,6 +1,7 @@
 package dev.client.worldcreation;
 
 import dev.config.OreOverrides;
+import dev.config.OreDimensionOverrides;
 import dev.world.level.levelgen.OreSpawnDimensions;
 import dev.world.level.levelgen.OreUnifier;
 import net.minecraft.client.Minecraft;
@@ -68,6 +69,9 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
     private final int sliderWidth;
     private final List<ModGroup> groups = new ArrayList<>();
     private final SquareToggle masterToggle = new SquareToggle(0, 0, true);
+    private OreRow openDimensionRow;
+    /** Unsaved "ore|dimension" pairs carried over a screen rebuild; null reads the stored overrides. */
+    private final Set<String> pendingDimensionDisabled;
 
     public OreOverrideList(
             Minecraft minecraft,
@@ -78,7 +82,21 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
             Map<ResourceLocation, OreOverrides.OreOverride> initial,
             Set<ResourceLocation> initialDisabled
     ) {
+        this(minecraft, width, height, y, canonicalOres, initial, initialDisabled, null);
+    }
+
+    public OreOverrideList(
+            Minecraft minecraft,
+            int width,
+            int height,
+            int y,
+            List<Block> canonicalOres,
+            Map<ResourceLocation, OreOverrides.OreOverride> initial,
+            Set<ResourceLocation> initialDisabled,
+            Set<String> pendingDimensionDisabled
+    ) {
         super(minecraft, width, height, y, rowHeightFor(canonicalOres));
+        this.pendingDimensionDisabled = pendingDimensionDisabled;
         setRenderHeader(true, HEADER_HEIGHT);
         int targetRowWidth = Math.min(MAX_TABLE_WIDTH, Math.max(MIN_TABLE_WIDTH, width - HORIZONTAL_MARGIN));
         this.labelWidth = Math.min(MAX_LABEL_WIDTH, Math.max(MIN_LABEL_WIDTH, targetRowWidth * 30 / 100));
@@ -278,10 +296,21 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
     public void renderWidget(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         super.renderWidget(guiGraphics, mouseX, mouseY, partialTick);
         renderStickyHeader(guiGraphics, mouseX, mouseY, partialTick);
+        renderDimensionMenu(guiGraphics, mouseX, mouseY);
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 0 && openDimensionRow != null) {
+            int option = dimensionMenuOptionAt(openDimensionRow, mouseX, mouseY);
+            if (option >= 0) {
+                openDimensionRow.toggleDimension(option);
+                return true;
+            }
+            if (!openDimensionRow.isDimensionCell(mouseX, mouseY)) {
+                openDimensionRow = null;
+            }
+        }
         if (button == 0 && isMasterToggleHit(mouseX, mouseY)) {
             toggleAllEnabled();
             return true;
@@ -293,6 +322,56 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
             return true;
         }
         return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    private void renderDimensionMenu(GuiGraphics graphics, int mouseX, int mouseY) {
+        OreRow row = openDimensionRow;
+        if (row == null || row.dimensionInfo.options().size() < 2) return;
+        int x = dimensionColumnX(row.lastLeft);
+        int y = dimensionMenuY(row);
+        int width = Math.max(dimensionWidth, 120);
+        int height = row.dimensionInfo.options().size() * 18 + 4;
+        graphics.pose().pushPose();
+        graphics.pose().translate(0.0F, 0.0F, 400.0F);
+        graphics.fill(x, y, x + width, y + height, 0xF0101010);
+        graphics.renderOutline(x, y, width, height, 0xFFE0E0E0);
+        for (int i = 0; i < row.dimensionInfo.options().size(); i++) {
+            int optionY = y + 2 + i * 18;
+            boolean hovered = mouseX >= x && mouseX < x + width && mouseY >= optionY && mouseY < optionY + 18;
+            if (hovered) graphics.fill(x + 1, optionY, x + width - 1, optionY + 18, 0x60404040);
+            DimensionOption option = row.dimensionInfo.options().get(i);
+            boolean enabled = row.dimensionEnabled.get(option.id());
+            renderSquareToggle(graphics, x + 3, optionY + 2, enabled, hovered);
+            graphics.drawString(Minecraft.getInstance().font,
+                    fit(option.label(), width - 25), x + 21, optionY + 5, 0xFFFFFFFF);
+        }
+        graphics.pose().popPose();
+    }
+
+    private static void renderSquareToggle(GuiGraphics graphics, int x, int y, boolean selected, boolean hovered) {
+        int size = ENABLED_TOGGLE_SIZE;
+        int borderWidth = 2;
+        int border = hovered ? 0xFFFFFFFF : 0xFFE0E0E0;
+        graphics.fill(x, y, x + size, y + borderWidth, border);
+        graphics.fill(x, y + size - borderWidth, x + size, y + size, border);
+        graphics.fill(x, y + borderWidth, x + borderWidth, y + size - borderWidth, border);
+        graphics.fill(x + size - borderWidth, y + borderWidth, x + size, y + size - borderWidth, border);
+        if (selected) graphics.fill(x + 4, y + 4, x + size - 4, y + size - 4, 0x80E0E0E0);
+    }
+
+    private int dimensionMenuOptionAt(OreRow row, double mouseX, double mouseY) {
+        int x = dimensionColumnX(row.lastLeft);
+        int y = dimensionMenuY(row);
+        int width = Math.max(dimensionWidth, 120);
+        if (mouseX < x || mouseX >= x + width || mouseY < y) return -1;
+        int option = ((int)mouseY - y - 2) / 18;
+        return option >= 0 && option < row.dimensionInfo.options().size() ? option : -1;
+    }
+
+    private int dimensionMenuY(OreRow row) {
+        int height = row.dimensionInfo.options().size() * 18 + 4;
+        int below = row.lastTop + row.lastHeight;
+        return below + height <= getY() + this.height ? below : row.lastTop - height;
     }
 
     private boolean isMasterToggleHit(double mouseX, double mouseY) {
@@ -424,6 +503,21 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
         return result;
     }
 
+    /** Ore/dimension pairs disabled through the dimension popup. */
+    public List<String> collectDimensionOverrides() {
+        List<String> result = new ArrayList<>();
+        for (ModGroup group : groups) {
+            for (OreRow row : group.rows) {
+                row.dimensionEnabled.forEach((dimension, enabled) -> {
+                    if (!enabled) {
+                        for (ResourceLocation member : row.members) result.add(member + "|" + dimension);
+                    }
+                });
+            }
+        }
+        return result;
+    }
+
     public abstract static class Entry extends ContainerObjectSelectionList.Entry<Entry> {
     }
 
@@ -480,15 +574,25 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
         private final Component label;
         private final DimensionInfo dimensionInfo;
         private final List<ResourceLocation> members;
+        private final Map<ResourceLocation, Boolean> dimensionEnabled = new LinkedHashMap<>();
         private final SquareToggle enabledToggle;
         private final MultiplierSlider frequencySlider;
         private final MultiplierSlider sizeSlider;
         private final MultiplierSlider richnessSlider;
+        private int lastLeft;
+        private int lastTop;
+        private int lastHeight;
 
         private OreRow(MaterialRowData data) {
             this.label = data.label();
             this.dimensionInfo = data.dimensionInfo();
             this.members = data.members();
+            for (DimensionOption option : dimensionInfo.options()) {
+                boolean enabled = members.stream().noneMatch(member -> pendingDimensionDisabled != null
+                        ? pendingDimensionDisabled.contains(member + "|" + option.id())
+                        : OreDimensionOverrides.isDisabled(member, option.id()));
+                dimensionEnabled.put(option.id(), enabled);
+            }
             this.enabledToggle = new SquareToggle(0, 0, data.enabled());
             int widgetWidth = sliderWidth - SLIDER_INSET * 2 - 1;
             this.frequencySlider = new MultiplierSlider(0, 0, widgetWidth, 20, null, MULTIPLIER_MIN, MULTIPLIER_MAX, data.override().frequency());
@@ -509,6 +613,9 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
                 boolean hovering,
                 float partialTick
         ) {
+            this.lastLeft = left;
+            this.lastTop = top;
+            this.lastHeight = height;
             int rowWidth = getRowWidth();
             int labelColumnLeft = labelColumnX(left);
             guiGraphics.fill(left, top, left + rowWidth, top + height, index % 2 == 0 ? ROW_BACKGROUND_EVEN : ROW_BACKGROUND_ODD);
@@ -541,6 +648,26 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
         }
 
         @Override
+        public boolean mouseClicked(double mouseX, double mouseY, int button) {
+            if (button == 0 && dimensionInfo.options().size() > 1 && isDimensionCell(mouseX, mouseY)) {
+                openDimensionRow = openDimensionRow == this ? null : this;
+                return true;
+            }
+            return super.mouseClicked(mouseX, mouseY, button);
+        }
+
+        private boolean isDimensionCell(double mouseX, double mouseY) {
+            int x = dimensionColumnX(lastLeft);
+            return mouseX >= x && mouseX < x + dimensionWidth
+                    && mouseY >= lastTop && mouseY < lastTop + lastHeight;
+        }
+
+        private void toggleDimension(int index) {
+            ResourceLocation dimension = dimensionInfo.options().get(index).id();
+            dimensionEnabled.computeIfPresent(dimension, (ignored, enabled) -> !enabled);
+        }
+
+        @Override
         public List<? extends GuiEventListener> children() {
             return List.of(enabledToggle, frequencySlider, sizeSlider, richnessSlider);
         }
@@ -551,12 +678,26 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
         }
 
         private void renderDimensionLabels(GuiGraphics guiGraphics, int x, int top, int height) {
-            List<Component> labels = dimensionInfo.labels();
-            int totalHeight = labels.size() * DIMENSION_LINE_HEIGHT;
+            List<DimensionOption> options = dimensionInfo.options();
+            int totalHeight = options.size() * DIMENSION_LINE_HEIGHT;
             int y = top + Math.max(2, (height - totalHeight) / 2);
-            for (Component label : labels) {
-                guiGraphics.drawString(Minecraft.getInstance().font, fit(label, dimensionWidth - 8), x, y, 0xD0D0D0);
+            for (DimensionOption option : options) {
+                int color = dimensionEnabled.getOrDefault(option.id(), true) ? 0xD0D0D0 : 0xFF777777;
+                int labelWidth = options.size() > 1 ? dimensionWidth - 25 : dimensionWidth - 8;
+                guiGraphics.drawString(Minecraft.getInstance().font, fit(option.label(), labelWidth), x, y, color);
                 y += DIMENSION_LINE_HEIGHT;
+            }
+            if (options.size() > 1) {
+                String arrow = openDimensionRow == this ? "▾" : "▸";
+                float scale = 1.5F;
+                int arrowWidth = Minecraft.getInstance().font.width(arrow);
+                float arrowX = x + dimensionWidth - 10.0F - arrowWidth * scale / 2.0F;
+                float arrowY = top + height / 2.0F - Minecraft.getInstance().font.lineHeight * scale / 2.0F;
+                guiGraphics.pose().pushPose();
+                guiGraphics.pose().translate(arrowX, arrowY, 0.0F);
+                guiGraphics.pose().scale(scale, scale, 1.0F);
+                guiGraphics.drawString(Minecraft.getInstance().font, arrow, 0, 0, 0xFFFFFFFF, false);
+                guiGraphics.pose().popPose();
             }
         }
     }
@@ -620,14 +761,14 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
 
     private static DimensionInfo dimensionInfo(List<ResourceLocation> members) {
         Set<ResourceLocation> keys = dimensionKeys(members);
-        List<Component> parts = new ArrayList<>();
+        List<DimensionOption> parts = new ArrayList<>();
         keys.stream()
                 .sorted(Comparator.comparingInt(OreOverrideList::dimensionSortRank)
                         .thenComparing(ResourceLocation::toString))
-                .map(OreOverrideList::dimensionName)
+                .map(id -> new DimensionOption(id, dimensionName(id)))
                 .forEach(parts::add);
         if (parts.isEmpty()) {
-            parts.add(Component.literal("-"));
+            parts.add(new DimensionOption(ResourceLocation.fromNamespaceAndPath("ores_and_drills", "unknown"), Component.literal("-")));
         }
         return new DimensionInfo(List.copyOf(parts));
     }
@@ -810,6 +951,9 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
     ) {
     }
 
-    private record DimensionInfo(List<Component> labels) {
+    private record DimensionOption(ResourceLocation id, Component label) {
+    }
+
+    private record DimensionInfo(List<DimensionOption> options) {
     }
 }

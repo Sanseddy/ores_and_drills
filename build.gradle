@@ -22,7 +22,20 @@ repositories {
     mavenCentral()
     maven {
         url = 'https://maven.blamejared.com'
-        content { includeGroup 'mezz.jei' }
+        content {
+            includeGroup 'mezz.jei'
+            includeGroup 'info.journeymap'
+        }
+    }
+    maven {
+        name = 'FTB'
+        url = 'https://maven.ftb.dev/releases'
+        content { includeGroup 'dev.ftb.mods' }
+    }
+    maven {
+        name = 'Architectury'
+        url = 'https://maven.architectury.dev/'
+        content { includeGroup 'dev.architectury' }
     }
     exclusiveContent {
         forRepository {
@@ -99,6 +112,14 @@ dependencies {
     compileOnly "maven.modrinth:jade:15.10.0+neoforge"
     compileOnly 'mezz.jei:jei-1.21.1-common-api:19.32.0.359'
     compileOnly 'mezz.jei:jei-1.21.1-neoforge-api:19.32.0.359'
+    compileOnly 'maven.modrinth:emi:1.1.24+1.21.1+neoforge'
+    // Map integrations: every class touching these APIs is loaded only after a ModList check.
+    compileOnly('info.journeymap:journeymap-api-neoforge:2.0.0-1.21.1') { transitive = false }
+    compileOnly('maven.modrinth:xaeros-world-map:neoforge-1.21.1-1.44.2') { transitive = false }
+    compileOnly('maven.modrinth:xaeros-minimap:neoforge-1.21.1-26.4.2') { transitive = false }
+    compileOnly('dev.ftb.mods:ftb-chunks-neoforge:2101.1.22') { transitive = false }
+    compileOnly('dev.ftb.mods:ftb-library-neoforge:2101.1.35') { transitive = false }
+    compileOnly('dev.architectury:architectury-neoforge:13.0.8') { transitive = false }
     testImplementation platform('org.junit:junit-bom:5.11.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'
 }

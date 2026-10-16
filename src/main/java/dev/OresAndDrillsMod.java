@@ -49,6 +49,7 @@ public final class OresAndDrillsMod {
         modEventBus.addListener(ModCapabilities::register);
         modEventBus.addListener(ModNetworking::register);
         modEventBus.addListener(OreWorldSettingsApplier::onConfigLoading);
+        modEventBus.addListener(dev.config.ConfigReloader::onConfigReloading);
         NeoForge.EVENT_BUS.addListener(OreDepositLocateCommand::register);
         NeoForge.EVENT_BUS.addListener(OreSettingsPresetManager::addReloadListener);
         NeoForge.EVENT_BUS.addListener(OreDepositExplosionHandler::onDetonate);

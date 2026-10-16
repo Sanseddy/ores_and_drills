@@ -7,6 +7,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.component.ItemLore;
 import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.fluids.FluidStack;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -36,9 +37,10 @@ public final class PreviewGrid {
             preview.setCount(1);
             PreviewEntry existing = findExisting(previews, preview);
             if (existing != null) {
-                existing.include(target.minCount(), target.maxCount(), target.remainingInVein());
+                existing.include(target.minCount(), target.maxCount(), target.remainingInVein(), target.requiredFluid());
             } else {
-                PreviewEntry entry = new PreviewEntry(preview, target.minCount(), target.maxCount(), target.remainingInVein());
+                PreviewEntry entry = new PreviewEntry(preview, target.minCount(), target.maxCount(),
+                        target.remainingInVein(), target.requiredFluid());
                 previews.add(entry);
             }
         }
@@ -70,12 +72,16 @@ public final class PreviewGrid {
         private int minCount;
         private int maxCount;
         private double totalAverageLoot;
+        private final List<FluidStack> requiredFluids = new ArrayList<>();
+        private boolean acceptsSameNamedFluidAlternatives;
 
-        private PreviewEntry(ItemStack stack, int minCount, int maxCount, int remainingInVein) {
+        private PreviewEntry(ItemStack stack, int minCount, int maxCount, int remainingInVein,
+                             dev.recipe.DrillMiningFluid requiredFluid) {
             this.stack = stack;
             this.minCount = Math.max(1, minCount);
             this.maxCount = Math.max(this.minCount, maxCount);
             includeTotalLoot(this.minCount, this.maxCount, remainingInVein);
+            includeFluid(requiredFluid);
         }
 
         private boolean isSamePreview(ItemStack other) {
@@ -86,12 +92,29 @@ public final class PreviewGrid {
             return BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
         }
 
-        private void include(int minCount, int maxCount, int remainingInVein) {
+        private void include(int minCount, int maxCount, int remainingInVein,
+                             dev.recipe.DrillMiningFluid requiredFluid) {
             int clampedMin = Math.max(1, minCount);
             int clampedMax = Math.max(clampedMin, maxCount);
             this.minCount = Math.min(this.minCount, clampedMin);
             this.maxCount = Math.max(this.maxCount, clampedMax);
             includeTotalLoot(clampedMin, clampedMax, remainingInVein);
+            includeFluid(requiredFluid);
+        }
+
+        private void includeFluid(dev.recipe.DrillMiningFluid requiredFluid) {
+            if (requiredFluid == null) return;
+            acceptsSameNamedFluidAlternatives |= requiredFluid.hasSameNamedAlternatives();
+            // A fluid tag (e.g. c:sulfuric_acid) is one requirement even when several mods fill it with
+            // differently named liquids, so only its first display stack names it in the tooltip.
+            List<FluidStack> stacks = requiredFluid.displayStacks();
+            if (stacks.isEmpty()) return;
+            FluidStack fluid = stacks.getFirst();
+            boolean duplicate = requiredFluids.stream().anyMatch(existing ->
+                    existing.getAmount() == fluid.getAmount()
+                            && (FluidStack.isSameFluidSameComponents(existing, fluid)
+                            || existing.getHoverName().getString().equals(fluid.getHoverName().getString())));
+            if (!duplicate) requiredFluids.add(fluid.copy());
         }
 
         private void includeTotalLoot(int minCount, int maxCount, int remainingInVein) {
@@ -105,6 +128,21 @@ public final class PreviewGrid {
             List<Component> lore = new ArrayList<>();
             lore.add(Component.translatable("tooltip.ores_and_drills.mining_drill.expected_ore", totalLootText())
                     .withStyle(style -> style.withColor(ChatFormatting.GRAY).withItalic(false)));
+            // Lore lines can't contain line breaks (they render as an "LF" glyph), so the heading and each
+            // fluid are separate lines; translations stay client-side for dedicated servers.
+            if (!requiredFluids.isEmpty()) {
+                lore.add(Component.translatable("tooltip.ores_and_drills.mining_drill.required_fluid")
+                        .withStyle(style -> style.withColor(ChatFormatting.GOLD).withItalic(false)));
+            }
+            for (FluidStack fluid : requiredFluids) {
+                lore.add(Component.translatable(acceptsSameNamedFluidAlternatives
+                                        ? "recipe.ores_and_drills.any_fluid"
+                                        : "tooltip.ores_and_drills.mining_drill.required_fluid_entry",
+                                acceptsSameNamedFluidAlternatives
+                                        ? new Object[]{fluid.getHoverName()}
+                                        : new Object[]{fluid.getHoverName(), fluid.getAmount()})
+                        .withStyle(style -> style.withColor(ChatFormatting.GOLD).withItalic(false)));
+            }
             result.set(DataComponents.LORE, new ItemLore(lore));
             return result;
         }

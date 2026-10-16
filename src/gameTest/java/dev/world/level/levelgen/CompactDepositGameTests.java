@@ -442,7 +442,9 @@ public final class CompactDepositGameTests {
         long sections=plan.cells().stream().mapToLong(c -> net.minecraft.core.SectionPos.asLong(center.offset(c.x(),c.y(),c.z()))).distinct().count();
         helper.assertTrue(record.occupiedSections()==sections,"Confirmed section count missed a chunk boundary");
         BlockPos mined=center.offset(plan.cells().getFirst().x(),plan.cells().getFirst().y(),plan.cells().getFirst().z());
-        level.setBlock(mined,Blocks.STONE.defaultBlockState(),Block.UPDATE_NONE);
+        OreDepositRemovalGuard.runAuthorized(level, mined,
+                () -> level.setBlock(mined,Blocks.STONE.defaultBlockState(),Block.UPDATE_NONE)
+        );
         // OreDepositBlock.onRemove already clears the resource entry and decrements the index.
         helper.assertTrue(level.getChunkAt(mined).getData(ModAttachments.ORE_DEPOSITS).get(mined)==null,"Removal kept resource metadata");
         helper.assertTrue(index.recordsWithin(center,1,oreId,tier).stream().filter(deposit -> deposit.depositId()==id)

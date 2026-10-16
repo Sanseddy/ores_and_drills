@@ -60,17 +60,22 @@ public final class DrillMiningRecipes {
         dev.world.block.entity.drill.OreScanner.clearDropRangeCache();
     }
 
+    /** Selection order: the first accepting recipe in this order is the one a drill uses. */
+    public static List<RecipeHolder<DrillMiningRecipe>> ordered(RecipeManager manager) {
+        Comparator<RecipeHolder<DrillMiningRecipe>> order = Comparator
+                .<RecipeHolder<DrillMiningRecipe>>comparingInt(holder -> holder.value().priority()).reversed()
+                .thenComparing(holder -> !holder.value().requiresFluid())
+                .thenComparing(holder -> holder.value().input().unwrapKey().isPresent())
+                .thenComparing(holder -> holder.id().toString());
+        return manager.getAllRecipesFor(ModRecipes.DRILL_MINING.get()).stream().sorted(order).toList();
+    }
+
     private static synchronized List<RecipeHolder<DrillMiningRecipe>> matching(RecipeManager manager, BlockState state) {
         Collection<RecipeHolder<?>> snapshot = manager.getRecipes();
         Index index = INDEXES.get(manager);
         if (index == null || index.snapshot != snapshot) {
             dev.world.block.entity.drill.OreScanner.clearDropRangeCache();
-            Comparator<RecipeHolder<DrillMiningRecipe>> order = Comparator
-                    .<RecipeHolder<DrillMiningRecipe>>comparingInt(holder -> holder.value().priority()).reversed()
-                    .thenComparing(holder -> !holder.value().requiresFluid())
-                    .thenComparing(holder -> holder.value().input().unwrapKey().isPresent())
-                    .thenComparing(holder -> holder.id().toString());
-            index = new Index(snapshot, manager.getAllRecipesFor(ModRecipes.DRILL_MINING.get()).stream().sorted(order).toList(), new IdentityHashMap<>());
+            index = new Index(snapshot, ordered(manager), new IdentityHashMap<>());
             INDEXES.put(manager, index);
         }
         Index current = index;

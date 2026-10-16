@@ -8,5 +8,5 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(RenderChunkRegion.class)
 public interface RenderChunkRegionAccessor {
     @Accessor("level")
-    Level factoryExpansion$level();
+    Level oresAndDrills$level();
 }

@@ -13,7 +13,7 @@ public abstract class CaveWorldCarverMixin {
     private static final float FACTORY_EXPANSION_CARVER_CHANCE_MULTIPLIER = 0.90F;
 
     @Inject(method = "isStartChunk", at = @At("HEAD"), cancellable = true)
-    private void factoryExpansion$slightlyReduceCaveCarverChance(
+    private void oresAndDrills$slightlyReduceCaveCarverChance(
             CaveCarverConfiguration config,
             RandomSource random,
             CallbackInfoReturnable<Boolean> callbackInfo

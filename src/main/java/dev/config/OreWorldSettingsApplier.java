@@ -1,7 +1,6 @@
 package dev.config;
 
 import dev.OresAndDrillsMod;
-import dev.world.level.levelgen.DepositTerrainValidator;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.fml.config.ModConfig;
@@ -22,11 +21,13 @@ public final class OreWorldSettingsApplier {
     private OreWorldSettingsApplier() {
     }
 
-    public static void applyOreWorldSettings(Set<ResourceLocation> disabledOres, List<String> overrides) {
+    public static void applyOreWorldSettings(Set<ResourceLocation> disabledOres, List<String> overrides,
+                                             List<String> dimensionOverrides) {
         OreDepositConfig.DISABLED_DEPOSIT_ORES.set(encodeDisabled(disabledOres));
         OreOverrides.setWorldOverrides(overrides);
+        OreDimensionOverrides.setDisabled(dimensionOverrides);
         OreDepositConfig.SPEC.save();
-        DepositTerrainValidator.clearCache();
+        ConfigReloader.reload();
 
         OresAndDrillsMod.LOGGER.debug("Ore deposits: applied ore settings from the Ore Settings screen");
     }

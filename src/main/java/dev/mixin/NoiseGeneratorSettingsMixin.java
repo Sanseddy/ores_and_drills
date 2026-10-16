@@ -24,7 +24,7 @@ public abstract class NoiseGeneratorSettingsMixin {
     private boolean oreVeinsEnabled;
 
     @Inject(method = "<init>", at = @At("RETURN"))
-    private void factoryExpansion$adjustNoiseSettings(
+    private void oresAndDrills$adjustNoiseSettings(
             NoiseSettings noiseSettings,
             BlockState defaultBlock,
             BlockState defaultFluid,

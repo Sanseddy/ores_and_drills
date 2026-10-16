@@ -155,9 +155,18 @@ public final class OreUnifier {
         return Map.copyOf(result);
     }
 
+    /** Almost Unified's mod_priorities, when present, are applied before the configured list. */
+    public static boolean hasAlmostUnifiedPriorities() {
+        return Files.exists(almostUnifiedConfig());
+    }
+
+    private static Path almostUnifiedConfig() {
+        return FMLPaths.CONFIGDIR.get().resolve("almostunified").resolve("unify.json");
+    }
+
     private static List<String> loadModPriorities() {
         List<String> priorities = new ArrayList<>();
-        Path almostUnifiedConfig = FMLPaths.CONFIGDIR.get().resolve("almostunified").resolve("unify.json");
+        Path almostUnifiedConfig = almostUnifiedConfig();
         if (Files.exists(almostUnifiedConfig)) {
             try (Reader reader = Files.newBufferedReader(almostUnifiedConfig)) {
                 JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();

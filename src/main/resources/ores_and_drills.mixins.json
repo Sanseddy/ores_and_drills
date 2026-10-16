@@ -12,6 +12,7 @@
     "CreateMovementContextAccessor",
     "JustHammersXPlatMixin",
     "LevelMixin",
+    "MekanismDigitalMinerMixin",
     "PrimaryLevelDataMixin",
     "NoiseGeneratorSettingsMixin",
     "NoiseBasedChunkGeneratorAccessor",

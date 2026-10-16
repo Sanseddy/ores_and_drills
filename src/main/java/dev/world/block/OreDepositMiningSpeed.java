@@ -1,5 +1,6 @@
 package dev.world.block;
 
+import dev.config.OreDepositConfig;
 import dev.registry.ModBlocks;
 import dev.world.level.levelgen.OreDepositData;
 import net.minecraft.core.BlockPos;
@@ -11,12 +12,16 @@ public final class OreDepositMiningSpeed {
     private OreDepositMiningSpeed() {
     }
 
-    /**
-     * Deposits with more than one unit take {@code remainingOre * 0.5} times as long to break as
-     * one ordinary ore block. The final unit keeps the ordinary ore block duration.
-     */
-    static float progressMultiplier(int remainingOre) {
-        return remainingOre > 1 ? 1.0F / (remainingOre * 0.5F) : 1.0F;
+    static double durationMultiplier(int oreCount, double exponentialGrowth, double maxExponentialMultiplier) {
+        int normalizedCount = Math.max(1, oreCount);
+        double exponent = exponentialGrowth * Math.max(0, normalizedCount - 2);
+        double exponentialFactor = Math.min(maxExponentialMultiplier, Math.exp(exponent));
+        return normalizedCount * exponentialFactor;
+    }
+
+    /** Converts the hybrid duration curve into the reciprocal multiplier required by BreakSpeed. */
+    static float progressMultiplier(int oreCount, double exponentialGrowth, double maxExponentialMultiplier) {
+        return (float)(1.0D / durationMultiplier(oreCount, exponentialGrowth, maxExponentialMultiplier));
     }
 
     public static void onBreakSpeed(PlayerEvent.BreakSpeed event) {
@@ -31,8 +36,10 @@ public final class OreDepositMiningSpeed {
         }
 
         int remainingOre = OreDepositData.remainingOreAt(level, pos);
-        if (remainingOre > 1) {
-            event.setNewSpeed(event.getNewSpeed() * progressMultiplier(remainingOre));
-        }
+        event.setNewSpeed(event.getNewSpeed() * progressMultiplier(
+                remainingOre,
+                OreDepositConfig.ORE_MINING_EXPONENTIAL_GROWTH.get(),
+                OreDepositConfig.ORE_MINING_MAX_EXPONENTIAL_MULTIPLIER.get()
+        ));
     }
 }

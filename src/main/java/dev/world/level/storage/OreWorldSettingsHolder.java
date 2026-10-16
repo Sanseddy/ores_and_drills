@@ -2,9 +2,13 @@ package dev.world.level.storage;
 
 import java.util.List;
 
-/** Internal bridge added to PrimaryLevelData for Ores & Drills' level.dat settings. */
+/** Internal mixin interface for Ores & Drills' level.dat settings. */
 public interface OreWorldSettingsHolder {
-    List<String> factoryExpansion$oreOverrides();
+    List<String> oresAndDrills$oreOverrides();
 
-    void factoryExpansion$setOreOverrides(List<String> entries);
+    void oresAndDrills$setOreOverrides(List<String> entries);
+
+    List<String> oresAndDrills$oreDimensionOverrides();
+
+    void oresAndDrills$setOreDimensionOverrides(List<String> entries);
 }

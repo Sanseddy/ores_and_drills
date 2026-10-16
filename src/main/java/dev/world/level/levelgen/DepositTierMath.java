@@ -385,7 +385,7 @@ final class DepositTierMath {
         return amounts;
     }
 
-    /** Capacity-aware allocation for compact deposits; the legacy small-tier allocator stays unchanged. */
+    /** Capacity-aware allocation for compact deposits; small tiers use their dedicated allocator. */
     static int[] distributeOre(int totalOre, double[] weights, int maximumPerBlock) {
         int count = weights.length;
         if (count == 0) return new int[0];
@@ -452,7 +452,7 @@ final class DepositTierMath {
     }
 
     /**
-     * Legacy lens helper retained for the small-tier path and spawn-profile diagnostics.
+     * Lens helper used by the small-tier path and spawn-profile diagnostics.
      * Compact MEDIUM/LARGE placement overrides these dimensions using its independent Y surfaces.
      */
     static int verticalLayersForTier(int tier, double tierPosition, int maximumDepth) {

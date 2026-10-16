@@ -13,7 +13,7 @@ public abstract class CanyonWorldCarverMixin {
     private static final float FACTORY_EXPANSION_CARVER_CHANCE_MULTIPLIER = 0.90F;
 
     @Inject(method = "isStartChunk", at = @At("HEAD"), cancellable = true)
-    private void factoryExpansion$slightlyReduceCanyonCarverChance(
+    private void oresAndDrills$slightlyReduceCanyonCarverChance(
             CanyonCarverConfiguration config,
             RandomSource random,
             CallbackInfoReturnable<Boolean> callbackInfo

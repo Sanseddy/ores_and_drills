@@ -3,6 +3,7 @@ package dev.world.block;
 import dev.registry.ModBlocks;
 import dev.world.level.levelgen.OreDepositData;
 import dev.world.level.levelgen.OreDepositOrePalette;
+import dev.world.level.levelgen.OreDepositRemovalGuard;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -17,8 +18,6 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.StateDefinition;
-import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.HitResult;
 
@@ -27,21 +26,8 @@ import java.util.function.BiConsumer;
 public class OreDepositBlock extends Block {
     public static final MapCodec<OreDepositBlock> CODEC = simpleCodec(OreDepositBlock::new);
 
-    /**
-     * Kept for serialized-state compatibility. Visual refreshes now use a client render notification;
-     * toggling a real state here can make Sable replace a plot block with the backing-world block.
-     */
-    public static final BooleanProperty REFRESH = BooleanProperty.create("refresh");
-
     public OreDepositBlock(Properties properties) {
         super(properties);
-        registerDefaultState(stateDefinition.any().setValue(REFRESH, false));
-    }
-
-    @Override
-    protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-        super.createBlockStateDefinition(builder);
-        builder.add(REFRESH);
     }
 
     @Override
@@ -138,7 +124,11 @@ public class OreDepositBlock extends Block {
             return false;
         }
 
-        return super.onDestroyedByPlayer(state, level, pos, player, willHarvest, fluid);
+        // Creative deletion is an intentional administrative action. Keep it working while direct
+        // machine setBlock/removeBlock calls remain protected by the global deposit guard.
+        return OreDepositRemovalGuard.runAuthorized(level, pos,
+                () -> super.onDestroyedByPlayer(state, level, pos, player, willHarvest, fluid)
+        );
     }
 
     @Override

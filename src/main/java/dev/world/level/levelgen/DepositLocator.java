@@ -75,6 +75,10 @@ public final class DepositLocator {
         TierDepositResolver resolver = DepositResolvers.forTier(requestedTier);
         DepositTierLayout layout = resolver.layout();
         int cellSizeBlocks = layout.cellSizeBlocks();
+        int originCellX = Math.floorDiv(origin.getX(), cellSizeBlocks);
+        int originCellZ = Math.floorDiv(origin.getZ(), cellSizeBlocks);
+        int searchCenterCellX = originCellX;
+        int searchCenterCellZ = originCellZ;
         Set<Long> dataSearchCells = Set.of();
         if (dataDriven) {
             BlockPos nearestAllowedBiome = DataDrivenOreDepositBiomeModifier.findClosestAllowedBiome(
@@ -85,6 +89,8 @@ public final class DepositLocator {
             }
             int biomeCellX = Math.floorDiv(nearestAllowedBiome.getX(), cellSizeBlocks);
             int biomeCellZ = Math.floorDiv(nearestAllowedBiome.getZ(), cellSizeBlocks);
+            searchCenterCellX = biomeCellX;
+            searchCenterCellZ = biomeCellZ;
             Set<Long> nearbyCells = new HashSet<>();
             // The closest allowed point can sit on a cell edge while the immutable slot selects a source
             // in the neighbouring cell. Evaluate a small fixed neighbourhood, then let the ordinary
@@ -96,11 +102,13 @@ public final class DepositLocator {
             }
             dataSearchCells = Set.copyOf(nearbyCells);
         }
-        int cellSearchRadius = Mth.ceil(
+        // A data-driven search has already reduced the entire radius to the 5x5 neighbourhood of
+        // the nearest allowed 3D biome. Iterating every ring from the player merely to skip all other
+        // cells was especially dangerous for TINY (millions of server-thread iterations) and could
+        // trip the watchdog. Search that bounded neighbourhood directly.
+        int cellSearchRadius = dataDriven ? 2 : Mth.ceil(
                 (searchRadius + layout.maximumRadius()) / (double) cellSizeBlocks
         );
-        int originCellX = Math.floorDiv(origin.getX(), cellSizeBlocks);
-        int originCellZ = Math.floorDiv(origin.getZ(), cellSizeBlocks);
         OresAndDrillsMod.LOGGER.debug(
                 "Ore locate pipeline: tier={}, resolver={}, cellSizeBlocks={}, cellSearchRadius={}, "
                         + "tierSalt={}, sampleCount={}..{}, maximumRadius={}, validation=coverage>={}, sections>={}",
@@ -120,8 +128,8 @@ public final class DepositLocator {
             int perimeter = ring == 0 ? 1 : ring * 8;
             for (int cursor = 0; cursor < perimeter; cursor++) {
                 long offset = ringOffset(ring, cursor);
-                int cellX = originCellX + (int) (offset >> 32);
-                int cellZ = originCellZ + (int) offset;
+                int cellX = searchCenterCellX + (int) (offset >> 32);
+                int cellZ = searchCenterCellZ + (int) offset;
                 if (dataDriven && !dataSearchCells.contains(ChunkPos.asLong(cellX, cellZ))) {
                     continue;
                 }

@@ -84,7 +84,7 @@ public final class PhysicalOreDepositSavedData extends SavedData {
         return true;
     }
 
-    /** Restores one authoritative mirrored entry before legacy fallback data can be synthesized. */
+    /** Restores one authoritative mirrored entry before the chunk attachment is queried. */
     public synchronized OreDepositChunkData.Entry restoreEntry(
             ServerLevel level,
             ChunkAccess targetChunk,

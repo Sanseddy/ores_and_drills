@@ -21,6 +21,7 @@ import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.ContainerHelper;
 import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -28,7 +29,10 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
+import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.items.IItemHandler;
+import net.neoforged.neoforge.items.ItemHandlerHelper;
 import net.neoforged.neoforge.items.wrapper.InvWrapper;
 import software.bernie.geckolib.animatable.GeoBlockEntity;
 import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
@@ -199,6 +203,61 @@ public abstract class AbstractDrillBlockEntity extends BlockEntity implements Ge
                 stack -> true
         );
         return new ScanResult(mineable, changed);
+    }
+
+    /**
+     * Pushes mined items from the player-placed main block, matching Factorio's dedicated output tile. Inventories
+     * receive items directly; otherwise one item is placed into the output tile for a conveyor to collect. An item
+     * already waiting there blocks further ejection instead of allowing an unlimited pile to accumulate.
+     */
+    protected static boolean exportOutput(ServerLevel level, BlockPos origin, Direction facing, AbstractDrillBlockEntity be) {
+        ItemStack output = be.inventory.getItem(be.outputSlotIndex);
+        if (output.isEmpty()) {
+            return false;
+        }
+
+        Direction outputDirection = facing.getOpposite();
+        BlockPos outputPort = origin.relative(outputDirection);
+        IItemHandler destination = level.getCapability(
+                Capabilities.ItemHandler.BLOCK,
+                outputPort,
+                outputDirection.getOpposite()
+        );
+        if (destination != null) {
+            ItemStack remainder = ItemHandlerHelper.insertItemStacked(destination, output.copy(), false);
+            if (remainder.getCount() == output.getCount()) {
+                return false;
+            }
+
+            be.inventory.setItem(be.outputSlotIndex, remainder);
+            return true;
+        }
+
+        AABB waitingArea = new AABB(
+                outputPort.getX() + 0.1D, outputPort.getY() - 0.75D, outputPort.getZ() + 0.1D,
+                outputPort.getX() + 0.9D, outputPort.getY() + 1.25D, outputPort.getZ() + 0.9D
+        );
+        if (!level.getEntitiesOfClass(ItemEntity.class, waitingArea, ItemEntity::isAlive).isEmpty()) {
+            return false;
+        }
+
+        ItemStack ejected = output.copyWithCount(1);
+        ItemEntity item = new ItemEntity(
+                level,
+                outputPort.getX() + 0.5D,
+                outputPort.getY() + 0.35D,
+                outputPort.getZ() + 0.5D,
+                ejected
+        );
+        item.setDeltaMovement(0.0D, 0.0D, 0.0D);
+        item.setDefaultPickUpDelay();
+        if (!level.addFreshEntity(item)) {
+            return false;
+        }
+
+        output.shrink(1);
+        be.inventory.setItem(be.outputSlotIndex, output);
+        return true;
     }
 
     protected static boolean canOutputTargets(AbstractDrillBlockEntity be, List<OreScanner.Target> mineable) {

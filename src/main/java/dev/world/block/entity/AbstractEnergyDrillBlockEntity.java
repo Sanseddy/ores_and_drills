@@ -1,6 +1,7 @@
 package dev.world.block.entity;
 
 import dev.world.block.AbstractDrillBlock;
+import dev.world.block.AbstractDrillPartBlock;
 import dev.world.block.DrillStructure;
 import dev.world.block.EnergyProfile;
 import dev.world.block.MiningDrillTier;
@@ -197,8 +198,9 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
 
         ServerLevel serverLevel = (ServerLevel) level;
         Direction facing = state.getValue(AbstractDrillBlock.FACING);
+        boolean changed = exportOutput(serverLevel, pos, facing, be);
         ScanResult scan = scanAndPreview(serverLevel, pos, facing, be);
-        boolean changed = scan.changed();
+        changed |= scan.changed();
         changed |= be.chargeFromEnergyItem();
         changed |= be.pullFluidsFromInputs(serverLevel, pos, facing);
         boolean canMine = !scan.mineable().isEmpty();
@@ -274,7 +276,77 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
             return false;
         }
 
+        AbstractEnergyDrillBlockEntity connectedDrill = connectedDrillAt(level, sourcePos);
+        if (connectedDrill != null && connectedDrill != this && connectedDrill.fluidHandler == source) {
+            return balanceFluids(fluidHandler, source);
+        }
+
         return !FluidUtil.tryFluidTransfer(fluidHandler, source, FluidType.BUCKET_VOLUME, true).isEmpty();
+    }
+
+    private static AbstractEnergyDrillBlockEntity connectedDrillAt(ServerLevel level, BlockPos partPos) {
+        BlockState partState = level.getBlockState(partPos);
+        if (!(partState.getBlock() instanceof AbstractDrillPartBlock part)) {
+            return null;
+        }
+
+        BlockPos origin = part.structure().originFromPart(partPos, partState);
+        return level.getBlockEntity(origin) instanceof AbstractEnergyDrillBlockEntity drill ? drill : null;
+    }
+
+    /**
+     * Equalizes every fluid present in either drill. Pairwise equalization makes a row of drills behave like a
+     * Factorio fluid network: liquid spreads through the row over subsequent ticks without being pumped back and
+     * forth by both block entities.
+     */
+    private static boolean balanceFluids(IFluidHandler first, IFluidHandler second) {
+        boolean changed = false;
+        for (int tank = 0; tank < first.getTanks(); tank++) {
+            FluidStack fluid = first.getFluidInTank(tank);
+            if (!fluid.isEmpty() && isFirstOccurrence(first, tank, fluid)) {
+                changed |= balanceFluid(first, second, fluid);
+            }
+        }
+        for (int tank = 0; tank < second.getTanks(); tank++) {
+            FluidStack fluid = second.getFluidInTank(tank);
+            if (!fluid.isEmpty() && isFirstOccurrence(second, tank, fluid)) {
+                changed |= balanceFluid(first, second, fluid);
+            }
+        }
+        return changed;
+    }
+
+    private static boolean isFirstOccurrence(IFluidHandler handler, int tank, FluidStack fluid) {
+        for (int previous = 0; previous < tank; previous++) {
+            if (FluidStack.isSameFluidSameComponents(handler.getFluidInTank(previous), fluid)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean balanceFluid(IFluidHandler first, IFluidHandler second, FluidStack fluid) {
+        int firstAmount = amountOf(first, fluid);
+        int secondAmount = amountOf(second, fluid);
+        int transferAmount = Math.abs(firstAmount - secondAmount) / 2;
+        if (transferAmount <= 0) {
+            return false;
+        }
+
+        IFluidHandler source = firstAmount > secondAmount ? first : second;
+        IFluidHandler destination = firstAmount > secondAmount ? second : first;
+        return !FluidUtil.tryFluidTransfer(destination, source, fluid.copyWithAmount(transferAmount), true).isEmpty();
+    }
+
+    private static int amountOf(IFluidHandler handler, FluidStack fluid) {
+        int amount = 0;
+        for (int tank = 0; tank < handler.getTanks(); tank++) {
+            FluidStack stored = handler.getFluidInTank(tank);
+            if (FluidStack.isSameFluidSameComponents(stored, fluid)) {
+                amount += stored.getAmount();
+            }
+        }
+        return amount;
     }
 
     private static IEnergyStorage energyStorage(ItemStack stack) {
@@ -392,9 +464,6 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
             if (tag.contains(key)) {
                 fluidTanks[tank].readFromNBT(registries, tag.getCompound(key));
             }
-        }
-        if (fluidTanks.length > 0 && tag.contains("FluidTank") && !tag.contains("FluidTank0")) {
-            fluidTanks[0].readFromNBT(registries, tag.getCompound("FluidTank"));
         }
     }
 
