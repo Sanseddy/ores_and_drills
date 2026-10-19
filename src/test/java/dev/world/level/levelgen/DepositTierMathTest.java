@@ -100,132 +100,14 @@ class DepositTierMathTest {
     }
 
     @Test
-    void maxFrequencySaturatesTheSmallTierGateWithoutDuplicatingFeatureCopies() {
-        assertEquals(0.16D, DepositTierMath.smallTierGateProbability(0.5D, 0.32D, 1.0D), 1.0E-9D);
-        assertEquals(0.96D, DepositTierMath.smallTierGateProbability(0.5D, 0.32D, 6.0D), 1.0E-9D);
-        assertEquals(1.0D, DepositTierMath.smallTierGateProbability(1.0D, 0.32D, 6.0D), 1.0E-9D);
-    }
-
-    @Test
-    void expectedFrequencyBecomesOneSeedCandidatePerTierCell() {
-        assertEquals(0.125D, DepositTierMath.cellCandidateProbability(0.125D, 1, 1.0D), 1.0E-9D);
-        assertEquals(0.5D, DepositTierMath.cellCandidateProbability(0.125D, 2, 1.0D), 1.0E-9D);
-        assertEquals(1.0D, DepositTierMath.cellCandidateProbability(0.5D, 2, 6.0D), 1.0E-9D);
-        assertEquals(0.0D, DepositTierMath.cellCandidateProbability(Double.NaN, 2, 1.0D), 1.0E-9D);
-    }
-
-    @Test
-    void finalSmallTierRetentionAlsoReducesSaturatedCommonOreCandidates() {
+    void dataDrivenSmallTierRetentionLeavesMediumAndLargeUntouched() {
         for (DepositTier tier : DepositTier.values()) {
-            for (double expected : new double[]{0.0D, 0.01D, 0.5D, 20.0D}) {
-                double original = DepositTierMath.cellCandidateProbability(expected, 2, 6.0D);
+            for (double original : new double[]{0.0D, 0.01D, 0.5D, 1.0D}) {
                 double retained = DepositTierMath.retainedTierCandidateProbability(tier, original, 0.5D);
                 assertEquals(original * (tier.ordinal() < DepositTier.MEDIUM.ordinal() ? 0.5D : 1.0D),
                         retained, EPSILON);
             }
         }
-        assertEquals(0.5D, DepositTierMath.retainedTierCandidateProbability(DepositTier.TINY, 1.0D, 0.5D), EPSILON);
-        assertEquals(0.5D, DepositTierMath.retainedTierCandidateProbability(DepositTier.SMALL, 1.0D, 0.5D), EPSILON);
-    }
-
-    @Test
-    void smallTierWorkloadBudgetHasAHardMaximum() {
-        assertEquals(8, DepositTierMath.smallAttemptBudget(8.0D, 12));
-        assertEquals(12, DepositTierMath.smallAttemptBudget(48.0D, 12));
-        assertEquals(1, DepositTierMath.smallAttemptBudget(0.1D, 12));
-    }
-
-    private static final DepositTierMath.RarityParameters RARITY_DEFAULTS = new DepositTierMath.RarityParameters(
-            0.30D, 0.80D, 1.40D, 1.50D, 0.45D, 0.000001D
-    );
-
-    @Test
-    void smallTiersRetainMostOfACommonMaterialsOwnOriginalFrequencyButSuppressRarerOnes() {
-        DepositTierMath.SmallTierParameters parameters = new DepositTierMath.SmallTierParameters(
-                0.80D, 0.0D, 0.75D
-        );
-        DepositTierMath.TierDistribution distribution = DepositTierMath.distribution(DEFAULTS);
-        DepositTierMath.SmallTierPlan common = DepositTierMath.smallTierPlan(
-                20.0D, 20.0D, distribution, parameters, RARITY_DEFAULTS
-        );
-        DepositTierMath.SmallTierPlan rare = DepositTierMath.smallTierPlan(
-                0.2D, 20.0D, distribution, parameters, RARITY_DEFAULTS
-        );
-
-        assertEquals(0.80D, common.retainedFraction(), EPSILON);
-        assertTrue(rare.retainedFraction() < common.retainedFraction());
-        assertTrue(common.expectedAttempts()[DepositTier.TINY.ordinal()]
-                > common.expectedAttempts()[DepositTier.SMALL.ordinal()]);
-        assertTrue(rare.expectedAttempts()[DepositTier.TINY.ordinal()] > 0.0D);
-        assertTrue(rare.expectedAttempts()[DepositTier.SMALL.ordinal()] > 0.0D);
-    }
-
-    @Test
-    void smallTierGateDoesNotDivideFrequencyByRegisteredMaterialCount() {
-        DepositTierMath.SmallTierParameters parameters = new DepositTierMath.SmallTierParameters(
-                0.80D, 0.65D, 0.75D
-        );
-        DepositTierMath.SmallTierPlan plan = DepositTierMath.smallTierPlan(
-                10.0D, 20.0D, DepositTierMath.distribution(DEFAULTS), parameters, RARITY_DEFAULTS
-        );
-
-        assertEquals(10.0D * plan.retainedFraction(), plan.combinedExpectedAttempts(), EPSILON);
-        assertTrue(plan.gateProbabilities()[DepositTier.TINY.ordinal()] > 0.0D);
-        assertTrue(plan.gateProbabilities()[DepositTier.SMALL.ordinal()] > 0.0D);
-    }
-
-    @Test
-    void smallTierMinimumGuardStillAppliesWhenRequestedRetentionIsZero() {
-        DepositTierMath.SmallTierPlan plan = DepositTierMath.smallTierPlan(
-                0.25D,
-                16.0D,
-                DepositTierMath.distribution(DEFAULTS),
-                new DepositTierMath.SmallTierParameters(0.0D, 0.65D, 0.75D),
-                RARITY_DEFAULTS
-        );
-
-        assertEquals(0.65D, plan.retainedFraction(), EPSILON);
-        assertTrue(plan.expectedAttempts()[DepositTier.TINY.ordinal()]
-                > plan.expectedAttempts()[DepositTier.SMALL.ordinal()]);
-    }
-
-    @Test
-    void rarerMaterialRetainsALargerShareOfItsOwnBudgetThanACommonOneInTinyAndSmall() {
-        DepositTierMath.SmallTierParameters parameters = new DepositTierMath.SmallTierParameters(
-                0.80D, 0.0D, 0.75D
-        );
-        DepositTierMath.TierDistribution distribution = DepositTierMath.distribution(DEFAULTS);
-        DepositTierMath.SmallTierPlan almostCommon = DepositTierMath.smallTierPlan(
-                18.0D, 20.0D, distribution, parameters, RARITY_DEFAULTS
-        );
-        DepositTierMath.SmallTierPlan genuinelyRare = DepositTierMath.smallTierPlan(
-                0.5D, 20.0D, distribution, parameters, RARITY_DEFAULTS
-        );
-
-        assertTrue(genuinelyRare.retainedFraction() < almostCommon.retainedFraction());
-    }
-
-    @Test
-    void rareOreRarityCurveIsNotMaskedByTheSmallTierSafetyFloor() {
-        DepositTierMath.SmallTierPlan rare = DepositTierMath.smallTierPlan(
-                10.0D,
-                20.0D,
-                DepositTierMath.distribution(DEFAULTS),
-                new DepositTierMath.SmallTierParameters(0.85D, 0.0125D, 0.90D),
-                new DepositTierMath.RarityParameters(2.5D, 10.0D, 1.0D, 1.0D, 0.45D, 0.000001D)
-        );
-
-        assertTrue(rare.retainedFraction() >= 0.0125D);
-        assertTrue(rare.retainedFraction() < 0.125D);
-    }
-
-    @Test
-    void fractionalFrequencyMultiplierIsNotRoundedAway() {
-        assertEquals(0, DepositTierMath.splitExpectedMultiplier(0.0D).length);
-        assertEquals(0.25D, Arrays.stream(DepositTierMath.splitExpectedMultiplier(0.25D)).sum(), EPSILON);
-        assertEquals(1.75D, Arrays.stream(DepositTierMath.splitExpectedMultiplier(1.75D)).sum(), EPSILON);
-        assertEquals(3.0D, Arrays.stream(DepositTierMath.splitExpectedMultiplier(3.0D)).sum(), EPSILON);
-        assertEquals(2, DepositTierMath.splitExpectedMultiplier(1.75D).length);
     }
 
     private static void assertProfileRange(

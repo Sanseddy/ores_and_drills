@@ -348,6 +348,22 @@ public final class OreGenerationWeights {
         return List.copyOf(contexts);
     }
 
+    /** Every named biome in which each material owns an original ore feature; recipe viewers list these. */
+    public static Map<String, List<ResourceLocation>> biomesByMaterial() {
+        Map<String, java.util.TreeSet<ResourceLocation>> biomes = new TreeMap<>();
+        MATERIALS_BY_BIOME.forEach((biomeKey, materials) -> {
+            // "<direct>" (an unregistered biome) does not parse and has nothing to show.
+            ResourceLocation biomeId = ResourceLocation.tryParse(biomeKey);
+            if (biomeId == null) {
+                return;
+            }
+            materials.forEach(material -> biomes.computeIfAbsent(material, ignored -> new java.util.TreeSet<>()).add(biomeId));
+        });
+        Map<String, List<ResourceLocation>> result = new TreeMap<>();
+        biomes.forEach((material, ids) -> result.put(material, List.copyOf(ids)));
+        return result;
+    }
+
     public static MaterialFrequency materialFrequency(
             ResourceLocation dimension,
             ResourceLocation biomeId,
@@ -507,10 +523,8 @@ public final class OreGenerationWeights {
 
     static DepositTierMath.RarityParameters rarityParameters() {
         return new DepositTierMath.RarityParameters(
-                OreDepositConfig.SMALL_DEPOSIT_RARITY_PENALTY,
-                OreDepositConfig.VERY_RARE_ORE_PENALTY,
-                OreDepositConfig.VERY_RARE_ORE_PENALTY_CURVE,
-                OreDepositConfig.SMALL_DEPOSIT_PENALTY_CURVE,
+                OreDepositConfig.SMALL_DEPOSIT_RARITY_GROWTH,
+                OreDepositConfig.SMALL_DEPOSIT_RARITY_MAX_MULTIPLIER,
                 OreDepositConfig.LARGE_DEPOSIT_RARE_ORE_BOOST,
                 OreDepositConfig.MIN_ORE_SELECTION_WEIGHT
         );
@@ -936,7 +950,7 @@ public final class OreGenerationWeights {
             );
             double chancePercent = totalWeight > 0.0D ? weights[index] / totalWeight * 100.0D : 0.0D;
             OresAndDrillsMod.LOGGER.debug(
-                    "  Ore ID: {} | Original expected attempts: {} | Placement success probability: {} | Height availability: {} | Biome availability: {} | Target-block availability: {} | Exposure survival probability: {} | Effective original frequency: {} | Maximum effective frequency: {} | Relative frequency: {} | Rare tail: {} | Base exponent: {} | Adaptive exponent: {} | Final selection weight: {} | Selection chance: {}% | Relative selection rarity: 1 in {} (biome-scoped, tier={})",
+                    "  Ore ID: {} | Original expected attempts: {} | Placement success probability: {} | Height availability: {} | Biome availability: {} | Target-block availability: {} | Exposure survival probability: {} | Effective original frequency: {} | Maximum effective frequency: {} | Relative frequency: {} | Rarity penalty: {} | Effective exponent: {} | Final selection weight: {} | Selection chance: {}% | Relative selection rarity: 1 in {} (biome-scoped, tier={})",
                     entry.oreId(),
                     String.format(Locale.ROOT, "%.6f", entry.expectedAttempts()),
                     String.format(Locale.ROOT, "%.6f", entry.placementSuccessProbability()),
@@ -947,9 +961,8 @@ public final class OreGenerationWeights {
                     String.format(Locale.ROOT, "%.6f", entry.originalFrequency()),
                     String.format(Locale.ROOT, "%.6f", maximumOriginalFrequency),
                     String.format(Locale.ROOT, "%.6f", rarity.relativeFrequency()),
-                    String.format(Locale.ROOT, "%.6f", rarity.rareTail()),
-                    String.format(Locale.ROOT, "%.6f", rarity.baseExponent()),
-                    String.format(Locale.ROOT, "%.6f", rarity.adaptiveExponent()),
+                    String.format(Locale.ROOT, "%.6f", rarity.penalty()),
+                    String.format(Locale.ROOT, "%.6f", rarity.effectiveExponent()),
                     String.format(Locale.ROOT, "%.6f", weights[index]),
                     String.format(Locale.ROOT, "%.4f", chancePercent),
                     String.format(Locale.ROOT, "%.2f", chancePercent <= 0.0D ? Double.POSITIVE_INFINITY : 100.0D / chancePercent),

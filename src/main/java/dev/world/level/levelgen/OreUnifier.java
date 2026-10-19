@@ -7,8 +7,10 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.tags.TagKey;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.fml.loading.FMLPaths;
 
 import java.io.IOException;
@@ -29,6 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class OreUnifier {
     private static final String ORE_TAG_PREFIX = "ores/";
     private static final Map<Block, String> OBSERVED_BASE = new ConcurrentHashMap<>();
+    private static final Map<ResourceLocation, String> MATERIAL_KEYS = new ConcurrentHashMap<>();
     private static Map<String, MaterialGroup> groups;
     private static List<String> modPriorities;
 
@@ -100,6 +103,60 @@ public final class OreUnifier {
         return Optional.ofNullable(group.defaultBlock());
     }
 
+    /**
+     * The member of {@code ore}'s material that vanilla generation puts into {@code host}: the deepslate
+     * ore in deepslate and tuff, the stone ore in stone, granite, diorite and andesite, and likewise for
+     * netherrack and end stone. The ore's own mod is preferred. Ores of other rock families (a modded
+     * rock with its own ore) and materials without such a variant are returned unchanged.
+     */
+    public static Block variantForHost(Block ore, Block host) {
+        String hostBase = vanillaHostBase(host);
+        ResourceLocation oreId = BuiltInRegistries.BLOCK.getKey(ore);
+        if (hostBase == null || oreId == null) {
+            return ore;
+        }
+        String oreBase = resolvedBaseKey(ore, oreId);
+        if (oreBase.equals(hostBase) || !isVanillaHostBase(oreBase)) {
+            return ore;
+        }
+        MaterialGroup group = groups().get(materialKey(ore, oreId));
+        return group == null ? ore : group.variantFor(oreId.getNamespace(), hostBase).orElse(ore);
+    }
+
+    /**
+     * The stone member of a deepslate ore's material (iron ore for deepslate iron ore), the ore's own mod
+     * preferred; any other ore, or a deepslate ore without a stone variant, is returned unchanged.
+     */
+    public static Block stoneVariantOfDeepslate(Block ore) {
+        ResourceLocation oreId = BuiltInRegistries.BLOCK.getKey(ore);
+        if (oreId == null || !resolvedBaseKey(ore, oreId).equals("deepslate")) {
+            return ore;
+        }
+        MaterialGroup group = groups().get(materialKey(ore, oreId));
+        return group == null ? ore : group.variantFor(oreId.getNamespace(), "stone").orElse(ore);
+    }
+
+    private static String vanillaHostBase(Block host) {
+        BlockState state = host.defaultBlockState();
+        if (state.is(BlockTags.DEEPSLATE_ORE_REPLACEABLES)) {
+            return "deepslate";
+        }
+        if (state.is(BlockTags.STONE_ORE_REPLACEABLES)) {
+            return "stone";
+        }
+        if (state.is(BlockTags.BASE_STONE_NETHER)) {
+            return "nether";
+        }
+        return state.is(Blocks.END_STONE) ? "end" : null;
+    }
+
+    private static boolean isVanillaHostBase(String base) {
+        return switch (base) {
+            case "stone", "deepslate", "nether", "end" -> true;
+            default -> false;
+        };
+    }
+
     public static boolean isCanonicalSource(Block sourceOre) {
         return canonicalFor(sourceOre).isPresent();
     }
@@ -115,6 +172,7 @@ public final class OreUnifier {
         groups = null;
         modPriorities = null;
         OBSERVED_BASE.clear();
+        MATERIAL_KEYS.clear();
     }
 
     private static List<String> modPriorities() {
@@ -215,20 +273,20 @@ public final class OreUnifier {
         return id == null ? "" : materialKey(block, id);
     }
 
-    private static Optional<String> materialFromTags(Block block) {
-        return block.builtInRegistryHolder().tags()
-                .filter(OreUnifier::isMaterialOreTag)
-                .map(tag -> tag.location().getPath().substring(ORE_TAG_PREFIX.length()).toLowerCase(Locale.ROOT))
-                .findFirst();
+    /** Cached {@link #materialKeyFor(Block)} by block id for hot index lookups; reset when tags reload. */
+    public static String materialKeyFor(ResourceLocation oreId) {
+        return MATERIAL_KEYS.computeIfAbsent(oreId, id -> BuiltInRegistries.BLOCK.containsKey(id)
+                ? materialKeyFor(BuiltInRegistries.BLOCK.get(id))
+                : "");
     }
 
-    private static boolean isMaterialOreTag(TagKey<Block> tag) {
-        ResourceLocation location = tag.location();
-        String namespace = location.getNamespace();
-        boolean commonNamespace = namespace.equals("c") || namespace.equals("forge") || namespace.equals("neoforge");
-        return commonNamespace
-                && location.getPath().startsWith(ORE_TAG_PREFIX)
-                && location.getPath().length() > ORE_TAG_PREFIX.length();
+    /** {@code c:ores/<material>} of the block, or of its item when only the item is tagged. */
+    private static Optional<String> materialFromTags(Block block) {
+        return OreTags.oreTagIds(block)
+                .filter(location -> location.getPath().startsWith(ORE_TAG_PREFIX)
+                        && location.getPath().length() > ORE_TAG_PREFIX.length())
+                .map(location -> location.getPath().substring(ORE_TAG_PREFIX.length()).toLowerCase(Locale.ROOT))
+                .findFirst();
     }
 
     private static String materialKeyFromName(ResourceLocation oreId) {
@@ -327,6 +385,15 @@ public final class OreUnifier {
                     .min(candidateComparator())
                     .orElse(defaultCandidate)
                     .block();
+        }
+
+        /** The {@code base} member from {@code namespace} if it has one, otherwise the best other mod's. */
+        private Optional<Block> variantFor(String namespace, String base) {
+            return candidates.stream()
+                    .filter(candidate -> resolvedBaseKey(candidate.block(), candidate.id()).equals(base))
+                    .min(Comparator.comparing((OreCandidate candidate) -> !candidate.id().getNamespace().equals(namespace))
+                            .thenComparing(candidateComparator()))
+                    .map(OreCandidate::block);
         }
 
         private Block defaultBlock() {

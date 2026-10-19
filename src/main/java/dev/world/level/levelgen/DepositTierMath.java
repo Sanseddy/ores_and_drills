@@ -1,5 +1,7 @@
 package dev.world.level.levelgen;
 
+import dev.util.HybridGrowthMath;
+
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.function.DoubleSupplier;
@@ -111,128 +113,6 @@ final class DepositTierMath {
         return new TierDistribution(profiles, rawScales, normalizedScales, spawnWeights, shares);
     }
 
-    static SmallTierPlan smallTierPlan(
-            double originalFrequency,
-            double maximumOriginalFrequency,
-            TierDistribution distribution,
-            SmallTierParameters parameters,
-            RarityParameters rarityParameters
-    ) {
-        int smallTierCount = Math.min(DepositTier.MEDIUM.ordinal(), distribution.profiles().length);
-        double[] weights = new double[smallTierCount];
-        double[] rarityExponents = new double[smallTierCount];
-        double[] expectedAttempts = new double[smallTierCount];
-        double[] gateProbabilities = new double[smallTierCount];
-        if (smallTierCount == 0 || originalFrequency <= 0.0D || maximumOriginalFrequency <= 0.0D) {
-            return new SmallTierPlan(weights, rarityExponents, expectedAttempts, gateProbabilities, 0.0D, 0.0D);
-        }
-
-        double tierRelativeFrequency = clamp(parameters.relativeFrequency(), 0.0D, 1.0D);
-        double totalWeight = 0.0D;
-        for (int index = 0; index < smallTierCount; index++) {
-            weights[index] = Math.pow(tierRelativeFrequency, index);
-            totalWeight += weights[index];
-        }
-
-        double retention = clamp(parameters.frequencyRetention(), 0.0D, 1.0D);
-        for (int index = 0; index < smallTierCount; index++) {
-            RarityWeight rarity = adaptiveTierOreWeight(
-                    DepositTier.byIndex(index), originalFrequency, maximumOriginalFrequency, rarityParameters
-            );
-            rarityExponents[index] = rarity.adaptiveExponent();
-            double rarityRatio = clamp(rarity.weight() / originalFrequency, 0.0D, 1.0D);
-            double share = totalWeight <= 0.0D ? 1.0D / smallTierCount : weights[index] / totalWeight;
-            expectedAttempts[index] = originalFrequency * retention * share * rarityRatio;
-        }
-
-        double combined = Arrays.stream(expectedAttempts).sum();
-        double minimumCombined = originalFrequency * clamp(parameters.minimumRetention(), 0.0D, 1.0D);
-        if (combined < minimumCombined) {
-            if (combined > 0.0D) {
-                double correction = minimumCombined / combined;
-                for (int index = 0; index < expectedAttempts.length; index++) {
-                    expectedAttempts[index] *= correction;
-                }
-            } else {
-                for (int index = 0; index < expectedAttempts.length; index++) {
-                    double share = totalWeight <= 0.0D ? 1.0D / smallTierCount : weights[index] / totalWeight;
-                    expectedAttempts[index] = minimumCombined * share;
-                }
-            }
-            combined = minimumCombined;
-        }
-        for (int index = 0; index < expectedAttempts.length; index++) {
-            gateProbabilities[index] = clamp(expectedAttempts[index] / originalFrequency, 0.0D, 1.0D);
-        }
-        return new SmallTierPlan(
-                weights,
-                rarityExponents,
-                expectedAttempts,
-                gateProbabilities,
-                combined,
-                combined / originalFrequency
-        );
-    }
-
-    /**
-     * Splits a multiplier into full and fractional source-stream copies. Kept for diagnostics and
-     * regression coverage; worldgen no longer materializes these copies as placed features.
-     */
-    static double[] splitExpectedMultiplier(double expectedMultiplier) {
-        double safeMultiplier = Math.max(0.0D, expectedMultiplier);
-        int guaranteed = (int) Math.floor(safeMultiplier);
-        double fractional = safeMultiplier - guaranteed;
-        double[] result = new double[guaranteed + (fractional > 0.0D ? 1 : 0)];
-        Arrays.fill(result, 0, guaranteed, 1.0D);
-        if (fractional > 0.0D) {
-            result[result.length - 1] = fractional;
-        }
-        return result;
-    }
-
-    /** Shared safety bound for TINY/SMALL candidate attempts. */
-    static int smallAttemptBudget(double configuredBudget, int hardMaximum) {
-        int safeHardMaximum = Math.max(1, hardMaximum);
-        if (!Double.isFinite(configuredBudget)) {
-            return safeHardMaximum;
-        }
-        return Math.min(safeHardMaximum, Math.max(1, (int)Math.ceil(configuredBudget)));
-    }
-
-    /** Applies an ore Frequency multiplier without expanding the placed-feature graph. */
-    static double smallTierGateProbability(
-            double sourceProbability,
-            double retentionGate,
-            double frequencyMultiplier
-    ) {
-        double source = clamp(sourceProbability, 0.0D, 1.0D);
-        double retention = clamp(retentionGate, 0.0D, 1.0D);
-        double multiplier = Double.isFinite(frequencyMultiplier)
-                ? clamp(frequencyMultiplier, 0.1D, 6.0D)
-                : 1.0D;
-        return Math.min(1.0D, source * retention * multiplier);
-    }
-
-    /**
-     * Converts an automatically detected expected frequency per chunk into the single immutable
-     * candidate owned by a tier cell. This removes dependence on the surrounding PlacedFeature random
-     * stream while retaining the same expected frequency until a cell saturates at one candidate.
-     */
-    static double cellCandidateProbability(
-            double expectedAttemptsPerChunk,
-            int cellSizeChunks,
-            double frequencyMultiplier
-    ) {
-        double expected = Double.isFinite(expectedAttemptsPerChunk)
-                ? Math.max(0.0D, expectedAttemptsPerChunk)
-                : 0.0D;
-        int safeCellSize = Math.max(1, cellSizeChunks);
-        double multiplier = Double.isFinite(frequencyMultiplier)
-                ? clamp(frequencyMultiplier, 0.1D, 6.0D)
-                : 1.0D;
-        return clamp(expected * safeCellSize * safeCellSize * multiplier, 0.0D, 1.0D);
-    }
-
     /** Retain fewer small-tier candidates even when their original cell chance saturated at one. */
     static double retainedTierCandidateProbability(DepositTier tier, double probability, double smallTierRetention) {
         double chance = clamp(probability, 0.0D, 1.0D);
@@ -297,39 +177,38 @@ final class DepositTierMath {
             RarityParameters parameters
     ) {
         if (maximumEffectiveFrequency <= 0.0D) {
-            return new RarityWeight(0.0D, 0.0D, 0.0D, 1.0D, 0.0D);
+            return new RarityWeight(0.0D, Double.POSITIVE_INFINITY, 1.0D, 0.0D);
         }
         double relativeFrequency = clamp(
                 effectiveOriginalFrequency / maximumEffectiveFrequency,
                 parameters.minimumRelativeWeight(), 1.0D
         );
-        double smallBoundary = DepositTier.MEDIUM.normalizedPosition();
-        double smallInfluence = smallBoundary <= 0.0D
-                ? 0.0D
-                : clamp(1.0D - tier.normalizedPosition() / smallBoundary, 0.0D, 1.0D);
-        double rareTail = Math.pow(1.0D - relativeFrequency, positive(parameters.rareTailCurve()));
-        double baseExponent;
-        double adaptiveExponent;
-        if (smallInfluence > 0.0D) {
-            baseExponent = 1.0D + nonNegative(parameters.smallTierBaseRarityStrength()) * smallInfluence;
-            double tailStrength = nonNegative(parameters.rareTailStrength())
-                    * Math.pow(smallInfluence, positive(parameters.smallTierInfluenceCurve()));
-            adaptiveExponent = baseExponent + tailStrength * rareTail;
+        boolean smallTier = tier.ordinal() < DepositTier.MEDIUM.ordinal();
+        double weight;
+        if (smallTier) {
+            // The manual mining-time curve, counting how many times rarer this ore is than the most common
+            // one: a weight proportional to its own frequency, then a bounded exponential penalty on top.
+            weight = maximumEffectiveFrequency / HybridGrowthMath.multiplier(
+                    1.0D / relativeFrequency, parameters.rarityGrowth(), parameters.rarityMaxExponentialMultiplier()
+            );
         } else {
-            baseExponent = 1.0D - nonNegative(parameters.largeTierRarityBoost()) * tier.normalizedPosition();
-            adaptiveExponent = Math.max(0.01D, baseExponent);
-            rareTail = 0.0D;
+            double exponent = Math.max(
+                    0.01D, 1.0D - nonNegative(parameters.largeTierRarityBoost()) * tier.normalizedPosition()
+            );
+            weight = maximumEffectiveFrequency * Math.pow(relativeFrequency, exponent);
         }
-        double weight = maximumEffectiveFrequency * Math.pow(relativeFrequency, adaptiveExponent);
         weight = Math.min(maximumEffectiveFrequency, weight);
         // A constant floor would give every rare small-tier ore the same weight and mask stronger
         // penalties. Keep a positive floor proportional to its source frequency in small tiers only.
         double minimumWeight = maximumEffectiveFrequency * parameters.minimumRelativeWeight();
-        if (smallInfluence > 0.0D) {
+        if (smallTier) {
             minimumWeight *= relativeFrequency;
         }
         weight = Math.max(minimumWeight, weight);
-        return new RarityWeight(relativeFrequency, rareTail, baseExponent, adaptiveExponent, weight);
+        double penalty = maximumEffectiveFrequency / weight;
+        // The power of relativeFrequency this weight amounts to, so both branches read alike in diagnostics.
+        double effectiveExponent = relativeFrequency < 1.0D ? Math.log(penalty) / -Math.log(relativeFrequency) : 1.0D;
+        return new RarityWeight(relativeFrequency, penalty, effectiveExponent, weight);
     }
 
     static int calculateFillStage(long remainingOre, long minimumOre, long maximumOre, int stageCount) {
@@ -505,10 +384,6 @@ final class DepositTierMath {
         return minimum + clamp(position, 0.0D, 1.0D) * (maximum - minimum);
     }
 
-    private static double positive(double value) {
-        return Math.max(Double.MIN_NORMAL, value);
-    }
-
     private static double nonNegative(double value) {
         return Math.max(0.0D, value);
     }
@@ -550,57 +425,38 @@ final class DepositTierMath {
     record OreRange(double characteristicTotalOre, long minimumTotalOre, long maximumTotalOre) {
     }
 
+    /**
+     * @param rarityGrowth                  TINY/SMALL: exponential growth of the {@link HybridGrowthMath} penalty
+     * @param rarityMaxExponentialMultiplier TINY/SMALL: cap of that penalty's exponential part
+     * @param largeTierRarityBoost          MEDIUM/LARGE: how far rare ores are lifted towards the common ones
+     */
     record RarityParameters(
-            double smallTierBaseRarityStrength,
-            double rareTailStrength,
-            double rareTailCurve,
-            double smallTierInfluenceCurve,
+            double rarityGrowth,
+            double rarityMaxExponentialMultiplier,
             double largeTierRarityBoost,
             double minimumRelativeWeight
     ) {
         RarityParameters {
-            smallTierBaseRarityStrength = nonNegative(smallTierBaseRarityStrength);
-            rareTailStrength = nonNegative(rareTailStrength);
-            rareTailCurve = positive(rareTailCurve);
-            smallTierInfluenceCurve = positive(smallTierInfluenceCurve);
+            rarityGrowth = nonNegative(rarityGrowth);
+            rarityMaxExponentialMultiplier = Math.max(1.0D, rarityMaxExponentialMultiplier);
             largeTierRarityBoost = clamp(largeTierRarityBoost, 0.0D, 0.99D);
             minimumRelativeWeight = clamp(minimumRelativeWeight, 1.0E-12D, 1.0D);
         }
     }
 
+    /**
+     * @param penalty           how many times smaller the weight is than the most common ore's
+     * @param effectiveExponent the power of {@code relativeFrequency} that penalty amounts to
+     */
     record RarityWeight(
             double relativeFrequency,
-            double rareTail,
-            double baseExponent,
-            double adaptiveExponent,
+            double penalty,
+            double effectiveExponent,
             double weight
     ) {
     }
 
     private record RangeCurve(double minimum, double maximum, double steepness, double midpoint) {
-    }
-
-    record SmallTierParameters(
-            double frequencyRetention,
-            double minimumRetention,
-            double relativeFrequency
-    ) {
-    }
-
-    record SmallTierPlan(
-            double[] weights,
-            double[] rarityExponents,
-            double[] expectedAttempts,
-            double[] gateProbabilities,
-            double combinedExpectedAttempts,
-            double retainedFraction
-    ) {
-        SmallTierPlan {
-            weights = Arrays.copyOf(weights, weights.length);
-            rarityExponents = Arrays.copyOf(rarityExponents, rarityExponents.length);
-            expectedAttempts = Arrays.copyOf(expectedAttempts, expectedAttempts.length);
-            gateProbabilities = Arrays.copyOf(gateProbabilities, gateProbabilities.length);
-        }
     }
 
     record TierDistribution(

@@ -1,9 +1,12 @@
 package dev.client.map;
 
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -19,21 +22,15 @@ public final class OreMapPatch {
     private final int[] cellIndex;
     private final int extent;
     private final OreMapTiling.Tiles[] levels = new OreMapTiling.Tiles[OreMapTiling.MAX_LEVEL + 1];
-    private final long receivedAtMillis;
     private int baseColor;
 
     public OreMapPatch(DiscoveredOreDeposit deposit) {
-        this(deposit, System.currentTimeMillis());
-    }
-
-    OreMapPatch(DiscoveredOreDeposit deposit, long receivedAtMillis) {
-        this(deposit, receivedAtMillis, -1);
+        this(deposit, -1);
     }
 
     /** @param baseColor a fixed RGB colour, or -1 to resolve it from the ore on first use */
-    OreMapPatch(DiscoveredOreDeposit deposit, long receivedAtMillis, int baseColor) {
+    OreMapPatch(DiscoveredOreDeposit deposit, int baseColor) {
         this.deposit = deposit;
-        this.receivedAtMillis = receivedAtMillis;
         this.baseColor = baseColor;
         int lowX = 0;
         int lowZ = 0;
@@ -85,10 +82,6 @@ public final class OreMapPatch {
         return extent;
     }
 
-    long receivedAtMillis() {
-        return receivedAtMillis;
-    }
-
     public boolean isEmpty() {
         return deposit.cells().isEmpty() || deposit.remainingOre() <= 0;
     }
@@ -109,6 +102,68 @@ public final class OreMapPatch {
         }
         int index = cellIndex[x + z * width];
         return index < 0 ? null : deposit.cells().get(index);
+    }
+
+    /** Packs an x/z pair (a column offset from the centre, or a world column) into one map key. */
+    static long columnKey(int x, int z) {
+        return (long) x << 32 | z & 0xFFFFFFFFL;
+    }
+
+    /**
+     * Returns a refreshed immutable patch with new {remaining, initial} amounts for the given column offsets
+     * (keys from {@link #columnKey}), or this patch when nothing changed. As in the server's snapshot, a column
+     * whose ore runs out leaves the map while its initial amount keeps counting towards the total.
+     */
+    OreMapPatch withColumns(Long2ObjectMap<int[]> columns) {
+        if (columns.isEmpty()) {
+            return this;
+        }
+        List<DiscoveredOreDeposit.OreMapCell> oldCells = deposit.cells();
+        ArrayList<DiscoveredOreDeposit.OreMapCell> cells = new ArrayList<>(oldCells.size() + columns.size());
+        LongOpenHashSet known = new LongOpenHashSet(Math.min(oldCells.size(), columns.size()));
+        long initialDelta = 0L;
+        boolean changed = false;
+        for (DiscoveredOreDeposit.OreMapCell cell : oldCells) {
+            long key = columnKey(cell.offsetX(), cell.offsetZ());
+            int[] amounts = columns.get(key);
+            if (amounts == null) {
+                cells.add(cell);
+                continue;
+            }
+            known.add(key);
+            if (amounts[0] == cell.remainingOre() && amounts[1] == cell.initialOre()) {
+                cells.add(cell);
+                continue;
+            }
+            changed = true;
+            initialDelta += amounts[1] - cell.initialOre();
+            if (amounts[0] > 0) {
+                cells.add(new DiscoveredOreDeposit.OreMapCell(cell.offsetX(), cell.offsetZ(), amounts[0], amounts[1]));
+            }
+        }
+        for (Long2ObjectMap.Entry<int[]> column : columns.long2ObjectEntrySet()) {
+            int[] amounts = column.getValue();
+            if (amounts[0] <= 0 || known.contains(column.getLongKey())) {
+                continue;
+            }
+            changed = true;
+            initialDelta += amounts[1];
+            cells.add(new DiscoveredOreDeposit.OreMapCell(
+                    (int) (column.getLongKey() >> 32), (int) column.getLongKey(), amounts[0], amounts[1]
+            ));
+        }
+        if (!changed) {
+            return this;
+        }
+        long remaining = 0L;
+        for (DiscoveredOreDeposit.OreMapCell cell : cells) {
+            remaining += cell.remainingOre();
+        }
+        DiscoveredOreDeposit updated = new DiscoveredOreDeposit(
+                deposit.id(), deposit.dimension(), deposit.center(), deposit.oreId(), deposit.tier(), deposit.color(),
+                remaining, Math.max(remaining, deposit.initialOre() + initialDelta), cells
+        );
+        return new OreMapPatch(updated, baseColor);
     }
 
     /** Tiles to draw at this zoom; never smaller than one screen pixel. */

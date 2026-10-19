@@ -8,12 +8,14 @@ import dev.OresAndDrillsMod;
 import dev.client.ore.speck.ArgbImage;
 import dev.client.ore.speck.OreSpeckAnalysis;
 import dev.client.ore.speck.OreSpeckLayout;
+import dev.world.level.levelgen.OreUnifier;
 import dev.world.level.levelgen.OreVisualStages;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Block;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
@@ -21,6 +23,7 @@ import java.io.InputStream;
 import java.io.Reader;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -109,16 +112,31 @@ final class OreSpeckLibrary {
     }
 
     private static List<OreSpeckLayout> buildLayouts(ResourceManager resourceManager, Key key) {
+        // A deepslate ore is drawn with its stone ore's specks; the block in the world stays the deepslate one.
+        ResourceLocation textureOreId = textureOreFor(key.oreId());
         int[] palette = key.dropId() != null
                 ? OreDepositOreColors.paletteForDrop(resourceManager, key.dropId())
-                : OreDepositOreColors.paletteForOre(resourceManager, key.oreId());
+                : OreDepositOreColors.paletteForOre(resourceManager, textureOreId);
 
         // A model can reference several textures: a resource pack may draw the ore as a stone layer plus a
         // transparent overlay, or give the ore different faces. The overlay wins; otherwise the texture with
-        // the most ore pixels. Known rock textures are never the ore itself.
+        // the most ore pixels. Known rock textures are never the ore itself. Tinted layers are read in the
+        // color the game draws them with, and stacked ore layers (a pattern plus a secondary layer, as
+        // material-based mods draw ores) are also tried together, as they appear in the world.
+        Block textureOre = BuiltInRegistries.BLOCK.containsKey(textureOreId) ? BuiltInRegistries.BLOCK.get(textureOreId) : null;
+        List<OreModelLayers.Layer> modelLayers = new ArrayList<>();
+        for (ResourceLocation modelId : blockStateModels(resourceManager, textureOreId)) {
+            modelLayers.addAll(OreModelLayers.layers(resourceManager, modelId));
+        }
+        Map<ResourceLocation, Integer> tintIndices = OreModelLayers.tintIndices(modelLayers);
+        List<ResourceLocation> layerTextures = OreModelLayers.textures(modelLayers);
+        Set<ResourceLocation> candidates = new LinkedHashSet<>(blockTextures(resourceManager, textureOreId));
+        candidates.addAll(layerTextures);
+
         OreSpeckAnalysis analysis = OreSpeckAnalysis.empty(key.resolution());
-        ResourceLocation oreTexture = null;
-        for (ResourceLocation candidate : blockTextures(resourceManager, key.oreId())) {
+        String oreTexture = null;
+        Map<ResourceLocation, ArgbImage> oreLayers = new LinkedHashMap<>();
+        for (ResourceLocation candidate : candidates) {
             if (HOST_TEXTURES.contains(candidate)) {
                 continue;
             }
@@ -126,11 +144,28 @@ final class OreSpeckLibrary {
             if (image == null) {
                 continue;
             }
-            ArgbImage host = OreSpeckAnalysis.pickHost(image, hostImages(resourceManager), key.resolution());
-            OreSpeckAnalysis candidateAnalysis = OreSpeckAnalysis.analyze(image, host, palette, key.resolution());
+            Integer tintIndex = tintIndices.get(candidate);
+            if (tintIndex != null && textureOre != null) {
+                image = image.tinted(OreModelLayers.blockTint(textureOre, tintIndex));
+            }
+            if (layerTextures.contains(candidate)) {
+                oreLayers.put(candidate, image);
+            }
+            OreSpeckAnalysis candidateAnalysis = analyze(resourceManager, image, palette, key.resolution());
             if (isBetter(candidateAnalysis, analysis)) {
                 analysis = candidateAnalysis;
-                oreTexture = candidate;
+                oreTexture = candidate.toString();
+            }
+        }
+        if (oreLayers.size() > 1) {
+            ArgbImage stacked = null;
+            for (ArgbImage layer : oreLayers.values()) {
+                stacked = stacked == null ? layer : stacked.over(layer);
+            }
+            OreSpeckAnalysis stackedAnalysis = analyze(resourceManager, stacked, palette, key.resolution());
+            if (isBetter(stackedAnalysis, analysis)) {
+                analysis = stackedAnalysis;
+                oreTexture = "stacked " + oreLayers.keySet();
             }
         }
         if (analysis.total() == 0) {
@@ -138,14 +173,28 @@ final class OreSpeckLibrary {
         }
 
         OresAndDrillsMod.LOGGER.debug(
-                "Ore deposit: {} (texture {}, drop {}) -> {}",
-                key.oreId(), oreTexture, key.dropId(), analysis.summary()
+                "Ore deposit: {} (texture {} of {}, drop {}) -> {}",
+                key.oreId(), oreTexture, textureOreId, key.dropId(), analysis.summary()
         );
         List<OreSpeckLayout> layouts = new ArrayList<>(key.variants());
         for (int variant = 0; variant < key.variants(); variant++) {
             layouts.add(OreSpeckLayout.plan(analysis, seedFor(key.oreId(), variant), OreVisualStages.maximumFillFactor()));
         }
         return List.copyOf(layouts);
+    }
+
+    private static OreSpeckAnalysis analyze(ResourceManager resourceManager, ArgbImage image, int[] palette, int resolution) {
+        ArgbImage host = OreSpeckAnalysis.pickHost(image, hostImages(resourceManager), resolution);
+        return OreSpeckAnalysis.analyze(image, host, palette, resolution);
+    }
+
+    private static ResourceLocation textureOreFor(ResourceLocation oreId) {
+        if (!BuiltInRegistries.BLOCK.containsKey(oreId)) {
+            return oreId;
+        }
+        Block stoneOre = OreUnifier.stoneVariantOfDeepslate(BuiltInRegistries.BLOCK.get(oreId));
+        ResourceLocation stoneOreId = BuiltInRegistries.BLOCK.getKey(stoneOre);
+        return stoneOreId == null ? oreId : stoneOreId;
     }
 
     private static boolean isBetter(OreSpeckAnalysis candidate, OreSpeckAnalysis current) {

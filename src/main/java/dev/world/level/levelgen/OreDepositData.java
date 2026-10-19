@@ -79,12 +79,13 @@ public final class OreDepositData {
         if (deposits.isEmpty()) {
             return;
         }
+        List<GeneratedDeposit> hostMatched = matchOreVariantsToHost(level, deposits);
 
         // A lens frequently crosses chunk borders, but it still contains many positions from each
         // affected chunk. Resolve each chunk and take its attachment monitor once, rather than doing
         // both for every block in the lens.
         Long2ObjectOpenHashMap<List<GeneratedDeposit>> depositsByChunk = new Long2ObjectOpenHashMap<>();
-        for (GeneratedDeposit deposit : deposits) {
+        for (GeneratedDeposit deposit : hostMatched) {
             BlockPos pos = deposit.pos();
             long chunkKey = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
             depositsByChunk.computeIfAbsent(chunkKey, ignored -> new ArrayList<>()).add(deposit);
@@ -98,6 +99,54 @@ public final class OreDepositData {
                 chunk.setUnsaved(true);
             }
         }
+    }
+
+    /**
+     * Every generator picks one ore per deposit or per source feature, so a vein crossing from stone into
+     * deepslate would keep the stone ore. Like vanilla, each block instead takes its material's variant
+     * for the rock it replaced: deepslate ore in deepslate, stone ore in stone.
+     */
+    private static List<GeneratedDeposit> matchOreVariantsToHost(WorldGenLevel level, List<GeneratedDeposit> deposits) {
+        OreDepositPaletteData palette = OreDepositPaletteData.get(level.getLevel());
+        List<ResourceLocation> ores = palette.ores();
+        List<ResourceLocation> bases = palette.bases();
+        Map<Long, Integer> variants = new HashMap<>();
+        List<GeneratedDeposit> matched = new ArrayList<>(deposits.size());
+        for (GeneratedDeposit deposit : deposits) {
+            int oreIndex = variants.computeIfAbsent(
+                    ((long) deposit.oreIndex() << 32) | (deposit.baseIndex() & 0xFFFFFFFFL),
+                    ignored -> hostVariantIndex(palette, ores, bases, deposit.oreIndex(), deposit.baseIndex())
+            );
+            matched.add(oreIndex == deposit.oreIndex() ? deposit : new GeneratedDeposit(
+                    deposit.pos(), deposit.baseIndex(), oreIndex, deposit.amount(), deposit.tier()
+            ));
+        }
+        return matched;
+    }
+
+    /** A deposit's blocks may hold different host variants of its one recorded ore. */
+    private static boolean isSameMaterial(ResourceLocation recordOre, @Nullable ResourceLocation blockOre) {
+        if (blockOre == null) {
+            return false;
+        }
+        String material = OreUnifier.materialKeyFor(recordOre);
+        return recordOre.equals(blockOre) || !material.isEmpty() && material.equals(OreUnifier.materialKeyFor(blockOre));
+    }
+
+    private static int hostVariantIndex(
+            OreDepositPaletteData palette,
+            List<ResourceLocation> ores,
+            List<ResourceLocation> bases,
+            int oreIndex,
+            int baseIndex
+    ) {
+        if (oreIndex < 0 || oreIndex >= ores.size() || baseIndex < 0 || baseIndex >= bases.size()) {
+            return oreIndex;
+        }
+        Block ore = BuiltInRegistries.BLOCK.get(ores.get(oreIndex));
+        Block variant = OreUnifier.variantForHost(ore, BuiltInRegistries.BLOCK.get(bases.get(baseIndex)));
+        int variantIndex = variant == ore ? -1 : palette.oreIndex(variant);
+        return variantIndex >= 0 ? variantIndex : oreIndex;
     }
 
     public static void remove(ServerLevel level, BlockPos pos) {
@@ -242,6 +291,11 @@ public final class OreDepositData {
         return entry == null ? -1 : entry.tier();
     }
 
+    /** Medium and large deposits are mined by drills only: explosions leave them untouched. */
+    public static boolean ignoresExplosions(ServerLevel level, BlockPos pos) {
+        return tierAt(level, pos) >= OreDepositTier.MEDIUM.index();
+    }
+
     /**
      * Builds a top-down resource patch from already-loaded physical blocks without loading any extra chunks.
      * Vertical blocks in the same X/Z column are combined into one Factorio-style map cell.
@@ -272,7 +326,7 @@ public final class OreDepositData {
                     if (entry.tier() != deposit.tier().index()
                             || (long) dx * dx + (long) dz * dz > radiusSqr
                             || Math.abs(pos.getY() - center.getY()) > 12
-                            || !deposit.oreId().equals(oreId(level, entry.oreIndex()))) {
+                            || !isSameMaterial(deposit.oreId(), oreId(level, entry.oreIndex()))) {
                         return;
                     }
                     long key = ChunkPos.asLong(dx, dz);
@@ -332,6 +386,12 @@ public final class OreDepositData {
         return new DepositStats(entry.remainingOre(), entry.initialOre());
     }
 
+    /** Tier of a deposit block as this side knows it (the client from its synced chunk data), or {@code -1}. */
+    public static int readTierAt(Level level, BlockPos pos) {
+        OreDepositChunkData.Entry entry = entryForRead(level, pos);
+        return entry == null ? -1 : entry.tier();
+    }
+
     public static int remainingOreAt(Level level, BlockPos pos) {
         OreDepositChunkData.Entry entry = entryForRead(level, pos);
         return entry == null ? 0 : Math.max(0, entry.remainingOre());
@@ -384,7 +444,8 @@ public final class OreDepositData {
                 entry.oreIndex(),
                 OreVisualStages.stageFor(entry.remainingOre()),
                 OreVisualStages.stageFor(entry.initialOre()),
-                entry.remainingOre() < entry.initialOre()
+                entry.remainingOre() < entry.initialOre(),
+                entry.tier()
         );
     }
 
@@ -491,7 +552,7 @@ public final class OreDepositData {
         }
         ItemStack tool = player.getMainHandItem();
         BlockState oreState = oreState(oreBlockId);
-        if (dev.recipe.DrillMiningRecipes.requiresFluidForPlayer(level, oreState)
+        if (dev.recipe.DrillMiningRecipes.requiresFluidOutsideDrills(level, oreState)
                 || !oreState.canHarvestBlock(level, pos, player)) {
             // Fluid-locked ore and weak tools waste only one unit, with no drop or XP.
             // Keep the same depletion path for ordinary breaking and area-mining tools.
@@ -530,7 +591,60 @@ public final class OreDepositData {
         return true;
     }
 
+    /**
+     * Up to {@code units} units in one go for an explosion, with one update and one break effect. Returns
+     * their loot, rolled per unit; fluid-locked ore loses the units with nothing to show for it.
+     */
+    public static List<ItemStack> mineByExplosion(ServerLevel level, BlockPos pos, int units) {
+        ChunkAccess chunk = chunk(level, pos);
+        OreDepositChunkData.Entry entry = entry(level, pos);
+        OreDepositChunkData data = chunk.getExistingDataOrNull(ModAttachments.ORE_DEPOSITS);
+        if (units <= 0 || entry == null || data == null || entry.remainingOre() <= 0) {
+            return List.of();
+        }
+        ResourceLocation oreBlockId = oreId(level, entry.oreIndex());
+        if (oreBlockId == null) {
+            return List.of();
+        }
+
+        int amount = Math.min(units, entry.remainingOre());
+        List<ItemStack> drops = new ArrayList<>(amount);
+        if (!dev.recipe.DrillMiningRecipes.requiresFluidOutsideDrills(level, oreState(oreBlockId))) {
+            for (int unit = 0; unit < amount; unit++) {
+                ItemStack drop = dropFor(level, pos, oreBlockId);
+                if (!drop.isEmpty()) {
+                    drops.add(drop);
+                }
+            }
+            if (drops.isEmpty()) {
+                // As in mineOne: an ore without loot is not mined at all.
+                return List.of();
+            }
+        }
+        deplete(level, chunk, data, pos, entry, amount);
+        return drops;
+    }
+
+    /** The deposit's ore needs a mining fluid, so only Ores & Drills drills get anything out of it. */
+    public static boolean isFluidLocked(ServerLevel level, BlockPos pos) {
+        OreDepositChunkData.Entry entry = entry(level, pos);
+        if (entry == null || entry.remainingOre() <= 0) {
+            return false;
+        }
+        ResourceLocation oreBlockId = oreId(level, entry.oreIndex());
+        return oreBlockId != null
+                && dev.recipe.DrillMiningRecipes.requiresFluidOutsideDrills(level, oreState(oreBlockId));
+    }
+
+    /**
+     * One unit for any mining other than an Ores & Drills drill: explosions, world destruction and other
+     * mods' machines. Fluid-locked ore loses the unit without a drop, as when a player breaks it by hand.
+     */
     public static ItemStack mineOne(ServerLevel level, BlockPos pos) {
+        if (isFluidLocked(level, pos)) {
+            depleteWithoutDrop(level, pos);
+            return ItemStack.EMPTY;
+        }
         return mineOne(level, pos, null, ItemStack.EMPTY);
     }
 
@@ -578,7 +692,7 @@ public final class OreDepositData {
             return ItemStack.EMPTY;
         }
 
-        deplete(level, chunk, data, pos, entry);
+        deplete(level, chunk, data, pos, entry, 1);
 
         if (player != null) {
             BlockState oreBlockState = oreState(oreBlockId);
@@ -601,12 +715,12 @@ public final class OreDepositData {
             return;
         }
 
-        deplete(level, chunk, data, pos, entry);
+        deplete(level, chunk, data, pos, entry, 1);
     }
 
-    private static void deplete(ServerLevel level, ChunkAccess chunk, OreDepositChunkData data, BlockPos pos, OreDepositChunkData.Entry entry) {
+    private static void deplete(ServerLevel level, ChunkAccess chunk, OreDepositChunkData data, BlockPos pos, OreDepositChunkData.Entry entry, int amount) {
         playVirtualBreakEffect(level, pos);
-        int remaining = entry.remainingOre() - 1;
+        int remaining = entry.remainingOre() - amount;
         data.put(pos, entry.baseIndex(), entry.oreIndex(), Math.max(0, remaining), entry.initialOre(), entry.initialRichness(), entry.richnessReferenceAmount(), entry.tier());
         OreDepositChunkData.Entry updatedEntry = data.get(pos);
         PhysicalOreDepositSavedData.get(level).updateIfTracked(pos, updatedEntry);
@@ -634,7 +748,7 @@ public final class OreDepositData {
     private static void markIndexesDepleted(ServerLevel level, BlockPos pos, OreDepositChunkData.Entry entry) {
         ResourceLocation oreId = oreId(level, entry.oreIndex());
         if (oreId != null) {
-            ConfirmedDepositIndex.get(level).markBlockDepleted(pos, oreId);
+            ConfirmedDepositIndex.get(level).markBlockDepleted(pos, oreId, entry.tier());
         }
         if (entry.tier() >= OreDepositFeature.TIER_MEDIUM) {
             Block ore = oreId == null ? null : BuiltInRegistries.BLOCK.get(oreId);
@@ -749,7 +863,7 @@ public final class OreDepositData {
      * @param initialStage visual stage the block was generated with; drawn as a faint trace once mined
      * @param depleted     whether some ore has been taken, i.e. the trace of the initial stage is visible
      */
-    public record Visual(int baseIndex, int oreIndex, int stage, int initialStage, boolean depleted) {
+    public record Visual(int baseIndex, int oreIndex, int stage, int initialStage, boolean depleted, int tier) {
     }
 
     private record PhysicalTransfer(BlockPos sourcePos, BlockPos destinationPos, OreDepositChunkData.Entry entry) {

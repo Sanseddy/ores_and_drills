@@ -2,13 +2,14 @@ package dev.world.level.levelgen;
 
 import dev.OresAndDrillsMod;
 import dev.config.OreDepositConfig;
+import dev.config.OreGenerationMode;
 import dev.config.OreOverrides;
+import dev.config.OreWorldDisabledOres;
 import dev.config.OreSettingsPresetManager;
 import dev.registry.ModWorldgen;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.biome.Biome;
@@ -22,6 +23,7 @@ import net.minecraft.world.level.levelgen.feature.configurations.OreConfiguratio
 import net.minecraft.world.level.levelgen.feature.configurations.RandomFeatureConfiguration;
 import net.minecraft.world.level.levelgen.placement.PlacementModifier;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
+import net.minecraft.world.level.levelgen.placement.RarityFilter;
 import net.minecraft.world.level.levelgen.structure.templatesystem.RuleTest;
 import net.neoforged.neoforge.common.world.BiomeGenerationSettingsBuilder;
 import net.neoforged.neoforge.common.world.BiomeModifier;
@@ -51,6 +53,8 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
     private static final Set<ResourceLocation> LOGGED_DISABLED_ORES = ConcurrentHashMap.newKeySet();
     private static final Set<ResourceLocation> LOGGED_PRESET_DISABLED_ORES = ConcurrentHashMap.newKeySet();
     private static final Set<ResourceLocation> LOGGED_UNREPRESENTABLE_ORES = ConcurrentHashMap.newKeySet();
+    private static final Set<ResourceLocation> LOGGED_VANILLA_LIKE_FALLBACKS = ConcurrentHashMap.newKeySet();
+    private static final Set<String> LOGGED_VANILLA_LIKE_SOURCES = ConcurrentHashMap.newKeySet();
     private static final Map<ResourceLocation, List<OreDepositFeature.Configuration>> COMPACT_CONFIGS = new ConcurrentHashMap<>();
 
     static List<OreDepositFeature.Configuration> compactConfigurations() {
@@ -107,7 +111,10 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
             return;
         }
         if (phase == Phase.REMOVE) {
-            biome.unwrapKey().ifPresent(key -> COMPACT_CONFIGS.remove(key.location()));
+            biome.unwrapKey().ifPresent(key -> {
+                COMPACT_CONFIGS.remove(key.location());
+                SmallDepositAttemptPlanner.clearBiome(key.location());
+            });
         }
 
         BiomeGenerationSettingsBuilder generation = builder.getGenerationSettings();
@@ -159,6 +166,12 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
             Holder<Biome> biome,
             String sourceSignature
     ) {
+        // A feature placing only ignored ores stays in the biome verbatim, under its own registry key.
+        if (Boolean.TRUE.equals(onlyIgnoredOres(placedFeature.feature().value(),
+                Collections.newSetFromMap(new IdentityHashMap<>())))) {
+            return Replacement.KEEP;
+        }
+
         List<PlacedFeature> replacements = new ArrayList<>();
         boolean foundOreFeature = collectOreReplacements(
                 placedFeature.feature().value(),
@@ -300,9 +313,12 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
             List<PlacedFeature> replacements
     ) {
         // Targets that still become deposit tiers, and targets that keep their original vanilla vein
-        // instead because the player excluded that ore from deposits (it still spawns normally).
+        // because the deposit palette cannot represent them.
         List<OreConfiguration.TargetBlockState> depositTargets = new ArrayList<>();
         List<OreConfiguration.TargetBlockState> normalVeinTargets = new ArrayList<>();
+        // Ignored ores keep their own source block and vein; they are neither unified nor recorded anywhere.
+        List<OreConfiguration.TargetBlockState> ignoredTargets = new ArrayList<>();
+        int oreTargets = 0;
         boolean hasOreTarget = false;
         boolean hasCanonicalTarget = false;
         Block firstCanonicalOre = null;
@@ -313,17 +329,25 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
             }
 
             hasOreTarget = true;
+            oreTargets++;
             Block sourceOre = target.state.getBlock();
+            if (isOreIgnored(sourceOre)) {
+                ignoredTargets.add(target);
+                continue;
+            }
             var canonical = OreUnifier.canonicalFor(sourceOre, classifyTarget(target.target));
             if (canonical.isEmpty()) {
                 continue;
             }
             OreSpawnDimensions.record(sourceOre, biome);
             OreSpawnDimensions.record(canonical.get(), biome);
-            OreGenerationWeights.recordObservation(
-                    canonical.get(), biome, sourceSignature, configured,
-                    placement, chance, oreData.size(), target.target
-            );
+            // Disabled ores stay out of the rarity tables, as in OreSpawnDimensions' scan.
+            if (!isOreDisabled(sourceOre) && !isOreDisabled(canonical.get())) {
+                OreGenerationWeights.recordObservation(
+                        canonical.get(), biome, sourceSignature, configured,
+                        placement, chance, oreData.size(), target.target
+                );
+            }
 
             OreConfiguration.TargetBlockState unifiedTarget = OreConfiguration.target(target.target, canonical.get().defaultBlockState());
 
@@ -344,12 +368,12 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
 
             // Unification means one canonical block can be reached from several mods' source blocks, so an
             // exclusion entered as either the source mod's own ID or the canonical/unified ID must match.
-            if (isDepositDisabled(sourceOre) || isDepositDisabled(canonical.get())) {
+            // A disabled ore generates nothing: neither deposits nor its original vein.
+            if (isOreDisabled(sourceOre) || isOreDisabled(canonical.get())) {
                 ResourceLocation oreId = BuiltInRegistries.BLOCK.getKey(canonical.get());
                 if (oreId != null && LOGGED_DISABLED_ORES.add(oreId)) {
-                    OresAndDrillsMod.LOGGER.debug("Ore deposits: {} excluded from deposits by server config; keeping its original vein instead", oreId);
+                    OresAndDrillsMod.LOGGER.debug("Ore deposits: {} disabled for this world; removing its generation", oreId);
                 }
-                normalVeinTargets.add(unifiedTarget);
                 continue;
             }
 
@@ -362,6 +386,18 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
 
         if (!hasOreTarget) {
             return false;
+        }
+
+        if (ignoredTargets.size() == oreTargets) {
+            // Only reached inside a feature that also places handled ores (see replacementFor).
+            replacements.add(ignoredOrePlacement(configured, placement, chance));
+            return true;
+        }
+        if (!ignoredTargets.isEmpty()) {
+            ConfiguredFeature<OreConfiguration, Feature<OreConfiguration>> ignoredOreFeature = new ConfiguredFeature<OreConfiguration, Feature<OreConfiguration>>(
+                    Feature.ORE, new OreConfiguration(ignoredTargets, oreData.size(), oreData.discardChanceOnAirExposure())
+            );
+            replacements.add(ignoredOrePlacement(ignoredOreFeature, placement, chance));
         }
 
         // A datapack rule owns its ore before any automatic candidate is created. This prevents the
@@ -405,34 +441,93 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
         float sizeMultiplier = override.size();
         float richnessMultiplier = override.richness();
 
-        for (int tier = OreDepositFeature.TIER_TINY; tier < OreDepositFeature.TIER_COUNT; tier++) {
-            // The original chain is scanned for frequency, height and target metadata only. Candidate
-            // existence itself is owned by OreDepositFeature's seed planner for every tier; retaining a
-            // Count/Rarity/Noise modifier here made /locate unable to reproduce whether this call existed.
-            List<PlacementModifier> tierPlacement = deterministicDepositAttemptPlacement();
-            if (tier < OreDepositFeature.TIER_MEDIUM) {
-                // Do not duplicate a placed feature for every whole-number frequency multiplier. With all
-                // ores at 600%, that used to install six TINY and six SMALL feature copies per original
-                // ore feature, making both world loading and chunk decoration grow without a useful bound.
-                // The feature applies the multiplier to its retention gate instead, and its shared
-                // per-chunk workload budget keeps an extreme preset responsive.
-                addTierReplacement(
-                        replacements, depositTargets, tier, chance, frequencyMultiplier,
-                        sizeMultiplier, richnessMultiplier, tierPlacement, biome
-                );
-            } else {
-                addTierReplacement(
-                        replacements, depositTargets, tier, 1.0F, frequencyMultiplier,
-                        sizeMultiplier, richnessMultiplier, tierPlacement, biome
-                );
+        OreDepositFeature.OreVein vanillaVein = OreGenerationMode.vanillaLikeGeneration()
+                ? vanillaPlacementVein(oreData, placement, sourceSignature, firstCanonicalOre)
+                : null;
+        if (vanillaVein != null) {
+            // The original placement chain is kept verbatim: Minecraft evaluates its count, rarity, height
+            // provider and filters (including datapack and modded modifiers), and each attempt builds a
+            // vein of the original shape out of deposit blocks.
+            replacements.add(new PlacedFeature(Holder.direct(configuredDeposit(new OreDepositFeature.Configuration(
+                    depositTargets, OreDepositFeature.TIER_TINY, chance, frequencyMultiplier,
+                    sizeMultiplier, richnessMultiplier, biome.unwrapKey().map(key -> key.location()),
+                    Optional.empty(), Optional.of(vanillaVein)
+            ))), placement));
+        }
+
+        if (vanillaVein == null) {
+            // One TINY/SMALL source per original feature: its stone and deepslate targets stay one source, and
+            // different features of one material stay separate sources. The feature runs once per chunk and
+            // evaluates the original modifiers itself with a stable seed, so they are neither run twice nor
+            // counted twice; the selector branch chance is applied once per attempt.
+            if (!oreData.sizeKnown()) {
+                logUnknownVeinSize(firstCanonicalOre, sourceSignature, oreData.size());
             }
+            OreDepositFeature.OreVein sourceVein = new OreDepositFeature.OreVein(
+                    oreData.size(), clamp(oreData.discardChanceOnAirExposure(), 0.0F, 1.0F), false,
+                    sourceSignature, placement
+            );
+            OreDepositFeature.Configuration smallConfig = new OreDepositFeature.Configuration(
+                    depositTargets, OreDepositFeature.TIER_TINY, chance, frequencyMultiplier,
+                    sizeMultiplier, richnessMultiplier, biome.unwrapKey().map(key -> key.location()),
+                    Optional.empty(), Optional.of(sourceVein)
+            );
+            biome.unwrapKey().ifPresent(key -> SmallDepositAttemptPlanner.register(key.location(), smallConfig));
+            replacements.add(new PlacedFeature(Holder.direct(configuredDeposit(smallConfig)), List.of()));
+        }
+
+        for (int tier = OreDepositFeature.TIER_MEDIUM; tier < OreDepositFeature.TIER_COUNT; tier++) {
+            // The original chain is scanned for frequency, height and target metadata only. Candidate
+            // existence itself is owned by OreDepositFeature's seed planner; retaining a Count/Rarity/Noise
+            // modifier here made /locate unable to reproduce whether this call existed.
+            addTierReplacement(
+                    replacements, depositTargets, tier, 1.0F, frequencyMultiplier,
+                    sizeMultiplier, richnessMultiplier, deterministicDepositAttemptPlacement(), biome, Optional.empty()
+            );
         }
         return true;
     }
 
+    private static void logUnknownVeinSize(Block ore, String sourceSignature, int fallbackSize) {
+        ResourceLocation oreId = BuiltInRegistries.BLOCK.getKey(ore);
+        if (oreId != null && LOGGED_VANILLA_LIKE_FALLBACKS.add(oreId)) {
+            OresAndDrillsMod.LOGGER.debug(
+                    "Ore deposits: {} source {} has no readable vein size; TINY/SMALL use vein size {}",
+                    oreId, sourceSignature, fallbackSize
+            );
+        }
+    }
+
+    /**
+     * Describes one original ore feature for vanilla-like veins. Minecraft runs the original placement chain
+     * verbatim (an empty chain runs once per chunk, as in vanilla); an unreadable vein size uses the same
+     * fallback as the regular mode. The regular mode's attempt thinning never applies here.
+     */
+    private static OreDepositFeature.OreVein vanillaPlacementVein(
+            OreFeatureData oreData,
+            List<PlacementModifier> placement,
+            String sourceSignature,
+            Block ore
+    ) {
+        ResourceLocation oreId = BuiltInRegistries.BLOCK.getKey(ore);
+        if (!oreData.sizeKnown()) {
+            logUnknownVeinSize(ore, sourceSignature, oreData.size());
+        }
+        if (LOGGED_VANILLA_LIKE_SOURCES.add(sourceSignature)) {
+            OresAndDrillsMod.LOGGER.debug(
+                    "Ore deposits: vanilla-like veins for {} from {}: vein size {}",
+                    oreId, sourceSignature, oreData.size()
+            );
+        }
+        return new OreDepositFeature.OreVein(
+                oreData.size(), clamp(oreData.discardChanceOnAirExposure(), 0.0F, 1.0F), true, sourceSignature
+        );
+    }
+
     static OreFeatureData oreFeatureData(FeatureConfiguration config) {
         if (config instanceof OreConfiguration oreConfiguration) {
-            return new OreFeatureData(oreConfiguration.targetStates, oreConfiguration.size, oreConfiguration.discardChanceOnAirExposure);
+            return new OreFeatureData(oreConfiguration.targetStates, oreConfiguration.size,
+                    oreConfiguration.discardChanceOnAirExposure, true);
         }
 
         List<OreConfiguration.TargetBlockState> targets = targetList(config, "targetStates");
@@ -443,7 +538,8 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
             return null;
         }
 
-        return new OreFeatureData(targets, reflectedSize(config), reflectedDiscardChance(config));
+        Integer size = reflectedSize(config);
+        return new OreFeatureData(targets, size == null ? 8 : size, reflectedDiscardChance(config), size != null);
     }
 
     private static float reflectedDiscardChance(FeatureConfiguration config) {
@@ -480,14 +576,14 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
         }
     }
 
-    private static int reflectedSize(FeatureConfiguration config) {
+    /** The source vein size, or {@code null} when it cannot be read (callers fall back to size 8). */
+    private static Integer reflectedSize(FeatureConfiguration config) {
         Integer resolved = resolveSize(reflectedValue(config, "size"));
         if (resolved != null) {
             return resolved;
         }
 
-        resolved = resolveSize(reflectedValue(config, "getSize"));
-        return resolved != null ? resolved : 8;
+        return resolveSize(reflectedValue(config, "getSize"));
     }
 
     /**
@@ -616,12 +712,13 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
             float sizeMultiplier,
             float richnessMultiplier,
             List<PlacementModifier> placement,
-            Holder<Biome> sourceBiome
+            Holder<Biome> sourceBiome,
+            Optional<OreDepositFeature.OreVein> vein
     ) {
         Optional<ResourceLocation> sourceBiomeId = sourceBiome.unwrapKey().map(key -> key.location());
         OreDepositFeature.Configuration config = new OreDepositFeature.Configuration(
                 targets, tier, sourceProbability, frequencyMultiplier,
-                sizeMultiplier, richnessMultiplier, sourceBiomeId
+                sizeMultiplier, richnessMultiplier, sourceBiomeId, Optional.empty(), vein
         );
         if (tier >= OreDepositFeature.TIER_MEDIUM && sourceBiomeId.isPresent()) {
             COMPACT_CONFIGS.compute(sourceBiomeId.get(), (id, old) -> {
@@ -740,27 +837,101 @@ public enum ReplaceOreFeaturesBiomeModifier implements BiomeModifier {
         return lower;
     }
 
-    private static boolean isDepositDisabled(Block block) {
-        ResourceLocation id = BuiltInRegistries.BLOCK.getKey(block);
-        if (id == null) {
-            return false;
-        }
-
-        for (String configuredEntry : OreDepositConfig.DISABLED_DEPOSIT_ORES.get()) {
-            if (configuredEntry.startsWith("#")) {
-                ResourceLocation tagId = ResourceLocation.tryParse(configuredEntry.substring(1));
-                if (tagId != null && block.defaultBlockState().is(TagKey.create(Registries.BLOCK, tagId))) {
-                    return true;
-                }
-            } else if (configuredEntry.equals(id.toString())) {
-                return true;
-            }
-        }
-
-        return false;
+    /** Disabled for this world on its creation screen. */
+    static boolean isOreDisabled(Block block) {
+        return OreWorldDisabledOres.isDisabled(block);
     }
 
-    record OreFeatureData(List<OreConfiguration.TargetBlockState> targets, int size, float discardChanceOnAirExposure) {
+    /**
+     * Listed in the common config's {@code ignored_ores}: the mod leaves the ore's own worldgen untouched (no
+     * deposits, no unification, no rarity weight). An entry matches the source block or the unified block of
+     * its material, so ignoring {@code minecraft:iron_ore} also leaves every other mod's iron ore alone.
+     */
+    public static boolean isOreIgnored(Block block) {
+        if (!OreDepositConfig.SPEC.isLoaded()) {
+            return false;
+        }
+        List<? extends String> ignored = OreDepositConfig.IGNORED_ORES.get();
+        if (ignored.isEmpty()) {
+            return false;
+        }
+        if (OreWorldDisabledOres.matches(ignored, block)) {
+            return true;
+        }
+        Block unified = OreUnifier.unifiedBlockFor(block).orElse(block);
+        return unified != block && OreWorldDisabledOres.matches(ignored, unified);
+    }
+
+    /** Whether {@link #modify} replaces this feature: it reaches at least one ore target that is not ignored. */
+    static boolean placesHandledOre(ConfiguredFeature<?, ?> configured) {
+        return Boolean.FALSE.equals(onlyIgnoredOres(configured, Collections.newSetFromMap(new IdentityHashMap<>())));
+    }
+
+    /**
+     * {@code TRUE} when every ore target reachable from {@code configured} is ignored, {@code FALSE} when any
+     * ore target is not, {@code null} when it places no ore at all. Mirrors {@link #collectOreReplacements}.
+     */
+    private static Boolean onlyIgnoredOres(ConfiguredFeature<?, ?> configured, Set<ConfiguredFeature<?, ?>> visited) {
+        if (configured.feature() instanceof OreDepositFeature || !visited.add(configured)) {
+            return null;
+        }
+        Boolean result = null;
+        OreFeatureData oreData = oreFeatureData(configured.config());
+        if (oreData != null) {
+            for (OreConfiguration.TargetBlockState target : oreData.targets()) {
+                if (OreTags.isOre(target.state)) {
+                    if (!isOreIgnored(target.state.getBlock())) {
+                        visited.remove(configured);
+                        return Boolean.FALSE;
+                    }
+                    result = Boolean.TRUE;
+                }
+            }
+            visited.remove(configured);
+            return result;
+        }
+
+        List<ConfiguredFeature<?, ?>> children = new ArrayList<>();
+        if (configured.config() instanceof RandomFeatureConfiguration random) {
+            random.features.forEach(weighted -> children.add(weighted.feature.value().feature().value()));
+            children.add(random.defaultFeature.value().feature().value());
+        } else {
+            configured.config().getFeatures().forEach(children::add);
+        }
+        for (ConfiguredFeature<?, ?> child : children) {
+            Boolean childResult = onlyIgnoredOres(child, visited);
+            if (Boolean.FALSE.equals(childResult)) {
+                visited.remove(configured);
+                return Boolean.FALSE;
+            }
+            if (childResult != null) {
+                result = Boolean.TRUE;
+            }
+        }
+        visited.remove(configured);
+        return result;
+    }
+
+    /**
+     * An ignored ore inside a feature that also places handled ores: its original configured feature keeps
+     * its placement, and a weighted-selector branch keeps its chance (rounded to a "1 in N" rarity).
+     */
+    private static PlacedFeature ignoredOrePlacement(ConfiguredFeature<?, ?> configured,
+                                                     List<PlacementModifier> placement, float chance) {
+        if (chance >= 0.999F) {
+            return new PlacedFeature(Holder.direct(configured), placement);
+        }
+        List<PlacementModifier> thinned = new ArrayList<>(placement);
+        thinned.add(RarityFilter.onAverageOnceEvery(Math.max(1, Math.round(1.0F / Math.max(chance, 1.0E-4F)))));
+        return new PlacedFeature(Holder.direct(configured), List.copyOf(thinned));
+    }
+
+    record OreFeatureData(
+            List<OreConfiguration.TargetBlockState> targets,
+            int size,
+            float discardChanceOnAirExposure,
+            boolean sizeKnown
+    ) {
     }
 
     private record Replacement(List<PlacedFeature> placedFeatures) {

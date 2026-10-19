@@ -10,7 +10,13 @@ import javax.annotation.Nullable;
 import java.util.Optional;
 import java.util.function.Predicate;
 
-/** Horizontal cave-wall detection shared by world generation and validation. */
+/**
+ * Horizontal cave-wall detection shared by world generation and validation.
+ *
+ * <p>In a decoration region a block outside {@link WorldgenReadArea} is unknown, neither cave space nor host
+ * rock: such chunks may not have terrain yet and read as air, which would turn every stone block on the edge of
+ * the readable area into a wall facing a cave that does not exist.
+ */
 public final class CaveWallDetector {
     private static final Direction[] HORIZONTAL_DIRECTIONS = {
             Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST
@@ -51,7 +57,11 @@ public final class CaveWallDetector {
         }
         int depth = 0;
         for (; depth < maximumDepth; depth++) {
-            BlockState state = level.getBlockState(wallPos.relative(inwardDirection, depth));
+            BlockPos pos = wallPos.relative(inwardDirection, depth);
+            if (!WorldgenReadArea.contains(level, pos)) {
+                break;
+            }
+            BlockState state = level.getBlockState(pos);
             if (!hostPredicate.test(state) || !state.getFluidState().isEmpty()) {
                 break;
             }
@@ -66,6 +76,9 @@ public final class CaveWallDetector {
             int minimumDepth,
             int maximumDepth
     ) {
+        if (!WorldgenReadArea.contains(level, pos)) {
+            return Optional.empty();
+        }
         BlockState state = level.getBlockState(pos);
         if (!state.is(ModBlockTags.STONES) || !state.getFluidState().isEmpty()) {
             return Optional.empty();
@@ -166,7 +179,8 @@ public final class CaveWallDetector {
     public static boolean isExposedToCave(LevelAccessor level, Iterable<BlockPos> positions) {
         for (BlockPos pos : positions) {
             for (Direction direction : HORIZONTAL_DIRECTIONS) {
-                if (isOpenCaveSpace(level.getBlockState(pos.relative(direction)))) {
+                BlockPos neighbor = pos.relative(direction);
+                if (WorldgenReadArea.contains(level, neighbor) && isOpenCaveSpace(level.getBlockState(neighbor))) {
                     return true;
                 }
             }
@@ -193,6 +207,9 @@ public final class CaveWallDetector {
         }
         if (hostPredicate == null) {
             return findAnchorAt(level, pos, preferredExposedFace, minimumDepth, maximumDepth);
+        }
+        if (!WorldgenReadArea.contains(level, pos)) {
+            return Optional.empty();
         }
         BlockState state = level.getBlockState(pos);
         if (!hostPredicate.test(state) || !state.getFluidState().isEmpty()) {
@@ -234,8 +251,11 @@ public final class CaveWallDetector {
             int maximumDepth,
             Predicate<BlockState> hostPredicate
     ) {
-        if (exposedFace == null || exposedFace.getAxis().isVertical()
-                || !isOpenCaveSpace(level.getBlockState(pos.relative(exposedFace)))) {
+        if (exposedFace == null || exposedFace.getAxis().isVertical()) {
+            return false;
+        }
+        BlockPos front = pos.relative(exposedFace);
+        if (!WorldgenReadArea.contains(level, front) || !isOpenCaveSpace(level.getBlockState(front))) {
             return false;
         }
         return measureWallDepth(

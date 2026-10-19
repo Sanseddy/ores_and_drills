@@ -5,6 +5,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import dev.world.level.levelgen.OreDepositOrePalette;
 import dev.world.level.levelgen.OreDepositData;
+import dev.world.level.levelgen.OreGenerationSummary;
 import dev.world.level.levelgen.OreDepositStonePalette;
 import dev.client.map.OreMapMarkers;
 import dev.registry.ModBlocks;
@@ -36,7 +37,7 @@ public final class ModNetworking {
     }
 
     public static void register(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar("7");
+        var registrar = event.registrar("10");
         registrar.playToServer(
                 FluidTankClickPayload.TYPE,
                 FluidTankClickPayload.STREAM_CODEC,
@@ -56,26 +57,40 @@ public final class ModNetworking {
                     }
                 })
         ).playToClient(
+                OreMapWorldIdPayload.TYPE,
+                OreMapWorldIdPayload.STREAM_CODEC,
+                (payload, context) -> context.enqueueWork(() -> OreMapMarkers.setWorldId(payload.worldId()))
+        ).playToClient(
                 OreDepositPalettePayload.TYPE,
                 OreDepositPalettePayload.STREAM_CODEC,
                 (payload, context) -> context.enqueueWork(() -> {
                     OreDepositStonePalette.applyClientPalette(payload.bases());
-                    OreDepositOrePalette.applyClientPalette(payload.ores(), payload.drops());
+                    OreDepositOrePalette.applyClientPalette(
+                            payload.ores(), payload.drops(), payload.vanillaLikeGeneration()
+                    );
                 })
+        ).playToClient(
+                OreGenerationSummaryPayload.TYPE,
+                OreGenerationSummaryPayload.STREAM_CODEC,
+                (payload, context) -> context.enqueueWork(() ->
+                        OreGenerationSummary.applyClient(payload.entries(), payload.replacedFeatures()))
         ).playToClient(
                 OreDepositRemainingPayload.TYPE,
                 OreDepositRemainingPayload.STREAM_CODEC,
-                (payload, context) -> context.enqueueWork(() -> OreDepositData.applyClientEntry(
-                        context.player().level(),
-                        payload.pos(),
-                        payload.baseIndex(),
-                        payload.oreIndex(),
-                        payload.remainingOre(),
-                        payload.initialOre(),
-                        payload.initialRichness(),
-                        payload.richnessReferenceAmount(),
-                        payload.tier()
-                ))
+                (payload, context) -> context.enqueueWork(() -> {
+                    OreDepositData.applyClientEntry(
+                            context.player().level(),
+                            payload.pos(),
+                            payload.baseIndex(),
+                            payload.oreIndex(),
+                            payload.remainingOre(),
+                            payload.initialOre(),
+                            payload.initialRichness(),
+                            payload.richnessReferenceAmount(),
+                            payload.tier()
+                    );
+                    OreMapMarkers.markColumnDirty(context.player().level().dimension().location(), payload.pos());
+                })
         ).playToClient(
                 DiscoveredOreDepositPayload.TYPE,
                 DiscoveredOreDepositPayload.STREAM_CODEC,

@@ -1,5 +1,8 @@
 package dev.world.level.levelgen;
 
+import com.google.gson.JsonElement;
+import com.mojang.serialization.DynamicOps;
+import com.mojang.serialization.JsonOps;
 import dev.OresAndDrillsMod;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
@@ -24,6 +27,7 @@ import net.neoforged.neoforge.registries.NeoForgeRegistries;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -80,13 +84,15 @@ public final class OreSpawnDimensions {
         OreGenerationWeights.clear();
         List<BiomeModifier> biomeModifiers = biomeModifiersExcludingOwn(registryAccess);
         Map<ResourceLocation, Set<ResourceLocation>> dimensionIdsByBiome = dimensionIdsByBiome(dimensions);
+        PlacedOreScanner placedOres = new PlacedOreScanner(registryAccess);
         registryAccess.registry(Registries.BIOME).ifPresent(registry ->
                 registry.holders().forEach(biomeHolder -> scanBiome(
                         biomeHolder,
                         biomeModifiers,
                         biomeHolder.unwrapKey()
                                 .map(key -> dimensionIdsByBiome.getOrDefault(key.location(), Set.of()))
-                                .orElseGet(Set::of)
+                                .orElseGet(Set::of),
+                        placedOres
                 )));
     }
 
@@ -202,13 +208,84 @@ public final class OreSpawnDimensions {
     private static void scanBiome(
             Holder<Biome> biome,
             List<BiomeModifier> biomeModifiers,
-            Set<ResourceLocation> dimensionIds
+            Set<ResourceLocation> dimensionIds,
+            PlacedOreScanner placedOres
     ) {
         BiomeGenerationSettings generationSettings = simulatedGenerationSettings(biome, biomeModifiers);
         for (HolderSet<PlacedFeature> stepFeatures : generationSettings.features()) {
             for (Holder<PlacedFeature> placedFeature : stepFeatures) {
                 scanPlacedFeatureSafely(placedFeature, biome, dimensionIds);
+                recordPlacedOreDimensionsSafely(placedFeature, biome, dimensionIds, placedOres);
             }
+        }
+    }
+
+    /**
+     * Ores placed by features that are not ore features (a lake lined with an ore, a geode, a disk, any modded
+     * feature whose configuration names the block) still spawn in this biome's dimensions. Only the dimension
+     * display learns about them: such features keep their own generation and add no generation weights.
+     */
+    private static void recordPlacedOreDimensionsSafely(
+            Holder<PlacedFeature> placedFeature,
+            Holder<Biome> biome,
+            Set<ResourceLocation> dimensionIds,
+            PlacedOreScanner placedOres
+    ) {
+        try {
+            Collection<ResourceLocation> resolvedDimensionIds = dimensionIds.isEmpty()
+                    ? inferredDimensionIds(biome)
+                    : dimensionIds;
+            if (resolvedDimensionIds.isEmpty()) {
+                return;
+            }
+            for (Block ore : placedOres.oreBlocks(placedFeature.value().feature().value())) {
+                if (ReplaceOreFeaturesBiomeModifier.isOreIgnored(ore)) {
+                    continue;
+                }
+                recordDimensionIds(ore, resolvedDimensionIds);
+                OreUnifier.canonicalFor(ore).ifPresent(canonical -> recordDimensionIds(canonical, resolvedDimensionIds));
+            }
+        } catch (RuntimeException exception) {
+            OresAndDrillsMod.LOGGER.debug("Ore deposits: skipped a feature while scanning placed ore blocks", exception);
+        }
+    }
+
+    /** Ore blocks each configured feature (and every feature nested in it) can place; one encoding per scan. */
+    static final class PlacedOreScanner {
+        private final DynamicOps<JsonElement> ops;
+        private final Map<ConfiguredFeature<?, ?>, Set<Block>> cache = new IdentityHashMap<>();
+
+        PlacedOreScanner(RegistryAccess registryAccess) {
+            this.ops = registryAccess.createSerializationContext(JsonOps.INSTANCE);
+        }
+
+        Set<Block> oreBlocks(ConfiguredFeature<?, ?> root) {
+            Set<Block> result = new LinkedHashSet<>();
+            // getFeatures() also yields features referenced by id from selectors, which encoding leaves as ids.
+            root.getFeatures().forEach(feature -> result.addAll(cache.computeIfAbsent(feature, this::encodedOreBlocks)));
+            return result;
+        }
+
+        private Set<Block> encodedOreBlocks(ConfiguredFeature<?, ?> feature) {
+            Set<Block> ores = new LinkedHashSet<>();
+            try {
+                ConfiguredFeature.DIRECT_CODEC.encodeStart(ops, feature)
+                        .resultOrPartial(ignored -> { })
+                        .ifPresent(json -> FeatureBlockStates.forEachPlacedStateName(json, name -> {
+                            ResourceLocation id = ResourceLocation.tryParse(name);
+                            if (id == null) {
+                                return;
+                            }
+                            BuiltInRegistries.BLOCK.getOptional(id)
+                                    .filter(block -> OreTags.isOre(block.defaultBlockState()))
+                                    .ifPresent(ores::add);
+                        }));
+            } catch (RuntimeException exception) {
+                // Like the ore scan, an unserializable third-party configuration is only a missing GUI hint.
+                OresAndDrillsMod.LOGGER.debug("Ore deposits: could not encode {} while scanning placed ores",
+                        feature.feature(), exception);
+            }
+            return Set.copyOf(ores);
         }
     }
 
@@ -283,12 +360,22 @@ public final class OreSpawnDimensions {
             }
 
             Block sourceOre = target.state.getBlock();
+            if (ReplaceOreFeaturesBiomeModifier.isOreIgnored(sourceOre)) {
+                // Ignored ores keep their own worldgen and stay out of every table the mod builds.
+                continue;
+            }
             OreUnifier.canonicalFor(sourceOre, ReplaceOreFeaturesBiomeModifier.classifyTarget(target.target))
                     .ifPresent(canonical -> {
                         record(sourceOre, biome);
                         record(canonical, biome);
                         recordDimensionIds(sourceOre, resolvedDimensionIds);
                         recordDimensionIds(canonical, resolvedDimensionIds);
+                        // A disabled ore generates nothing; as a rarity reference or lottery entry it would
+                        // still shift every other ore's weights and win deposit slots that then stay empty.
+                        if (ReplaceOreFeaturesBiomeModifier.isOreDisabled(sourceOre)
+                                || ReplaceOreFeaturesBiomeModifier.isOreDisabled(canonical)) {
+                            return;
+                        }
                         OreGenerationWeights.recordObservation(
                                 canonical,
                                 biome,

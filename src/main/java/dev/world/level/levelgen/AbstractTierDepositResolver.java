@@ -43,7 +43,8 @@ abstract class AbstractTierDepositResolver implements TierDepositResolver {
             int cellZ,
             ResourceLocation requestedOre
     ) {
-        if (!DepositCandidateResolver.isTaggedOre(requestedOre)) {
+        if (!DepositCandidateResolver.isTaggedOre(requestedOre) || tier.index() < OreDepositFeature.TIER_MEDIUM) {
+            // Automatic TINY/SMALL have no cell plan: SmallDepositLocate reads and predicts their attempt stream.
             return List.of();
         }
         Block ore = BuiltInRegistries.BLOCK.get(requestedOre);
@@ -75,10 +76,11 @@ abstract class AbstractTierDepositResolver implements TierDepositResolver {
 
         List<DepositCandidate> candidates = new ArrayList<>();
         float sizeMultiplier = OreDepositFeature.liveSizeMultiplier(ore);
+        // Every context below describes the same immutable source chunk. Resolving its noise biome
+        // once avoids one MultiNoiseBiomeSource traversal per registered biome for every locate cell.
+        ResourceLocation sourceBiomeId = OreDepositFeature.automaticSourceBiomeId(level, chunkX, chunkZ);
         for (OreGenerationWeights.SourceContext context : contexts) {
-            if (!OreDepositFeature.matchesAutomaticSourceBiome(
-                    level, chunkX, chunkZ, context.biomeId()
-            )) {
+            if (!java.util.Objects.equals(sourceBiomeId, context.biomeId())) {
                 continue;
             }
             if (!OreDepositFeature.predictsMaterialForChunk(
@@ -90,25 +92,11 @@ abstract class AbstractTierDepositResolver implements TierDepositResolver {
                     level, chunkX, chunkZ, tier.index(), requestedOre,
                     materialKey, sizeMultiplier, context.biomeId()
             );
-            if (tier.index() < OreDepositFeature.TIER_MEDIUM) {
-                var actualBiome = level.getUncachedNoiseBiome(
-                        net.minecraft.core.QuartPos.fromBlock(candidate.center().getX()),
-                        net.minecraft.core.QuartPos.fromBlock(candidate.center().getY()),
-                        net.minecraft.core.QuartPos.fromBlock(candidate.center().getZ())
-                );
-                if (!actualBiome.is(net.minecraft.resources.ResourceKey.create(
-                        net.minecraft.core.registries.Registries.BIOME, context.biomeId()
-                ))) {
-                    continue;
-                }
-            }
-            if (tier.index() >= OreDepositFeature.TIER_MEDIUM) {
-                candidate = OreDepositFeature.relocatePredictedCandidateToSourceBiome(
-                        level, candidate, context.biomeId(), context.targets()
-                );
-                if (candidate == null) {
-                    continue;
-                }
+            candidate = OreDepositFeature.relocatePredictedCandidateToSourceBiome(
+                    level, candidate, context.biomeId(), context.targets()
+            );
+            if (candidate == null) {
+                continue;
             }
             candidates.add(candidate);
         }

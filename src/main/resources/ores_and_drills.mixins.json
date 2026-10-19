@@ -17,7 +17,9 @@
     "NoiseGeneratorSettingsMixin",
     "NoiseBasedChunkGeneratorAccessor",
     "NoiseRouterDataMixin",
+    "OreDepositHardnessMixin",
     "OreFeatureMixin",
+    "PaletteIdGuardMixin",
     "SableAssemblyTransformAccessor",
     "SableSubLevelAssemblyHelperMixin",
     "SableSubLevelPlayerChunkSenderMixin",
@@ -25,9 +27,11 @@
     "StructureStartMixin",
     "TagLoaderMixin",
     "TagManagerMixin",
+    "UnregisteredBlockStateTraceMixin",
     "WorldGenRegionMixin"
   ],
   "client": [
+    "CreateWorldScreenMixin",
     "CreateWorldScreenWorldTabMixin",
     "DrillBlockGetterMixin",
     "DrillLevelRendererMixin",

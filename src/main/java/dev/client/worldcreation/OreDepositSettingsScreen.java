@@ -1,22 +1,24 @@
 package dev.client.worldcreation;
 
 import dev.OresAndDrillsMod;
-import dev.config.OreDepositConfig;
+import dev.config.OreGenerationMode;
 import dev.config.OreOverrides;
+import dev.config.OreWorldDisabledOres;
 import dev.config.OreWorldSettingsApplier;
 import dev.world.level.levelgen.OreSpawnDimensions;
 import dev.world.level.levelgen.OreTags;
 import dev.world.level.levelgen.OreUnifier;
+import dev.world.level.levelgen.ReplaceOreFeaturesBiomeModifier;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Checkbox;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.worldselection.CreateWorldScreen;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationContext;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.Block;
 
 import java.util.ArrayList;
@@ -30,6 +32,9 @@ import java.util.Set;
 /** Factorio-style ore generation settings editor, opened from a button injected onto CreateWorldScreen. */
 public final class OreDepositSettingsScreen extends Screen {
     private static final int MARGIN = 20;
+    private static final int BUTTON_WIDTH = 100;
+    private static final int BUTTON_GAP = 5;
+    private static final int CORNER_MARGIN = 8;
 
     private final Screen parent;
 
@@ -40,6 +45,9 @@ public final class OreDepositSettingsScreen extends Screen {
     private record PendingEdits(Set<ResourceLocation> disabled, Map<ResourceLocation, OreOverrides.OreOverride> overrides,
                                 Set<String> dimensionDisabled) {
     }
+
+    /** Survives init() rebuilds (resize, mod priorities screen) like the list's pending edits. */
+    private boolean vanillaLikeGeneration = OreGenerationMode.vanillaLikeGeneration();
 
     public OreDepositSettingsScreen(Screen parent) {
         super(Component.translatable("gui.ores_and_drills.ore_settings.title"));
@@ -65,15 +73,30 @@ public final class OreDepositSettingsScreen extends Screen {
                 pending != null ? pending.dimensionDisabled() : null
         ));
 
+        int rowY = this.height - 28;
+        Checkbox vanillaLikeCheckbox = Checkbox.builder(
+                        Component.translatable("gui.ores_and_drills.ore_settings.vanilla_like"), this.font)
+                .selected(vanillaLikeGeneration)
+                .onValueChange((checkbox, value) -> vanillaLikeGeneration = value)
+                .tooltip(Tooltip.create(Component.translatable("gui.ores_and_drills.ore_settings.vanilla_like.tooltip")))
+                .build();
+        // Bottom-right corner, vertically centred on the button row.
+        int checkboxX = this.width - CORNER_MARGIN - vanillaLikeCheckbox.getWidth();
+        vanillaLikeCheckbox.setPosition(checkboxX, rowY + (20 - vanillaLikeCheckbox.getHeight()) / 2);
+
+        // On a narrow window the centred row would run under the checkbox; shift it left just enough.
+        int rowX = Math.max(CORNER_MARGIN,
+                Math.min(this.width / 2 - 155, checkboxX - BUTTON_GAP - (BUTTON_WIDTH * 3 + BUTTON_GAP * 2)));
         addRenderableWidget(Button.builder(Component.translatable("gui.ores_and_drills.mod_priorities.open_button"), button -> openModPriorities())
-                .bounds(this.width / 2 - 155, this.height - 28, 100, 20)
+                .bounds(rowX, rowY, BUTTON_WIDTH, 20)
                 .build());
         addRenderableWidget(Button.builder(Component.translatable("gui.ores_and_drills.ore_settings.done"), button -> onDone())
-                .bounds(this.width / 2 - 50, this.height - 28, 100, 20)
+                .bounds(rowX + BUTTON_WIDTH + BUTTON_GAP, rowY, BUTTON_WIDTH, 20)
                 .build());
         addRenderableWidget(Button.builder(Component.translatable("gui.ores_and_drills.ore_settings.cancel"), button -> onClose())
-                .bounds(this.width / 2 + 55, this.height - 28, 100, 20)
+                .bounds(rowX + (BUTTON_WIDTH + BUTTON_GAP) * 2, rowY, BUTTON_WIDTH, 20)
                 .build());
+        addRenderableWidget(vanillaLikeCheckbox);
     }
 
     private void openModPriorities() {
@@ -134,7 +157,8 @@ public final class OreDepositSettingsScreen extends Screen {
     private static List<Block> canonicalOreBlocks() {
         List<Block> blocks = new ArrayList<>();
         for (Block block : OreTags.oreBlocks()) {
-            if (OreUnifier.isCanonicalSource(block)) {
+            // Ignored ores are left to their own worldgen, so the mod has no settings for them.
+            if (OreUnifier.isCanonicalSource(block) && !ReplaceOreFeaturesBiomeModifier.isOreIgnored(block)) {
                 blocks.add(block);
             }
         }
@@ -155,52 +179,23 @@ public final class OreDepositSettingsScreen extends Screen {
         return overrides;
     }
 
+    /** Ores already switched off for the world being created (empty for a fresh world). */
     private static Set<ResourceLocation> configuredDisabled(List<Block> blocks) {
         Set<ResourceLocation> disabled = new LinkedHashSet<>();
-        List<? extends String> entries;
-        try {
-            entries = OreDepositConfig.DISABLED_DEPOSIT_ORES.get();
-        } catch (IllegalStateException exception) {
-            entries = OreDepositConfig.DISABLED_DEPOSIT_ORES.getDefault();
-        }
-
         for (Block block : blocks) {
             ResourceLocation id = BuiltInRegistries.BLOCK.getKey(block);
-            if (id != null && isDisabledBy(entries, block, id)) {
+            if (id != null && OreWorldDisabledOres.isDisabled(block)) {
                 disabled.add(id);
             }
         }
         return disabled;
     }
 
-    private static boolean isDisabledBy(List<? extends String> entries, Block block, ResourceLocation blockId) {
-        for (String raw : entries) {
-            if (raw == null || raw.isBlank()) {
-                continue;
-            }
-
-            boolean isTag = raw.charAt(0) == '#';
-            ResourceLocation id = ResourceLocation.tryParse(isTag ? raw.substring(1) : raw);
-            if (id == null) {
-                continue;
-            }
-
-            if (isTag) {
-                if (block.defaultBlockState().is(TagKey.create(Registries.BLOCK, id))) {
-                    return true;
-                }
-            } else if (blockId.equals(id)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private void onDone() {
         Set<ResourceLocation> disabled = oreOverrideList.collectDisabled();
         List<String> overrides = oreOverrideList.collectOverrides();
         List<String> dimensionOverrides = oreOverrideList.collectDimensionOverrides();
-        OreWorldSettingsApplier.applyOreWorldSettings(disabled, overrides, dimensionOverrides);
+        OreWorldSettingsApplier.applyOreWorldSettings(disabled, overrides, dimensionOverrides, vanillaLikeGeneration);
         this.minecraft.setScreen(parent);
     }
 

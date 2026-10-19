@@ -1,6 +1,7 @@
 package dev.config;
 
 import dev.OresAndDrillsMod;
+import dev.command.OreDepositLocateService;
 import dev.world.level.levelgen.DepositTerrainValidator;
 import dev.world.level.levelgen.OreDepositOrePalette;
 import dev.world.level.levelgen.OreDepositStonePalette;
@@ -23,6 +24,7 @@ public final class ConfigReloader {
         OreDepositStonePalette.clearAvailableCache();
         OreDepositOrePalette.clearAvailableCache();
         DepositTerrainValidator.clearCache();
+        OreDepositLocateService.invalidateAll();
         OreSettingsPresetManager.refreshActivePreset();
         OresAndDrillsMod.LOGGER.debug("Ores & Drills: config reloaded");
     }

@@ -45,13 +45,13 @@ public final class DrillMiningRecipes {
         return recipes.isEmpty() ? null : recipes.getFirst().value();
     }
 
-    public static boolean requiresFluidForPlayer(ServerLevel level, BlockState source) {
-        return requiresFluidForPlayer(level.getRecipeManager(), source);
+    public static boolean requiresFluidOutsideDrills(ServerLevel level, BlockState source) {
+        return requiresFluidOutsideDrills(level.getRecipeManager(), source);
     }
 
     /** Also used by client integrations with the server-synchronized recipe manager. */
-    public static boolean requiresFluidForPlayer(RecipeManager manager, BlockState source) {
-        // Any fluid recipe locks hand mining, independent of current machine/world conditions.
+    public static boolean requiresFluidOutsideDrills(RecipeManager manager, BlockState source) {
+        // Any fluid recipe locks every mining but the drills', independent of current machine/world conditions.
         return matching(manager, source).stream().anyMatch(holder -> holder.value().requiresFluid());
     }
 

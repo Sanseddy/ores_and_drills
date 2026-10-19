@@ -2,6 +2,8 @@ package dev.mixin;
 
 import dev.config.OreOverrides;
 import dev.config.OreDimensionOverrides;
+import dev.config.OreGenerationMode;
+import dev.config.OreWorldDisabledOres;
 import dev.world.level.storage.OreWorldSettingsHolder;
 import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.Lifecycle;
@@ -29,11 +31,17 @@ public abstract class PrimaryLevelDataMixin implements OreWorldSettingsHolder {
     private static final String ORES_AND_DRILLS_SETTINGS = "OresAndDrillsOreSettings";
     private static final String ORE_OVERRIDES = "OreOverrides";
     private static final String ORE_DIMENSION_OVERRIDES = "OreDimensionOverrides";
+    private static final String VANILLA_LIKE_GENERATION = "VanillaLikeGeneration";
+    private static final String DISABLED_ORES = "DisabledOres";
 
     @Unique
     private List<String> oresAndDrills$oreOverrides = List.of();
     @Unique
     private List<String> oresAndDrills$oreDimensionOverrides = List.of();
+    @Unique
+    private boolean oresAndDrills$vanillaLikeGeneration;
+    @Unique
+    private List<String> oresAndDrills$disabledOres = List.of();
 
     @Inject(
             method = "<init>(Lnet/minecraft/world/level/LevelSettings;Lnet/minecraft/world/level/levelgen/WorldOptions;Lnet/minecraft/world/level/storage/PrimaryLevelData$SpecialWorldProperty;Lcom/mojang/serialization/Lifecycle;)V",
@@ -48,6 +56,8 @@ public abstract class PrimaryLevelDataMixin implements OreWorldSettingsHolder {
     ) {
         oresAndDrills$setOreOverrides(OreOverrides.worldOverrides());
         oresAndDrills$setOreDimensionOverrides(OreDimensionOverrides.encoded());
+        oresAndDrills$setVanillaLikeGeneration(OreGenerationMode.vanillaLikeGeneration());
+        oresAndDrills$setDisabledOres(OreWorldDisabledOres.entries());
     }
 
     @Inject(method = "parse", at = @At("RETURN"))
@@ -74,6 +84,19 @@ public abstract class PrimaryLevelDataMixin implements OreWorldSettingsHolder {
                 .toList();
         holder.oresAndDrills$setOreDimensionOverrides(dimensionEntries);
         OreDimensionOverrides.setDisabled(dimensionEntries);
+        // Worlds saved before this setting existed keep the established per-cell TINY/SMALL planner.
+        boolean vanillaLike = tag.get(ORES_AND_DRILLS_SETTINGS)
+                .get(VANILLA_LIKE_GENERATION)
+                .asBoolean(false);
+        holder.oresAndDrills$setVanillaLikeGeneration(vanillaLike);
+        OreGenerationMode.setVanillaLikeGeneration(vanillaLike);
+        List<String> disabledOres = tag.get(ORES_AND_DRILLS_SETTINGS)
+                .get(DISABLED_ORES)
+                .asStream()
+                .flatMap(value -> value.asString().result().stream())
+                .toList();
+        holder.oresAndDrills$setDisabledOres(disabledOres);
+        OreWorldDisabledOres.set(disabledOres);
     }
 
     @Inject(method = "setTagData", at = @At("TAIL"))
@@ -94,6 +117,12 @@ public abstract class PrimaryLevelDataMixin implements OreWorldSettingsHolder {
             dimensionEntries.add(StringTag.valueOf(entry));
         }
         settings.put(ORE_DIMENSION_OVERRIDES, dimensionEntries);
+        settings.putBoolean(VANILLA_LIKE_GENERATION, oresAndDrills$vanillaLikeGeneration);
+        ListTag disabledOres = new ListTag();
+        for (String entry : oresAndDrills$disabledOres) {
+            disabledOres.add(StringTag.valueOf(entry));
+        }
+        settings.put(DISABLED_ORES, disabledOres);
         nbt.put(ORES_AND_DRILLS_SETTINGS, settings);
     }
 
@@ -115,5 +144,25 @@ public abstract class PrimaryLevelDataMixin implements OreWorldSettingsHolder {
     @Override
     public void oresAndDrills$setOreDimensionOverrides(List<String> entries) {
         oresAndDrills$oreDimensionOverrides = List.copyOf(entries == null ? List.of() : new ArrayList<>(entries));
+    }
+
+    @Override
+    public List<String> oresAndDrills$disabledOres() {
+        return oresAndDrills$disabledOres;
+    }
+
+    @Override
+    public void oresAndDrills$setDisabledOres(List<String> entries) {
+        oresAndDrills$disabledOres = List.copyOf(entries == null ? List.of() : new ArrayList<>(entries));
+    }
+
+    @Override
+    public boolean oresAndDrills$vanillaLikeGeneration() {
+        return oresAndDrills$vanillaLikeGeneration;
+    }
+
+    @Override
+    public void oresAndDrills$setVanillaLikeGeneration(boolean enabled) {
+        oresAndDrills$vanillaLikeGeneration = enabled;
     }
 }

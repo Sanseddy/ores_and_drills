@@ -19,4 +19,15 @@ record GenerationWriteBounds(int minimumX, int maximumX, int minimumZ, int maxim
     boolean contains(int x, int z) {
         return x >= minimumX && x <= maximumX && z >= minimumZ && z <= maximumZ;
     }
+
+    /** True when the whole square of {@code radius} blocks around {@code (x, z)} is inside. */
+    boolean containsSquare(int x, int z, int radius) {
+        return contains(x - radius, z - radius) && contains(x + radius, z + radius);
+    }
+
+    /** These bounds shrunk by {@code blocks} on every side; an exhausted area contains nothing. */
+    GenerationWriteBounds inset(int blocks) {
+        int margin = Math.max(0, blocks);
+        return new GenerationWriteBounds(minimumX + margin, maximumX - margin, minimumZ + margin, maximumZ - margin);
+    }
 }

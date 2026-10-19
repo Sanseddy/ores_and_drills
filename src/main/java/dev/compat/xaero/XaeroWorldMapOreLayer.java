@@ -1,6 +1,5 @@
 package dev.compat.xaero;
 
-import dev.client.map.DiscoveredOreDeposit;
 import dev.client.map.OreMapMarkers;
 import dev.client.map.OreMapPainter;
 import dev.client.map.OreMapPatch;
@@ -33,7 +32,6 @@ public final class XaeroWorldMapOreLayer
     private static final long HOVER_TIMEOUT_NANOS = 200_000_000L;
     private static MapElementRenderHandler registeredOn;
     private static OreMapPatch hoveredPatch;
-    private static DiscoveredOreDeposit.OreMapCell hoveredCell;
     private static long hoveredAt;
 
     private XaeroWorldMapOreLayer() {
@@ -62,8 +60,7 @@ public final class XaeroWorldMapOreLayer
         if (hoveredPatch == null || System.nanoTime() - hoveredAt > HOVER_TIMEOUT_NANOS || !OreMapMarkers.isEnabled()) {
             return;
         }
-        graphics.renderComponentTooltip(Minecraft.getInstance().font,
-                OreMapTooltip.lines(hoveredPatch, hoveredCell), mouseX, mouseY);
+        OreMapTooltip.renderMapLabel(graphics, hoveredPatch, mouseX, mouseY);
     }
 
     @Override
@@ -90,14 +87,12 @@ public final class XaeroWorldMapOreLayer
         context.dimension = info.mapDimension;
 
         hoveredPatch = null;
-        hoveredCell = null;
         if (info.mapDimension != null) {
             int mouseX = (int) Math.floor(info.mouseX);
             int mouseZ = (int) Math.floor(info.mouseZ);
             OreMapPatch patch = OreMapMarkers.patchAt(info.mapDimension.location(), mouseX, mouseZ);
             if (patch != null) {
                 hoveredPatch = patch;
-                hoveredCell = patch.cellAt(mouseX, mouseZ);
                 hoveredAt = System.nanoTime();
             }
         }
@@ -123,7 +118,7 @@ public final class XaeroWorldMapOreLayer
         // The pose is centred on the deposit centre in real screen pixels; one block is info.scale pixels.
         OreMapPainter.paint(graphics, patch,
                 OreMapTransform.axisAligned(info.scale, partialX, partialY),
-                OreMapPainter.TILE_ALPHA, null);
+                OreMapPainter.TILE_ALPHA, null, patch == hoveredPatch);
         return true;
     }
 

@@ -42,6 +42,7 @@ public final class ConfirmedDepositIndex extends SavedData {
     private final Set<Long> startingForcedPlans = new HashSet<>();
     private final Map<Long,CompoundTag> serializedForcedPlans=new HashMap<>();
     private final Map<Long, Set<Long>> forcedByChunk = new HashMap<>();
+    private long revision;
 
     private ConfirmedDepositIndex() {
     }
@@ -181,6 +182,7 @@ public final class ConfirmedDepositIndex extends SavedData {
         }
         byCell.computeIfAbsent(cellKey(deposit.center()), ignored -> new ArrayList<>()).add(deposit);
         if (!deposit.equals(previous)) {
+            revision++;
             setDirty();
             return true;
         }
@@ -206,6 +208,9 @@ public final class ConfirmedDepositIndex extends SavedData {
         int minCellZ = Math.floorDiv(origin.getZ() - radius, CELL_SIZE);
         int maxCellZ = Math.floorDiv(origin.getZ() + radius, CELL_SIZE);
         double radiusSqr = (double) radius * radius;
+        // Blocks take their host rock's ore variant (deepslate ore in deepslate) while a record keeps one
+        // representative ore, so the filter matches by material.
+        String filterMaterial = oreFilter == null ? "" : OreUnifier.materialKeyFor(oreFilter);
         List<ConfirmedDeposit> result = new ArrayList<>();
         for (int cellX = minCellX; cellX <= maxCellX; cellX++) {
             for (int cellZ = minCellZ; cellZ <= maxCellZ; cellZ++) {
@@ -214,7 +219,9 @@ public final class ConfirmedDepositIndex extends SavedData {
                     continue;
                 }
                 for (ConfirmedDeposit record : records) {
-                    if ((oreFilter == null || oreFilter.equals(record.oreId()))
+                    if ((oreFilter == null || oreFilter.equals(record.oreId())
+                            || !filterMaterial.isEmpty()
+                            && filterMaterial.equals(OreUnifier.materialKeyFor(record.oreId())))
                             && (tierFilter == null || tierFilter == record.tier())
                             && horizontalDistanceSqr(origin, record.center()) <= radiusSqr) {
                         result.add(record);
@@ -226,12 +233,19 @@ public final class ConfirmedDepositIndex extends SavedData {
         return List.copyOf(result);
     }
 
-    /** Keeps the authoritative record alive until its final tracked block is removed. */
-    public synchronized void markBlockDepleted(BlockPos pos, ResourceLocation oreId) {
+    /**
+     * Keeps the authoritative record alive until its final tracked block is removed. Only a record of the
+     * block's own tier may be decremented: unrecorded (vanilla-like) small deposits must not drain a
+     * neighbouring record of the same ore.
+     */
+    public synchronized void markBlockDepleted(BlockPos pos, ResourceLocation oreId, int tier) {
         int radius = OreDepositFeature.MAX_DEPOSIT_FOOTPRINT_DIAMETER;
         ConfirmedDeposit nearest = null;
         double nearestDistance = Double.MAX_VALUE;
         for (ConfirmedDeposit candidate : recordsWithin(pos, radius, oreId)) {
+            if (candidate.tier().index() != tier) {
+                continue;
+            }
             int verticalReach = candidate.tier().index() >= OreDepositFeature.TIER_MEDIUM
                     ? CompactDepositGeometry.MAX_VERTICAL_REACH : OreDepositFeature.MAX_UNDERGROUND_DEPTH;
             if (Math.abs(candidate.center().getY() - pos.getY()) > verticalReach) {
@@ -259,7 +273,13 @@ public final class ConfirmedDepositIndex extends SavedData {
             byId.put(updated.depositId(), updated);
             byCell.computeIfAbsent(cellKey(updated.center()), ignored -> new ArrayList<>()).add(updated);
         }
+        revision++;
         setDirty();
+    }
+
+    /** Monotonic in-memory version used to keep locate-result caches coherent with mining/worldgen. */
+    public synchronized long revision() {
+        return revision;
     }
 
     static ConfirmedDepositIndex load(CompoundTag tag, HolderLookup.Provider registries) {

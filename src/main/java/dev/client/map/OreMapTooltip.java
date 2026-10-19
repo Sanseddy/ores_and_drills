@@ -3,6 +3,9 @@ package dev.client.map;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -48,4 +51,22 @@ public final class OreMapTooltip {
     public static Component oreName(OreMapPatch patch) {
         return BuiltInRegistries.BLOCK.get(patch.oreId()).getName();
     }
+
+    /** Factorio-style map label: ore item, localized name and a compact live total. */
+    public static void renderMapLabel(GuiGraphics graphics, OreMapPatch patch, int mouseX, int mouseY) {
+        Minecraft minecraft = Minecraft.getInstance();
+        ItemStack icon = BuiltInRegistries.BLOCK.get(patch.oreId()).asItem().getDefaultInstance();
+        Component text = oreName(patch).copy().append(" " + OreMapPalette.compactAmount(patch.deposit().remainingOre()));
+        int x = mouseX + 10;
+        int y = mouseY - 8;
+        graphics.pose().pushPose();
+        graphics.pose().translate(0.0F, 0.0F, 500.0F);
+        if (!icon.isEmpty()) {
+            graphics.renderItem(icon, x, y);
+            x += 18;
+        }
+        graphics.drawString(minecraft.font, text, x, y + 4, 0xFFFFFFFF, true);
+        graphics.pose().popPose();
+    }
+
 }

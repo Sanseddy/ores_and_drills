@@ -295,7 +295,7 @@ public class OresAndDrillsJadePlugin implements IWailaPlugin {
     }
 
     private static boolean requiresMiningFluid(BlockAccessor accessor, BlockState oreState) {
-        return DrillMiningRecipes.requiresFluidForPlayer(accessor.getLevel().getRecipeManager(), oreState);
+        return DrillMiningRecipes.requiresFluidOutsideDrills(accessor.getLevel().getRecipeManager(), oreState);
     }
 
     private static void appendFluidLockedTooltip(ITooltip tooltip) {

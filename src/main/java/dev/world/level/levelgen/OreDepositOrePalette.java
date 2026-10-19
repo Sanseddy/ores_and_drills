@@ -18,6 +18,7 @@ public final class OreDepositOrePalette {
     private static volatile List<ResourceLocation> availableIdsCache;
     private static volatile List<ResourceLocation> clientIds = List.of();
     private static volatile List<ResourceLocation> clientDropIds = List.of();
+    private static volatile boolean clientVanillaLikeGeneration;
     private static final AtomicInteger CLIENT_REVISION = new AtomicInteger();
 
     private OreDepositOrePalette() {
@@ -98,20 +99,31 @@ public final class OreDepositOrePalette {
      */
     public static synchronized boolean applyClientPalette(
             List<ResourceLocation> ids,
-            List<ResourceLocation> dropIds
+            List<ResourceLocation> dropIds,
+            boolean vanillaLikeGeneration
     ) {
         List<ResourceLocation> newIds = List.copyOf(ids.subList(0, Math.min(ids.size(), MAX_ORES)));
         ResourceLocation airId = BuiltInRegistries.ITEM.getKey(Items.AIR);
         List<ResourceLocation> newDropIds = java.util.stream.IntStream.range(0, newIds.size())
                 .mapToObj(index -> index < dropIds.size() ? dropIds.get(index) : airId)
                 .toList();
-        if (newIds.equals(clientIds) && newDropIds.equals(clientDropIds)) {
+        if (newIds.equals(clientIds) && newDropIds.equals(clientDropIds)
+                && vanillaLikeGeneration == clientVanillaLikeGeneration) {
             return false;
         }
         clientIds = newIds;
         clientDropIds = newDropIds;
+        clientVanillaLikeGeneration = vanillaLikeGeneration;
         CLIENT_REVISION.incrementAndGet();
         return true;
+    }
+
+    /**
+     * Whether the server world uses vanilla-like generation; its tiny and small deposits then show their ore's
+     * specks where the original ore texture has them instead of rearranged.
+     */
+    public static boolean clientVanillaLikeGeneration() {
+        return clientVanillaLikeGeneration;
     }
 
     public static int clientRevision() {

@@ -271,10 +271,15 @@ public final class CompactDepositGameTests {
     }
     private static void prepare(ServerLevel level,OreDepositFeature.CompactPlan plan) {
         var shape=new CompactDepositGeometry(plan.candidate().shapeSeed(),plan.candidate().tier()==OreDepositTier.LARGE,plan.candidate().geometrySize());
+        // Finish natural generation of every touched chunk and its neighbours first: decorating a neighbour
+        // later writes its own TINY/SMALL deposits into cells this fixture has already cleared.
+        shape.cells().stream().map(c -> new ChunkPos(plan.candidate().center().offset(c.x(),c.y(),c.z()))).distinct()
+                .forEach(chunk -> {for(int dx=-1;dx<=1;dx++)for(int dz=-1;dz<=1;dz++)level.getChunk(chunk.x+dx,chunk.z+dz);});
         for(var c:shape.cells()) {
             BlockPos pos=plan.candidate().center().offset(c.x(),c.y(),c.z());
             level.getChunkAt(pos).getData(ModAttachments.ORE_DEPOSITS).remove(pos);
-            level.setBlock(pos,Blocks.STONE.defaultBlockState(),Block.UPDATE_NONE);
+            // A natural deposit block is protected against plain replacement; the fixture clears it explicitly.
+            OreDepositRemovalGuard.runAuthorized(level,pos,() -> level.setBlock(pos,Blocks.STONE.defaultBlockState(),Block.UPDATE_NONE));
         }
     }
 
@@ -403,7 +408,7 @@ public final class CompactDepositGameTests {
         // Make a second invocation in the isolated GameTest world start from the same fixture.
         ConfirmedDepositIndex index = ConfirmedDepositIndex.get(level);
         for(var old:index.recordsWithin(center,1,oreId,tier)) {
-            for(int i=0;i<old.placedBlocks();i++)index.markBlockDepleted(center,oreId);
+            for(int i=0;i<old.placedBlocks();i++)index.markBlockDepleted(center,oreId,tier.index());
         }
         prepare(level,plan);
         Set<ChunkPos> touched = new HashSet<>();

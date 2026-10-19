@@ -8,7 +8,9 @@ import dev.client.map.OreMapTooltip;
 import journeymap.api.v2.client.IClientAPI;
 import journeymap.api.v2.client.IClientPlugin;
 import journeymap.api.v2.client.display.PolygonOverlay;
+import journeymap.api.v2.client.display.IOverlayListener;
 import journeymap.api.v2.client.fullscreen.IThemeButton;
+import journeymap.api.v2.client.event.FullscreenRenderEvent;
 import journeymap.api.v2.client.model.MapPolygonWithHoles;
 import journeymap.api.v2.client.model.ShapeProperties;
 import journeymap.api.v2.client.util.PolygonHelper;
@@ -19,6 +21,10 @@ import net.minecraft.client.resources.language.I18n;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.core.BlockPos;
+import journeymap.api.v2.client.util.UIState;
+
+import java.awt.geom.Point2D;
 
 import java.awt.geom.Area;
 import java.awt.geom.Path2D;
@@ -44,9 +50,14 @@ public final class OreMapJourneyMapPlugin implements IClientPlugin {
     private static IThemeButton toggleButton;
     private static int syncedRevision;
     private static final int RETRY_TICKS = 100;
+    /** Amounts change every tick while something mines; rebuilding polygons twice a second is plenty. */
+    private static final int MIN_TICKS_BETWEEN_SYNCS = 10;
     private static Object syncedLevel;
+    private static boolean syncedEnabled;
+    private static int ticksSinceSync;
     private static int retryCooldown;
     private static boolean warned;
+    private static Shown hoveredShown;
 
     @Override
     public String getModId() {
@@ -62,6 +73,17 @@ public final class OreMapJourneyMapPlugin implements IClientPlugin {
                             OreMapMarkers.toggle();
                             button.setToggled(OreMapMarkers.isEnabled());
                         }));
+        FullscreenEventRegistry.FULLSCREEN_RENDER_EVENT.subscribe(
+                OresAndDrillsMod.MOD_ID, OreMapJourneyMapPlugin::renderHoverLabel
+        );
+    }
+
+    private static void renderHoverLabel(FullscreenRenderEvent event) {
+        if (hoveredShown != null && hoveredShown.highlighted && OreMapMarkers.isEnabled()) {
+            OreMapTooltip.renderMapLabel(
+                    event.getGraphics(), hoveredShown.patch(), event.getMouseX(), event.getMouseY()
+            );
+        }
     }
 
     /** Mirrors the discovery store into JourneyMap overlays whenever it or the toggle changes. */
@@ -76,7 +98,10 @@ public final class OreMapJourneyMapPlugin implements IClientPlugin {
             return;
         }
         int revision = OreMapMarkers.revision();
-        if (minecraft.level == syncedLevel && revision == syncedRevision) {
+        ticksSinceSync++;
+        // A new level or a toggle is shown at once; changed amounts wait for the next sync slot.
+        boolean urgent = minecraft.level != syncedLevel || OreMapMarkers.isEnabled() != syncedEnabled;
+        if (!urgent && (revision == syncedRevision || ticksSinceSync < MIN_TICKS_BETWEEN_SYNCS)) {
             return;
         }
         try {
@@ -91,6 +116,8 @@ public final class OreMapJourneyMapPlugin implements IClientPlugin {
             sync();
             syncedLevel = minecraft.level;
             syncedRevision = revision;
+            syncedEnabled = OreMapMarkers.isEnabled();
+            ticksSinceSync = 0;
         } catch (Exception exception) {
             // JourneyMap may still be setting up the world; try again shortly instead of giving up.
             if (!warned) {
@@ -118,25 +145,61 @@ public final class OreMapJourneyMapPlugin implements IClientPlugin {
                 continue;
             }
             if (shown != null) {
+                if (hoveredShown == shown) {
+                    hoveredShown = null;
+                }
                 shown.overlays().forEach(api::remove);
             }
-            List<PolygonOverlay> overlays = overlaysFor(patch);
-            for (PolygonOverlay overlay : overlays) {
+            Shown replacement = overlaysFor(patch);
+            for (PolygonOverlay overlay : replacement.overlays()) {
                 api.show(overlay);
             }
-            SHOWN.put(patch.id(), new Shown(patch, overlays));
+            SHOWN.put(patch.id(), replacement);
         }
         SHOWN.entrySet().removeIf(entry -> {
             if (present.contains(entry.getKey())) {
                 return false;
             }
             entry.getValue().overlays().forEach(api::remove);
+            if (hoveredShown == entry.getValue()) {
+                hoveredShown = null;
+            }
             return true;
         });
     }
 
     /** One flat-coloured polygon (with holes) per connected part of the patch, like Factorio's map tiles. */
-    private static List<PolygonOverlay> overlaysFor(OreMapPatch patch) {
+    private static Shown overlaysFor(OreMapPatch patch) {
+        ResourceKey<net.minecraft.world.level.Level> dimension = ResourceKey.create(Registries.DIMENSION, patch.dimension());
+        String title = OreMapTooltip.title(patch);
+        List<PolygonOverlay> base = polygonsFor(patch, dimension, title, false);
+        List<PolygonOverlay> checker = polygonsFor(patch, dimension, title, true);
+        ArrayList<PolygonOverlay> all = new ArrayList<>(base.size() + checker.size());
+        all.addAll(base);
+        all.addAll(checker);
+        Shown shown = new Shown(patch, List.copyOf(all), List.copyOf(checker));
+        IOverlayListener listener = new IOverlayListener() {
+            @Override
+            public void onMouseMove(UIState mapState, Point2D.Double mousePosition, BlockPos blockPosition) {
+                shown.setHighlighted(true);
+                hoveredShown = shown;
+            }
+
+            @Override
+            public void onMouseOut(UIState mapState, Point2D.Double mousePosition, BlockPos blockPosition) {
+                shown.setHighlighted(false);
+                if (hoveredShown == shown) {
+                    hoveredShown = null;
+                }
+            }
+        };
+        all.forEach(overlay -> overlay.setOverlayListener(listener));
+        return shown;
+    }
+
+    private static List<PolygonOverlay> polygonsFor(OreMapPatch patch,
+                                                     ResourceKey<net.minecraft.world.level.Level> dimension,
+                                                     String title, boolean outline) {
         int centerX = patch.center().getX();
         int centerZ = patch.center().getZ();
         int extent = patch.extent();
@@ -144,7 +207,8 @@ public final class OreMapJourneyMapPlugin implements IClientPlugin {
         for (int z = centerZ - extent; z < centerZ + extent; z++) {
             int runStart = Integer.MIN_VALUE;
             for (int x = centerX - extent; x <= centerX + extent; x++) {
-                boolean filled = x < centerX + extent && patch.cellAt(x, z) != null;
+                boolean filled = x < centerX + extent && patch.cellAt(x, z) != null
+                        && (outline || ((x + z) & 1) == 0);
                 if (filled && runStart == Integer.MIN_VALUE) {
                     runStart = x;
                 } else if (!filled && runStart != Integer.MIN_VALUE) {
@@ -156,23 +220,55 @@ public final class OreMapJourneyMapPlugin implements IClientPlugin {
 
         ShapeProperties shape = new ShapeProperties()
                 .setFillColor(patch.baseColor())
-                .setFillOpacity(OreMapPainter.TILE_ALPHA)
+                .setFillOpacity(outline ? 0.0F : OreMapPainter.TILE_ALPHA)
+                .setStrokeColor(0xFFFFFF)
                 .setStrokeOpacity(0.0F)
-                .setStrokeWidth(0.0F);
-        ResourceKey<net.minecraft.world.level.Level> dimension = ResourceKey.create(Registries.DIMENSION, patch.dimension());
-        String title = OreMapTooltip.title(patch);
+                .setStrokeWidth(outline ? 2.0F : 0.0F);
         List<PolygonOverlay> overlays = new ArrayList<>();
         for (MapPolygonWithHoles polygon : PolygonHelper.createPolygonFromArea(new Area(rows), patch.center().getY())) {
             PolygonOverlay overlay = new PolygonOverlay(OresAndDrillsMod.MOD_ID, dimension, shape, polygon);
             overlay.setTitle(title)
                     .setOverlayGroupName(I18n.get("gui.ores_and_drills.ore_map.group"))
                     .setMinZoom(0)
-                    .setDisplayOrder(-1000);
+                    .setDisplayOrder(outline ? -999 : -1000);
             overlays.add(overlay);
         }
         return overlays;
     }
 
-    private record Shown(OreMapPatch patch, List<PolygonOverlay> overlays) {
+    private static final class Shown {
+        private final OreMapPatch patch;
+        private final List<PolygonOverlay> overlays;
+        private final List<PolygonOverlay> outlineOverlays;
+        private boolean highlighted;
+
+        private Shown(OreMapPatch patch, List<PolygonOverlay> overlays, List<PolygonOverlay> outlineOverlays) {
+            this.patch = patch;
+            this.overlays = overlays;
+            this.outlineOverlays = outlineOverlays;
+        }
+
+        OreMapPatch patch() {
+            return patch;
+        }
+
+        List<PolygonOverlay> overlays() {
+            return overlays;
+        }
+
+        void setHighlighted(boolean value) {
+            if (highlighted == value || api == null) {
+                return;
+            }
+            highlighted = value;
+            for (PolygonOverlay overlay : outlineOverlays) {
+                overlay.getShapeProperties().setStrokeOpacity(value ? 1.0F : 0.0F);
+                try {
+                    api.show(overlay);
+                } catch (Exception exception) {
+                    OresAndDrillsMod.LOGGER.debug("Could not refresh JourneyMap ore hover", exception);
+                }
+            }
+        }
     }
 }

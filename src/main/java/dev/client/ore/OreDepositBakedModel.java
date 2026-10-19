@@ -7,6 +7,7 @@ import dev.registry.ModBlocks;
 import dev.world.level.levelgen.OreDepositData;
 import dev.world.level.levelgen.OreDepositOrePalette;
 import dev.world.level.levelgen.OreDepositStonePalette;
+import dev.world.level.levelgen.OreDepositTier;
 import dev.world.level.levelgen.OreVisualStages;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderType;
@@ -207,13 +208,24 @@ public final class OreDepositBakedModel extends BakedModelWrapper<BakedModel> {
             return List.of();
         }
 
+        int stage = visual != null ? OreVisualStages.clamp(visual.stage()) : OreVisualStages.NORMAL_STAGE;
+        int initialStage = visual != null ? OreVisualStages.clamp(visual.initialStage()) : OreVisualStages.NORMAL_STAGE;
+        if (visual != null
+                && visual.tier() < OreDepositTier.MEDIUM.index()
+                && OreDepositOrePalette.clientVanillaLikeGeneration()) {
+            // Small vanilla-like blocks hold about one ore each, which the absolute ranges would show as nearly
+            // empty. An untouched block shows every speck of the ore texture instead; mining removes specks
+            // from there.
+            stage = OreVisualStages.clamp(OreVisualStages.NORMAL_STAGE + stage - initialStage);
+            initialStage = OreVisualStages.NORMAL_STAGE;
+        }
         Key key = new Key(
                 OreDepositStonePalette.clientRevision(),
                 visual != null ? Math.max(0, visual.baseIndex()) : 0,
                 visual != null ? visual.oreIndex() : -1,
                 variantFor(packedPos, side),
-                visual != null ? OreVisualStages.clamp(visual.stage()) : OreVisualStages.NORMAL_STAGE,
-                visual != null ? OreVisualStages.clamp(visual.initialStage()) : OreVisualStages.NORMAL_STAGE,
+                stage,
+                initialStage,
                 exhausted || visual != null && visual.depleted(),
                 pass,
                 side

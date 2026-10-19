@@ -11,25 +11,31 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Applies ore-generation settings chosen on the "Ore Settings" screen straight into the single global
- * common config. Since the config is common (not per-world), this now applies immediately when the screen
- * is closed, rather than deferring to a per-world config-load event — it affects every world from then on.
- * Per-ore frequency/size/richness is captured by {@code PrimaryLevelDataMixin} and saved inside the new
- * world's {@code level.dat}, rather than being written into the common config.
+ * Holds the ore-generation settings chosen on the "Ore Settings" screen for the world being created:
+ * disabled ores, per-ore frequency/size/richness, ore/dimension exclusions and the vanilla-like mode.
+ * {@code PrimaryLevelDataMixin} captures them into that world's {@code level.dat}; nothing is written to
+ * the common config, so they never leak into other worlds.
  */
 public final class OreWorldSettingsApplier {
     private OreWorldSettingsApplier() {
     }
 
     public static void applyOreWorldSettings(Set<ResourceLocation> disabledOres, List<String> overrides,
-                                             List<String> dimensionOverrides) {
-        OreDepositConfig.DISABLED_DEPOSIT_ORES.set(encodeDisabled(disabledOres));
+                                             List<String> dimensionOverrides, boolean vanillaLikeGeneration) {
+        OreWorldDisabledOres.set(encodeDisabled(disabledOres));
         OreOverrides.setWorldOverrides(overrides);
         OreDimensionOverrides.setDisabled(dimensionOverrides);
-        OreDepositConfig.SPEC.save();
-        ConfigReloader.reload();
+        OreGenerationMode.setVanillaLikeGeneration(vanillaLikeGeneration);
 
         OresAndDrillsMod.LOGGER.debug("Ore deposits: applied ore settings from the Ore Settings screen");
+    }
+
+    /**
+     * Starts a new world from default ore settings. The values above stay in memory after a world is created
+     * or opened, so without this reset the next new world would silently inherit them.
+     */
+    public static void resetForNewWorld() {
+        applyOreWorldSettings(Set.of(), List.of(), List.of(), false);
     }
 
     /** Keeps the active datapack preset selection in sync whenever the common config (re)loads. */

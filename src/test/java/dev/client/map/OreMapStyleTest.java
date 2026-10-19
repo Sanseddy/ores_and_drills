@@ -132,4 +132,22 @@ class OreMapStyleTest {
         assertEquals((pc * dx + ps * dz) * zoom, transform.y(dx, dz), 1.0E-9D);
         assertEquals(zoom, transform.pixelsPerBlock(), 1.0E-9D);
     }
+
+    @Test
+    void factorioGridAlternatesAtEveryTileAndHandlesNegativeCoordinates() {
+        assertTrue(OreMapPainter.checkerFilled(0, 0, 1));
+        assertTrue(!OreMapPainter.checkerFilled(1, 0, 1));
+        assertTrue(!OreMapPainter.checkerFilled(-1, 0, 1));
+        assertTrue(OreMapPainter.checkerFilled(-1, -1, 1));
+        assertTrue(OreMapPainter.checkerFilled(2, 2, 2));
+    }
+
+    @Test
+    void factorioLabelUsesCompactAmounts() {
+        assertEquals("999", OreMapPalette.compactAmount(999));
+        assertEquals("1.2k", OreMapPalette.compactAmount(1_234));
+        assertEquals("6.9M", OreMapPalette.compactAmount(6_900_000));
+        assertEquals("125M", OreMapPalette.compactAmount(125_000_000));
+    }
+
 }

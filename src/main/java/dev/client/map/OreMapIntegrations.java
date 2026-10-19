@@ -43,6 +43,7 @@ public final class OreMapIntegrations {
     }
 
     public static void tick() {
+        OreMapMarkers.tick();
         OreMapDiscoveryClient.tick();
         if (xaeroWorldMap) {
             try {
@@ -81,6 +82,9 @@ public final class OreMapIntegrations {
         boolean overButton = button.contains(mouseX, mouseY);
         if (xaeroWorldMap && !overButton && XaeroWorldMapOreLayer.isMapScreen(screen)) {
             XaeroWorldMapOreLayer.renderTooltip(graphics, mouseX, mouseY);
+        }
+        if (ftbChunks && !overButton && FtbChunksOreLayer.isLargeMap(screen)) {
+            FtbChunksOreLayer.renderLabel(graphics, mouseX, mouseY);
         }
         button.render(graphics, overButton);
         if (overButton) {

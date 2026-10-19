@@ -1,6 +1,7 @@
 package dev.client.map;
 
 import dev.client.ore.OreDepositOreColors;
+import dev.world.level.levelgen.OreTags;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -29,9 +30,9 @@ public final class OreMapColors {
     private static int resolve(ResourceLocation oreId) {
         if (BuiltInRegistries.BLOCK.containsKey(oreId)) {
             Block block = BuiltInRegistries.BLOCK.get(oreId);
-            Integer tagged = block.defaultBlockState().getTags()
-                    .filter(tag -> tag.location().getNamespace().equals("c"))
-                    .map(tag -> tag.location().getPath())
+            Integer tagged = OreTags.oreTagIds(block)
+                    .filter(location -> location.getNamespace().equals("c"))
+                    .map(ResourceLocation::getPath)
                     .filter(path -> path.startsWith("ores/"))
                     .map(path -> OreMapPalette.materialColor(path.substring("ores/".length())))
                     .filter(color -> color != null)

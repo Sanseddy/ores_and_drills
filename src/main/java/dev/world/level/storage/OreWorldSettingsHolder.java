@@ -11,4 +11,12 @@ public interface OreWorldSettingsHolder {
     List<String> oresAndDrills$oreDimensionOverrides();
 
     void oresAndDrills$setOreDimensionOverrides(List<String> entries);
+
+    List<String> oresAndDrills$disabledOres();
+
+    void oresAndDrills$setDisabledOres(List<String> entries);
+
+    boolean oresAndDrills$vanillaLikeGeneration();
+
+    void oresAndDrills$setVanillaLikeGeneration(boolean enabled);
 }

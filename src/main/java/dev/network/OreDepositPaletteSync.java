@@ -1,9 +1,12 @@
 package dev.network;
 
+import dev.config.OreGenerationMode;
 import dev.world.level.levelgen.OreDepositOrePalette;
+import dev.world.level.levelgen.OreGenerationSummary;
 import dev.world.level.levelgen.OreDepositPaletteData;
 import dev.world.level.levelgen.OreDepositStonePalette;
 import dev.world.level.levelgen.OreTags;
+import dev.world.level.storage.OreMapWorldId;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -29,8 +32,18 @@ public final class OreDepositPaletteSync {
         OreDepositPaletteData data = OreDepositPaletteData.get(level);
         data.refreshFromRegistries();
         List<ResourceLocation> ores = data.ores();
-        OreDepositPalettePayload payload = new OreDepositPalettePayload(data.bases(), ores, dropIds(level, ores));
-        event.getRelevantPlayers().forEach(player -> PacketDistributor.sendToPlayer(player, payload));
+        OreDepositPalettePayload payload = new OreDepositPalettePayload(
+                data.bases(), ores, dropIds(level, ores), OreGenerationMode.vanillaLikeGeneration()
+        );
+        OreMapWorldIdPayload worldId = new OreMapWorldIdPayload(OreMapWorldId.get(level).id());
+        OreGenerationSummaryPayload summary = new OreGenerationSummaryPayload(
+                OreGenerationSummary.entries(), OreGenerationSummary.replacedFeatures(level.registryAccess())
+        );
+        event.getRelevantPlayers().forEach(player -> {
+            PacketDistributor.sendToPlayer(player, worldId);
+            PacketDistributor.sendToPlayer(player, payload);
+            PacketDistributor.sendToPlayer(player, summary);
+        });
     }
 
     private static List<ResourceLocation> dropIds(ServerLevel level, List<ResourceLocation> oreIds) {

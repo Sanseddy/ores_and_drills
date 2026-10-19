@@ -7,6 +7,7 @@ import dev.OresAndDrillsMod;
 import dev.registry.ModBlockTags;
 import dev.registry.ModWorldgen;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -14,6 +15,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.RandomSource;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.biome.Biome;
@@ -36,6 +38,7 @@ import net.minecraft.server.level.ServerLevel;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.IdentityHashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -129,6 +132,9 @@ public record DataDrivenOreDepositBiomeModifier(
                 biomeId, ignored -> new java.util.concurrent.CopyOnWriteArrayList<>()
         );
         for (Block ore : matchingUnifiedOres()) {
+            if (ReplaceOreFeaturesBiomeModifier.isOreDisabled(ore) || ReplaceOreFeaturesBiomeModifier.isOreIgnored(ore)) {
+                continue;
+            }
             for (Map.Entry<String, TierSettings> entry : sizes.entrySet()) {
                 OreDepositTier tier = OreDepositTier.fromName(entry.getKey()).orElseThrow();
                 if (!isWinner(biome, ore, tier)) {
@@ -291,6 +297,117 @@ public record DataDrivenOreDepositBiomeModifier(
         return result;
     }
 
+    /** Resumable, order-identical counterpart of BiomeSource.findClosestBiome3d for /locate. */
+    static AllowedBiomeSearch beginClosestAllowedBiomeSearch(
+            ServerLevel level,
+            BlockPos origin,
+            Block ore,
+            OreDepositTier tier,
+            int radius
+    ) {
+        List<DataDrivenOreDepositBiomeModifier> rules = loadedRules(level).stream()
+                .filter(rule -> rule.matchesUnifiedOre(ore)
+                        && rule.matchesDimension(level.dimension().location())
+                        && rule.settings(tier).isPresent())
+                .toList();
+        if (rules.isEmpty()) return AllowedBiomeSearch.completed(null);
+        Set<ResourceLocation> exactBiomeIds = rules.stream()
+                .flatMap(rule -> rule.biomes.stream())
+                .filter(selector -> !selector.startsWith("#"))
+                .map(ResourceLocation::tryParse)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        BlockPos optionalHint = OptionalBiomeRegionHints.findClosest(level, origin, radius, exactBiomeIds);
+        if (optionalHint != null) return AllowedBiomeSearch.completed(optionalHint);
+        boolean possible = level.getChunkSource().getGenerator().getBiomeSource().possibleBiomes()
+                .stream().anyMatch(biome -> rules.stream().anyMatch(rule -> rule.matchesBiome(biome)));
+        if (!possible) return AllowedBiomeSearch.completed(null);
+        return new AllowedBiomeSearch(level, origin, radius, rules);
+    }
+
+    static final class AllowedBiomeSearch {
+        private static final int HORIZONTAL_STEP = 128;
+        private static final int VERTICAL_STEP = 16;
+        private final ServerLevel level;
+        private final BlockPos origin;
+        private final List<DataDrivenOreDepositBiomeModifier> rules;
+        private final Iterator<BlockPos.MutableBlockPos> horizontalOffsets;
+        private final int[] sampleYs;
+        private BlockPos.MutableBlockPos horizontalOffset;
+        private int yIndex;
+        private boolean done;
+        private BlockPos result;
+
+        private AllowedBiomeSearch(
+                ServerLevel level,
+                BlockPos origin,
+                int radius,
+                List<DataDrivenOreDepositBiomeModifier> rules
+        ) {
+            this.level = level;
+            this.origin = origin.immutable();
+            this.rules = rules;
+            this.horizontalOffsets = BlockPos.spiralAround(
+                    BlockPos.ZERO, Math.floorDiv(radius, HORIZONTAL_STEP), Direction.EAST, Direction.SOUTH
+            ).iterator();
+            this.sampleYs = Mth.outFromOrigin(
+                    origin.getY(), level.getMinBuildHeight() + 1, level.getMaxBuildHeight(), VERTICAL_STEP
+            ).toArray();
+        }
+
+        private AllowedBiomeSearch(BlockPos result) {
+            this.level = null;
+            this.origin = BlockPos.ZERO;
+            this.rules = List.of();
+            this.horizontalOffsets = java.util.Collections.emptyIterator();
+            this.sampleYs = new int[0];
+            this.result = result;
+            this.done = true;
+        }
+
+        static AllowedBiomeSearch completed(BlockPos result) {
+            return new AllowedBiomeSearch(result);
+        }
+
+        void advance(long deadlineNanos, int maximumSamples) {
+            int samples = 0;
+            while (!done && samples++ < maximumSamples && System.nanoTime() < deadlineNanos) {
+                if (horizontalOffset == null) {
+                    if (!horizontalOffsets.hasNext()) {
+                        done = true;
+                        return;
+                    }
+                    horizontalOffset = horizontalOffsets.next();
+                    yIndex = 0;
+                }
+                int x = origin.getX() + horizontalOffset.getX() * HORIZONTAL_STEP;
+                int z = origin.getZ() + horizontalOffset.getZ() * HORIZONTAL_STEP;
+                int y = sampleYs[yIndex++];
+                Holder<Biome> biome = BiomeNoiseCache.get(
+                        level,
+                        net.minecraft.core.QuartPos.fromBlock(x),
+                        net.minecraft.core.QuartPos.fromBlock(y),
+                        net.minecraft.core.QuartPos.fromBlock(z)
+                );
+                if (rules.stream().anyMatch(rule -> rule.matchesBiome(biome))) {
+                    result = new BlockPos(x, y, z);
+                    done = true;
+                    return;
+                }
+                if (yIndex >= sampleYs.length) horizontalOffset = null;
+            }
+        }
+
+        boolean isDone() {
+            return done;
+        }
+
+        BlockPos result() {
+            if (!done) throw new IllegalStateException("Biome search has not completed");
+            return result;
+        }
+    }
+
     /** Returns the exact per-cell plans used by the feature, including priority and fractional slots. */
     static List<PlannedDeposit> plansForCell(
             ServerLevel level,
@@ -371,7 +488,7 @@ public record DataDrivenOreDepositBiomeModifier(
 
     /** Shared remote-planning biome test used by both generation planning and /locate. */
     static boolean matchesPlannedBiome(ServerLevel level, BlockPos pos, ResourceLocation biomeId) {
-        Holder<Biome> noiseBiome = level.getUncachedNoiseBiome(
+        Holder<Biome> noiseBiome = BiomeNoiseCache.get(level,
                 net.minecraft.core.QuartPos.fromBlock(pos.getX()),
                 net.minecraft.core.QuartPos.fromBlock(pos.getY()),
                 net.minecraft.core.QuartPos.fromBlock(pos.getZ())

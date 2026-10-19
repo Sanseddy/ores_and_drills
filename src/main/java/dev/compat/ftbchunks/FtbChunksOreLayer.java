@@ -1,6 +1,5 @@
 package dev.compat.ftbchunks;
 
-import dev.client.map.DiscoveredOreDeposit;
 import dev.client.map.OreMapMarkers;
 import dev.client.map.OreMapPainter;
 import dev.client.map.OreMapPatch;
@@ -20,7 +19,6 @@ import dev.ftb.mods.ftblibrary.util.TooltipList;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
@@ -32,6 +30,9 @@ import net.minecraft.world.phys.Vec3;
 public final class FtbChunksOreLayer {
     /** Below every waypoint and entity icon. */
     private static final int PRIORITY = Integer.MIN_VALUE / 2;
+    private static final long HOVER_TIMEOUT_NANOS = 200_000_000L;
+    private static OreMapPatch hoveredPatch;
+    private static long hoveredAt;
 
     private FtbChunksOreLayer() {
     }
@@ -43,6 +44,13 @@ public final class FtbChunksOreLayer {
 
     public static boolean isLargeMap(Screen screen) {
         return screen instanceof ScreenWrapper wrapper && wrapper.getGui() instanceof LargeMapScreen;
+    }
+
+    public static void renderLabel(GuiGraphics graphics, int mouseX, int mouseY) {
+        if (hoveredPatch != null && System.nanoTime() - hoveredAt <= HOVER_TIMEOUT_NANOS
+                && OreMapMarkers.isEnabled()) {
+            OreMapTooltip.renderMapLabel(graphics, hoveredPatch, mouseX, mouseY);
+        }
     }
 
     private static void addIcons(MapIconEvent event) {
@@ -63,9 +71,6 @@ public final class FtbChunksOreLayer {
     private static final class PatchIcon implements MapIcon {
         private final OreMapPatch patch;
         private final Vec3 position;
-        private int lastX;
-        private int lastY;
-        private int lastSize;
 
         private PatchIcon(OreMapPatch patch) {
             this.patch = patch;
@@ -119,25 +124,7 @@ public final class FtbChunksOreLayer {
 
         @Override
         public void addTooltip(TooltipList list) {
-            OreMapPatch shown = current();
-            if (shown == null || lastSize <= 0) {
-                return;
-            }
-            Minecraft minecraft = Minecraft.getInstance();
-            double mouseX = minecraft.mouseHandler.xpos() * minecraft.getWindow().getGuiScaledWidth()
-                    / minecraft.getWindow().getScreenWidth();
-            double mouseY = minecraft.mouseHandler.ypos() * minecraft.getWindow().getGuiScaledHeight()
-                    / minecraft.getWindow().getScreenHeight();
-            double pixelsPerBlock = largeMapPixelsPerBlock(lastSize, shown);
-            int blockX = (int) Math.floor(shown.center().getX() + (mouseX - lastX - lastSize / 2.0D) / pixelsPerBlock);
-            int blockZ = (int) Math.floor(shown.center().getZ() + (mouseY - lastY - lastSize / 2.0D) / pixelsPerBlock);
-            DiscoveredOreDeposit.OreMapCell cell = shown.cellAt(blockX, blockZ);
-            if (cell == null) {
-                return;
-            }
-            for (Component line : OreMapTooltip.lines(shown, cell)) {
-                list.add(line);
-            }
+            // The Factorio-like label is rendered without FTB's tooltip box in ScreenEvent.Render.Post.
         }
 
         @Override
@@ -161,13 +148,27 @@ public final class FtbChunksOreLayer {
             if (mapType.isMinimap()) {
                 drawOnMinimap(graphics, shown, alpha);
             } else {
-                lastX = x;
-                lastY = y;
-                lastSize = w;
                 OreMapPainter.paint(graphics, shown,
                         OreMapTransform.axisAligned(largeMapPixelsPerBlock(w, shown), x + w / 2.0D, y + h / 2.0D),
-                        alpha, null);
+                        alpha, null, isHovered(shown, x, y, w, h));
             }
+        }
+
+        private static boolean isHovered(OreMapPatch shown, int x, int y, int w, int h) {
+            Minecraft minecraft = Minecraft.getInstance();
+            double mouseX = minecraft.mouseHandler.xpos() * minecraft.getWindow().getGuiScaledWidth()
+                    / minecraft.getWindow().getScreenWidth();
+            double mouseY = minecraft.mouseHandler.ypos() * minecraft.getWindow().getGuiScaledHeight()
+                    / minecraft.getWindow().getScreenHeight();
+            double pixelsPerBlock = largeMapPixelsPerBlock(w, shown);
+            int blockX = (int) Math.floor(shown.center().getX() + (mouseX - x - w / 2.0D) / pixelsPerBlock);
+            int blockZ = (int) Math.floor(shown.center().getZ() + (mouseY - y - h / 2.0D) / pixelsPerBlock);
+            boolean hovered = shown.cellAt(blockX, blockZ) != null;
+            if (hovered) {
+                hoveredPatch = shown;
+                hoveredAt = System.nanoTime();
+            }
+            return hovered;
         }
 
         /** The widget size is rounded up to whole pixels; the map's region tile size is the exact scale. */

@@ -9,9 +9,8 @@ import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import dev.OresAndDrillsMod;
 import dev.world.level.levelgen.DepositCandidateResolver;
-import dev.world.level.levelgen.DepositLocator;
 import dev.world.level.levelgen.DepositLocateStatus;
-import dev.world.level.levelgen.DepositTerrainValidator;
+import dev.world.level.levelgen.DepositLocator;
 import dev.world.level.levelgen.LocatedDeposit;
 import dev.world.level.levelgen.OreDepositTier;
 import dev.world.level.levelgen.OreSpawnDimensions;
@@ -31,12 +30,12 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
+import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.Optional;
 
 /** Registers {@code /locate oredeposit <ore|#ore_tag> [tier]}. */
 public final class OreDepositLocateCommand {
-    private static final DepositLocator LOCATOR = new DepositLocator(new DepositTerrainValidator());
     private static final SimpleCommandExceptionType ERROR_CATALOG_NOT_LOADED =
             new SimpleCommandExceptionType(Component.translatable(
                     "commands.ores_and_drills.locate.catalog_not_loaded"
@@ -49,11 +48,6 @@ public final class OreDepositLocateCommand {
             new DynamicCommandExceptionType(tier -> Component.translatable(
                     "commands.ores_and_drills.locate.unknown_tier", tier
             ));
-    private static final DynamicCommandExceptionType ERROR_GENERATOR =
-            new DynamicCommandExceptionType(selection -> Component.translatable(
-                    "commands.ores_and_drills.locate.generator_error", selection
-            ));
-
     private OreDepositLocateCommand() {
     }
 
@@ -71,14 +65,35 @@ public final class OreDepositLocateCommand {
         );
     }
 
+    /**
+     * Unlike vanilla, which matches only from the start or after {@code _} and {@code .}, the input also
+     * matches after {@code :} and {@code /}: {@code coal} suggests {@code #c:ores/coal} and {@code minecraft:coal_ore}.
+     */
     private static CompletableFuture<Suggestions> suggestOres(
             CommandContext<CommandSourceStack> context,
             SuggestionsBuilder builder
     ) {
-        return SharedSuggestionProvider.suggest(
-                DepositCandidateResolver.oreSuggestionCatalog(context.getSource().getLevel()),
-                builder
-        );
+        String input = builder.getRemaining().toLowerCase(Locale.ROOT);
+        for (String suggestion : DepositCandidateResolver.oreSuggestionCatalog(context.getSource().getLevel())) {
+            if (matchesAnySegment(input, suggestion.toLowerCase(Locale.ROOT))) {
+                builder.suggest(suggestion);
+            }
+        }
+        return builder.buildFuture();
+    }
+
+    private static boolean matchesAnySegment(String input, String suggestion) {
+        if (SharedSuggestionProvider.matchesSubStr(input, suggestion)) {
+            return true;
+        }
+        for (int index = 0; index < suggestion.length(); index++) {
+            char separator = suggestion.charAt(index);
+            if ((separator == ':' || separator == '/')
+                    && SharedSuggestionProvider.matchesSubStr(input, suggestion.substring(index + 1))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static CompletableFuture<Suggestions> suggestTiers(
@@ -114,29 +129,64 @@ public final class OreDepositLocateCommand {
 
         OreSpawnDimensions.ensureOriginalPlacedFeaturesScanned(level.registryAccess());
         BlockPos origin = BlockPos.containing(source.getPosition());
-        LocatedDeposit result = null;
-        try {
-            Iterable<OreDepositTier> tiers = requestedTier
-                    .<Iterable<OreDepositTier>>map(java.util.List::of)
-                    .orElse(java.util.List.of(OreDepositTier.values()));
-            for (OreDepositTier tier : tiers) {
-                LocatedDeposit candidate = LOCATOR.findNearest(
-                        level, origin, requestedOre, tier, DepositLocator.SEARCH_RADIUS
-                ).orElse(null);
-                if (candidate != null && isNearer(origin, result, candidate)) result = candidate;
-            }
-        } catch (RuntimeException exception) {
+        if (requestedTier.isPresent() && !DepositLocator.isLocatable(level, requestedOre, requestedTier.get())) {
+            source.sendFailure(Component.translatable(
+                    "commands.ores_and_drills.locate.vanilla_like_small", requestedTier.get().serializedName()
+            ));
+            return 0;
+        }
+        java.util.List<OreDepositTier> tiers = requestedTier
+                .map(java.util.List::of)
+                .orElse(java.util.Arrays.stream(OreDepositTier.values())
+                        .filter(tier -> DepositLocator.isLocatable(level, requestedOre, tier))
+                        .toList());
+        OreDepositLocateService.SubmitResult submitted = OreDepositLocateService.submit(
+                level, origin, requestedOre, tiers, DepositLocator.SEARCH_RADIUS,
+                (result, failure, metrics) -> finishLocate(
+                        source, requestedSelection, requestedTier, result.orElse(null), failure, metrics
+                )
+        );
+        if (submitted == OreDepositLocateService.SubmitResult.BUSY) {
+            source.sendFailure(Component.translatable("commands.ores_and_drills.locate.busy"));
+            return 0;
+        }
+        if (submitted != OreDepositLocateService.SubmitResult.CACHED) {
+            source.sendSuccess(() -> Component.translatable(
+                    "commands.ores_and_drills.locate.searching",
+                    Component.literal(requestedSelection),
+                    requestedTier.map(OreDepositTier::serializedName).orElse("any"),
+                    DepositLocator.SEARCH_RADIUS
+            ), false);
+        }
+        return 1;
+    }
+
+    private static void finishLocate(
+            CommandSourceStack source,
+            String requestedSelection,
+            Optional<OreDepositTier> requestedTier,
+            LocatedDeposit result,
+            Throwable failure,
+            OreDepositLocateService.Metrics metrics
+    ) {
+        if (failure != null) {
             OresAndDrillsMod.LOGGER.debug(
                     "Ore-deposit locate failed for {} tier {} in {}",
-                    requestedSelection + " -> " + requestedOre,
+                    requestedSelection,
                     requestedTier.map(OreDepositTier::serializedName).orElse("any"),
-                    level.dimension().location(),
-                    exception
+                    source.getLevel().dimension().location(), failure
             );
-            throw ERROR_GENERATOR.create(requestedSelection + requestedTier
-                    .map(tier -> " " + tier.serializedName()).orElse(""));
+            source.sendFailure(Component.translatable(
+                    "commands.ores_and_drills.locate.generator_error",
+                    requestedSelection + requestedTier
+                            .map(tier -> " " + tier.serializedName()).orElse("")
+            ));
+            return;
         }
-
+        OresAndDrillsMod.LOGGER.debug(
+                "Ore-deposit locate completed in {} ms after {} cells and {} candidates",
+                metrics.elapsedMillis(), metrics.cellsChecked(), metrics.candidatesChecked()
+        );
         if (result == null) {
             source.sendFailure(requestedTier.<Component>map(tier -> Component.translatable(
                             "commands.ores_and_drills.locate.not_found",
@@ -145,7 +195,7 @@ public final class OreDepositLocateCommand {
                             "commands.ores_and_drills.locate.not_found_any_ore",
                             Component.literal(requestedSelection), DepositLocator.SEARCH_RADIUS
                     )));
-            return 0;
+            return;
         }
 
         OreDepositTier foundTier = result.candidate().tier();
@@ -180,15 +230,6 @@ public final class OreDepositLocateCommand {
                     "commands.ores_and_drills.locate.rock_coverage", coveragePercent
             ), false);
         }
-        return 1;
-    }
-
-    private static boolean isNearer(BlockPos origin, LocatedDeposit current, LocatedDeposit candidate) {
-        if (current == null) return true;
-        long candidateDistance = DepositLocator.horizontalDistanceSquared(origin, candidate.candidate().center());
-        long currentDistance = DepositLocator.horizontalDistanceSquared(origin, current.candidate().center());
-        return candidateDistance < currentDistance
-                || candidateDistance == currentDistance && candidate.confirmed() && !current.confirmed();
     }
 
     private static Optional<ResourceLocation> resolveOreSelection(

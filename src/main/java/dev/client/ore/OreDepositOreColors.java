@@ -1,6 +1,7 @@
 package dev.client.ore;
 
 import dev.OresAndDrillsMod;
+import dev.client.ore.speck.ArgbImage;
 import dev.world.level.levelgen.OreDepositOrePalette;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -107,11 +108,16 @@ public final class OreDepositOreColors {
             return null;
         }
 
+        // Material-based items are grey textures colored per layer by an ItemColor; read them in that color.
+        Item item = itemById(itemId);
+        Map<ResourceLocation, Integer> tintIndices = OreModelLayers.tintIndices(OreModelLayers.layers(
+                resourceManager, ResourceLocation.fromNamespaceAndPath(itemId.getNamespace(), "item/" + itemId.getPath())));
         for (ResourceLocation textureId : texturesFromItemModel(resourceManager, itemId)) {
             ResourceLocation texturePath = ResourceLocation.fromNamespaceAndPath(
                     textureId.getNamespace(), "textures/" + textureId.getPath() + ".png"
             );
-            int[] palette = paletteFromTexture(resourceManager, texturePath);
+            int tint = item == Items.AIR ? 0xFFFFFF : OreModelLayers.itemTint(item, tintIndices.getOrDefault(textureId, -1));
+            int[] palette = paletteFromTexture(resourceManager, texturePath, tint);
             if (palette != null) {
                 return palette;
             }
@@ -119,13 +125,13 @@ public final class OreDepositOreColors {
 
         // Compatibility fallback for resource packs/items that provide a conventional texture but no model.
         ResourceLocation itemTexture = ResourceLocation.fromNamespaceAndPath(itemId.getNamespace(), "textures/item/" + itemId.getPath() + ".png");
-        int[] palette = paletteFromTexture(resourceManager, itemTexture);
+        int[] palette = paletteFromTexture(resourceManager, itemTexture, 0xFFFFFF);
         if (palette != null) {
             return palette;
         }
 
         ResourceLocation blockTexture = ResourceLocation.fromNamespaceAndPath(itemId.getNamespace(), "textures/block/" + itemId.getPath() + ".png");
-        return paletteFromTexture(resourceManager, blockTexture);
+        return paletteFromTexture(resourceManager, blockTexture, 0xFFFFFF);
     }
 
     private static List<ResourceLocation> texturesFromItemModel(ResourceManager resourceManager, ResourceLocation itemId) {
@@ -372,9 +378,10 @@ public final class OreDepositOreColors {
     /**
      * The real colors of the drop texture: pixels grouped into similar-color buckets, most common first, up
      * to {@link #MAX_PALETTE_COLORS} bucket averages. Near-black and transparent pixels are ignored so the
-     * palette does not match every dark crack of the host rock.
+     * palette does not match every dark crack of the host rock. {@code tintRgb} is multiplied into every
+     * pixel first, as the game does for a tinted layer (white for none).
      */
-    private static int[] paletteFromTexture(ResourceManager resourceManager, ResourceLocation texturePath) {
+    private static int[] paletteFromTexture(ResourceManager resourceManager, ResourceLocation texturePath, int tintRgb) {
         Optional<Resource> resource = resourceManager.getResource(texturePath);
         if (resource.isEmpty()) {
             return null;
@@ -387,9 +394,11 @@ public final class OreDepositOreColors {
                 for (int x = 0; x < image.getWidth(); x++) {
                     int abgr = image.getPixelRGBA(x, y);
                     int alpha = (abgr >> 24) & 0xFF;
-                    int red = abgr & 0xFF;
-                    int green = (abgr >> 8) & 0xFF;
-                    int blue = (abgr >> 16) & 0xFF;
+                    int argb = ArgbImage.multiply(alpha << 24 | (abgr & 0xFF) << 16 | abgr & 0xFF00 | (abgr >> 16) & 0xFF,
+                            tintRgb);
+                    int red = ArgbImage.red(argb);
+                    int green = ArgbImage.green(argb);
+                    int blue = ArgbImage.blue(argb);
                     if (alpha < 128 || Math.max(red, Math.max(green, blue)) < MINIMUM_BRIGHTNESS) {
                         continue;
                     }

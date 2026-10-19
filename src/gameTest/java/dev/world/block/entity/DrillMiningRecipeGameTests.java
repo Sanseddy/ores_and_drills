@@ -182,7 +182,7 @@ public final class DrillMiningRecipeGameTests {
         for (boolean asDeposit : new boolean[] {false, true}) {
             if (asDeposit) deposit(level, pos, Blocks.EMERALD_ORE, 100);
             else level.setBlock(pos, Blocks.EMERALD_ORE.defaultBlockState(), Block.UPDATE_ALL);
-            helper.assertTrue(DrillMiningRecipes.requiresFluidForPlayer(level, DrillMiningRecipes.sourceState(level, pos)),
+            helper.assertTrue(DrillMiningRecipes.requiresFluidOutsideDrills(level, DrillMiningRecipes.sourceState(level, pos)),
                     "Tagged recipe failed to lock hand mining");
             player.gameMode.destroyBlock(pos);
             helper.assertTrue((asDeposit ? level.getBlockState(pos).is(ModBlocks.ORE_DEPOSIT.get()) : level.getBlockState(pos).isAir())
@@ -326,7 +326,7 @@ public final class DrillMiningRecipeGameTests {
         for (boolean asDeposit : new boolean[] {false, true}) {
             if (asDeposit) deposit(level, pos, Blocks.GOLD_ORE, 100);
             else level.setBlock(pos, Blocks.GOLD_ORE.defaultBlockState(), Block.UPDATE_ALL);
-            helper.assertTrue(DrillMiningRecipes.requiresFluidForPlayer(level, DrillMiningRecipes.sourceState(level, pos)),
+            helper.assertTrue(DrillMiningRecipes.requiresFluidOutsideDrills(level, DrillMiningRecipes.sourceState(level, pos)),
                     "Wet recipe not active before real pickaxe destruction");
             player.gameMode.destroyBlock(pos);
             helper.assertTrue(asDeposit ? level.getBlockState(pos).is(ModBlocks.ORE_DEPOSIT.get()) : level.getBlockState(pos).isAir(),

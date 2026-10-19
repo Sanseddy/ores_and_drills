@@ -4,11 +4,13 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
 import dev.world.level.levelgen.DepositWorldgenGuard;
+import dev.world.level.levelgen.VanillaOreVein;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.levelgen.feature.OreFeature;
 import net.minecraft.world.level.levelgen.feature.configurations.OreConfiguration;
 import org.spongepowered.asm.mixin.Mixin;
@@ -27,5 +29,16 @@ public abstract class OreFeatureMixin {
         // Preserve vanilla RNG consumption even for blocked positions.
         boolean allowed=original.call(host,adjacent,random,config,target,pos);
         return allowed && (!target.state.is(Blocks.GRAVEL) || !DepositWorldgenGuard.blocksGravel(level,pos));
+    }
+
+    /** TINY/SMALL deposit veins run the unmodified vanilla feature and take its positions instead of ore. */
+    @WrapOperation(method="doPlace",at=@At(value="INVOKE",target=
+            "Lnet/minecraft/world/level/chunk/LevelChunkSection;setBlockState(IIILnet/minecraft/world/level/block/state/BlockState;Z)Lnet/minecraft/world/level/block/state/BlockState;"))
+    private BlockState oresAndDrills$captureDepositVein(LevelChunkSection section,int x,int y,int z,BlockState state,
+            boolean useLocks,Operation<BlockState> original,@Local BlockPos.MutableBlockPos pos) {
+        if (VanillaOreVein.capture(pos,state)) {
+            return section.getBlockState(x,y,z);
+        }
+        return original.call(section,x,y,z,state,useLocks);
     }
 }

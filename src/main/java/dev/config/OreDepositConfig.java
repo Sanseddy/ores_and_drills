@@ -9,11 +9,18 @@ public final class OreDepositConfig {
     
     // EN: Hard lower limit for the distance between large deposits, in blocks.
     // RU: Жёсткая нижняя граница расстояния между крупными залежами, в блоках.
-    public static final int MIN_LARGE_DEPOSIT_SPACING_LIMIT = 200;
-   
-    // EN: Hard upper limit for the distance between large deposits, in blocks.
-    // RU: Жёсткая верхняя граница расстояния между крупными залежами, в блоках.
-    public static final int MAX_LARGE_DEPOSIT_SPACING_LIMIT = 600;
+    public static final int MIN_LARGE_DEPOSIT_SPACING_LIMIT = 50;
+
+    // EN: Technical upper limit for the distance between large deposits: the world border radius, so the
+    //     value is effectively unbounded while chunk/cell arithmetic cannot overflow.
+    // RU: Технический верхний предел расстояния между крупными залежами: радиус границы мира. Практически
+    //     без ограничений, но вычисления по чанкам и ячейкам не переполняются.
+    public static final int MAX_LARGE_DEPOSIT_SPACING_LIMIT = 30_000_000;
+
+    // EN: Default distances between large deposits, in blocks.
+    // RU: Расстояния между крупными залежами по умолчанию, в блоках.
+    public static final int DEFAULT_MIN_LARGE_DEPOSIT_SPACING = 200;
+    public static final int DEFAULT_MAX_LARGE_DEPOSIT_SPACING = 600;
 
     // EN: Maximum deposit-generation attempts per chunk; prevents lag spikes.
     // RU: Максимальное число попыток генерации залежей на чанк; защита от лагов.
@@ -44,45 +51,56 @@ public final class OreDepositConfig {
     // RU: Общий множитель попыток создать MEDIUM/LARGE залежь: 1.0 оставляет исходную частоту.
     public static final double LARGE_DEPOSIT_ATTEMPT_MULTIPLIER = 1.0D;
 
-    // EN: Extra frequency multiplier for SMALL deposits only; below 1.0 makes SMALL rarer without touching TINY.
-    // RU: Дополнительный множитель частоты только для SMALL: меньше 1.0 — SMALL реже, TINY не меняется.
-    public static final double SMALL_DEPOSIT_FREQUENCY_MULTIPLIER = 0.5D;
+    // EN: Retention of TINY/SMALL candidates of datapack "frequency" rules; 0.5 halves them, 1.0 keeps all.
+    //     Automatic TINY/SMALL use SMALL_DEPOSIT_ATTEMPT_RETENTION instead.
+    // RU: Доля кандидатов TINY/SMALL у правил датапака с "frequency": 0.5 оставляет половину, 1.0 — все.
+    //     Автоматические TINY/SMALL используют SMALL_DEPOSIT_ATTEMPT_RETENTION.
+    public static final double TINY_SMALL_SPAWN_RETENTION = 1.0D;
 
-    // EN: Final TINY/SMALL spawn retention, applied after chance saturation; 0.5 halves candidates.
-    // RU: Итоговая доля появления TINY/SMALL после ограничения шанса: 0.5 оставляет половину кандидатов.
-    public static final double TINY_SMALL_SPAWN_RETENTION = 0.5D;
+    // EN: Share of original ore placed-feature attempts kept as TINY/SMALL candidates in the regular mode.
+    //     Not applied to "vanilla-like" generation. Reduced 32x from the initial 0.35; subject to playtesting.
+    // RU: Доля исходных попыток размещения руды, которая становится кандидатами TINY/SMALL в обычном режиме.
+    //     На режим «Как в ваниле» не действует. Уменьшено в 32 раза с начальных 0.35; баланс для проверки в игре.
+    public static final double SMALL_DEPOSIT_ATTEMPT_RETENTION = 0.0109375D;
+
+    // EN: Share of the kept attempts that become TINY; the rest (1 - share) become SMALL.
+    // RU: Доля сохранённых попыток, которая становится TINY; остальные (1 - доля) становятся SMALL.
+    public static final double SMALL_DEPOSIT_TINY_SHARE = 0.40D;
+
+    // EN: CAVE_WALL placement: chance that a TINY/SMALL candidate is laid on a cave wall instead of staying buried
+    //     at its attempt position, for the most common ore of the dimension and for an ore at least
+    //     SMALL_DEPOSIT_WALL_RARITY_DECADES orders of magnitude rarer. In between it follows log10 of the ore's
+    //     share of the most common ore's original frequency.
+    // RU: Режим CAVE_WALL: шанс, что кандидат TINY/SMALL ляжет на стену пещеры, а не останется в толще породы в
+    //     исходной точке, — для самой частой руды измерения и для руды, которая реже её на
+    //     SMALL_DEPOSIT_WALL_RARITY_DECADES порядков и больше. Между ними — по log10 доли частоты от самой частой руды.
+    public static final double SMALL_DEPOSIT_WALL_CHANCE_COMMON = 0.90D;
+    public static final double SMALL_DEPOSIT_WALL_CHANCE_RARE = 0.20D;
+    public static final double SMALL_DEPOSIT_WALL_RARITY_DECADES = 2.0D;
+
+    // EN: Whole-deposit reserve range of a TINY deposit at Richness 1, in ore units.
+    // RU: Суммарный запас всей залежи TINY при богатстве 1, в единицах руды.
+    public static final int TINY_DEPOSIT_MIN_RESERVE = 1;
+    public static final int TINY_DEPOSIT_MAX_RESERVE = 4;
+
+    // EN: Whole-deposit reserve range of a SMALL deposit at Richness 1, in ore units.
+    // RU: Суммарный запас всей залежи SMALL при богатстве 1, в единицах руды.
+    public static final int SMALL_DEPOSIT_MIN_RESERVE = 8;
+    public static final int SMALL_DEPOSIT_MAX_RESERVE = 16;
 
     // EN: Extra frequency multiplier for LARGE deposits only; above 1.0 makes LARGE more common without touching MEDIUM.
     // RU: Дополнительный множитель частоты только для LARGE: больше 1.0 — LARGE чаще, MEDIUM не меняется.
     public static final double LARGE_DEPOSIT_FREQUENCY_MULTIPLIER = 2.0D;
 
-    // EN: Share of an ore's original frequency allocated to TINY/SMALL deposits.
-    // RU: Доля исходной частоты руды, выделяемая маленьким залежам TINY/SMALL.
-    public static final double SMALL_DEPOSIT_FREQUENCY_SHARE = 0.65D;
+    // EN: Exponential rare-ore penalty of the small-tier material weight tables (debug diagnostics only).
+    //     Automatic TINY/SMALL no longer use it: they thin each material's own attempts equally.
+    // RU: Экспоненциальный штраф редких руд в таблицах весов маленьких типов (только отладочная диагностика).
+    //     Автоматические TINY/SMALL его больше не используют: попытки каждой руды прореживаются одинаково.
+    public static final double SMALL_DEPOSIT_RARITY_GROWTH = 0.2D;
 
-    // EN: Relative frequency of SMALL compared with TINY; a lower value makes SMALL rarer.
-    // RU: Относительная частота SMALL по сравнению с TINY: меньше число — реже SMALL.
-    public static final double SMALL_TO_TINY_FREQUENCY_RATIO = 0.75D;
-
-    // EN: Minimum combined TINY/SMALL frequency share so rare ores never disappear completely.
-    // RU: Минимальная суммарная доля частоты для TINY/SMALL, чтобы редкая руда не исчезла полностью.
-    public static final double MIN_SMALL_DEPOSIT_FREQUENCY_SHARE = 0.00125D;
-
-    // EN: Base rare-ore penalty in small deposits; a higher value makes rare ores less common.
-    // RU: Базовый штраф редких руд в маленьких залежах: больше число — редкие руды встречаются реже.
-    public static final double SMALL_DEPOSIT_RARITY_PENALTY = 4.5D;
-
-    // EN: Additional penalty for the very rarest ores in small deposits.
-    // RU: Дополнительный штраф для самых редких руд в маленьких залежах.
-    public static final double VERY_RARE_ORE_PENALTY = 18.0D;
-
-    // EN: Additional-penalty curve; a higher value targets only the rarest ores more strongly.
-    // RU: Кривая дополнительного штрафа: больше число сильнее выделяет только самые редкие руды.
-    public static final double VERY_RARE_ORE_PENALTY_CURVE = 1.0D;
-
-    // EN: Penalty fade-out curve from TINY to MEDIUM; a higher value concentrates it on TINY.
-    // RU: Кривая ослабления штрафа от TINY к MEDIUM: больше число концентрирует его на TINY.
-    public static final double SMALL_DEPOSIT_PENALTY_CURVE = 1.0D;
+    // EN: Cap of the exponential part of that penalty, like ore_mining_max_exponential_multiplier.
+    // RU: Потолок экспоненциальной части штрафа, как ore_mining_max_exponential_multiplier.
+    public static final double SMALL_DEPOSIT_RARITY_MAX_MULTIPLIER = 20.0D;
 
     // EN: Chance for a rare ore to become a large deposit; a higher value favors MEDIUM/LARGE deposits.
     // RU: Шанс редкой руды стать крупной залежью: больше число — чаще MEDIUM/LARGE для редких руд.
@@ -106,21 +124,31 @@ public final class OreDepositConfig {
     public static final ModConfigSpec.IntValue MAX_LARGE_DEPOSIT_SPACING;
     public static final ModConfigSpec.DoubleValue ORE_MINING_EXPONENTIAL_GROWTH;
     public static final ModConfigSpec.DoubleValue ORE_MINING_MAX_EXPONENTIAL_MULTIPLIER;
-    public static final ModConfigSpec.ConfigValue<List<? extends String>> DISABLED_DEPOSIT_ORES;
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> IGNORED_ORES;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> MOD_PRIORITIES;
     public static final ModConfigSpec.ConfigValue<String> ACTIVE_PRESET;
-    public static final ModConfigSpec.BooleanValue STRICT_WALL_DEPOSIT_LOCATE;
+    public static final ModConfigSpec.EnumValue<SmallDepositPlacement> SMALL_DEPOSIT_PLACEMENT;
+
+    /** Where a retained TINY/SMALL candidate builds its vein. */
+    public enum SmallDepositPlacement {
+        /** At the original attempt position: inherited height, biome and air-exposure behaviour. */
+        INHERITED,
+        /** Default: on a nearby cave wall, facing the cave, when one exists; otherwise the attempt position. */
+        CAVE_WALL
+    }
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
         builder.push("ore_deposits");
         MIN_LARGE_DEPOSIT_SPACING = builder
-                .comment("Минимальное расстояние в блоках между крупными залежами MEDIUM/LARGE.")
-                .defineInRange("minimum_medium_large_spacing", MIN_LARGE_DEPOSIT_SPACING_LIMIT,
+                .comment("Минимальное расстояние в блоках между крупными залежами MEDIUM/LARGE. Не меньше 50.")
+                .defineInRange("minimum_medium_large_spacing", DEFAULT_MIN_LARGE_DEPOSIT_SPACING,
                         MIN_LARGE_DEPOSIT_SPACING_LIMIT, MAX_LARGE_DEPOSIT_SPACING_LIMIT);
         MAX_LARGE_DEPOSIT_SPACING = builder
-                .comment("Максимальное расстояние в блоках между крупными залежами MEDIUM/LARGE.")
-                .defineInRange("maximum_medium_large_spacing", MAX_LARGE_DEPOSIT_SPACING_LIMIT,
+                .comment("Максимальное расстояние в блоках между крупными залежами MEDIUM/LARGE.",
+                        "Сверху не ограничено (технический предел — размер мира). Если оно меньше",
+                        "минимального, используется минимальное.")
+                .defineInRange("maximum_medium_large_spacing", DEFAULT_MAX_LARGE_DEPOSIT_SPACING,
                         MIN_LARGE_DEPOSIT_SPACING_LIMIT, MAX_LARGE_DEPOSIT_SPACING_LIMIT);
         ORE_MINING_EXPONENTIAL_GROWTH = builder
                 .comment("Exponential growth coefficient for manual mining time of concentrated ore deposits.",
@@ -130,11 +158,13 @@ public final class OreDepositConfig {
                 .comment("Maximum additional exponential multiplier for manual ore-deposit mining time.",
                         "The linear ore-count multiplier is always applied separately.")
                 .defineInRange("ore_mining_max_exponential_multiplier", 4.0D, 1.0D, 100.0D);
-        DISABLED_DEPOSIT_ORES = builder
-                .comment("ID блоков руды или теги блоков, исключённые из генерации залежей.",
-                        "Исключённые руды продолжают генерироваться обычными ванильными жилами.",
-                        "Теги начинаются с '#', например '#c:ores/uranium'.")
-                .defineListAllowEmpty("disabled_deposit_ores", List.of(),
+        IGNORED_ORES = builder
+                .comment("ID блоков руды или теги блоков, которые мод не трогает при генерации мира.",
+                        "Игнорируемые руды не превращаются в залежи, не объединяются с рудами других модов",
+                        "и не учитываются в редкости: их жилы генерируются как в ванили или как задумал автор мода.",
+                        "Совпадение с объединённой рудой материала (например minecraft:iron_ore) игнорирует",
+                        "этот материал из всех модов. Теги начинаются с '#', например '#c:ores/uranium'.")
+                .defineListAllowEmpty("ignored_ores", List.of(),
                         () -> "minecraft:coal_ore", OreDepositConfig::isValidBlockOrTagId);
         ACTIVE_PRESET = builder
                 .comment("Активный пресет настроек руд из datapack.",
@@ -145,10 +175,12 @@ public final class OreDepositConfig {
                 .defineListAllowEmpty("mod_priorities",
                         List.of("minecraft", "alltheores", "create", "mekanism", "thermal", "immersiveengineering", "modern_industrialization"),
                         () -> "minecraft", OreDepositConfig::isValidModId);
-        STRICT_WALL_DEPOSIT_LOCATE = builder
-                .comment("Если включено, /locate для TINY/SMALL возвращает только реально созданные",
-                        "стеновые или подземные месторождения из ConfirmedDepositIndex и не показывает seed-кандидаты.")
-                .define("strict_wall_deposit_locate", false);
+        SMALL_DEPOSIT_PLACEMENT = builder
+                .comment("Размещение маленьких залежей TINY/SMALL в обычном режиме генерации.",
+                        "CAVE_WALL (по умолчанию) — строить у ближайшей стены пещеры, если она есть рядом, чтобы залежь",
+                        "была видна; иначе в исходной точке попытки.",
+                        "INHERITED — всегда в исходной точке попытки руды: высота, биом и отсечение у воздуха как у исходной жилы.")
+                .defineEnum("small_deposit_placement", SmallDepositPlacement.CAVE_WALL);
         builder.pop();
         SPEC = builder.build();
     }

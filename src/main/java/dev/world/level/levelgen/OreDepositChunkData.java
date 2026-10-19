@@ -6,6 +6,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 
 public final class OreDepositChunkData {
@@ -21,13 +22,23 @@ public final class OreDepositChunkData {
     private static final int BASE_SHIFT = ORE_SHIFT + ORE_BITS;
     private static final long MISSING = Long.MIN_VALUE;
     private static final Snapshot EMPTY_SNAPSHOT = new Snapshot(new int[0], new long[0]);
+    private static final AtomicLong INSTANCES = new AtomicLong();
 
     private final Int2LongOpenHashMap entries = new Int2LongOpenHashMap();
     private Snapshot cachedSnapshot;
     private DiskSnapshot cachedDiskSnapshot;
+    private final long instanceId = INSTANCES.incrementAndGet();
 
     public OreDepositChunkData() {
         entries.defaultReturnValue(MISSING);
+    }
+
+    /**
+     * Unique per instance and never 0. Every attachment sync hands the client a new instance, so a changed id
+     * tells client code that a chunk's data was replaced without it holding on to the old copy.
+     */
+    public long instanceId() {
+        return instanceId;
     }
 
     public synchronized Entry get(BlockPos pos) {

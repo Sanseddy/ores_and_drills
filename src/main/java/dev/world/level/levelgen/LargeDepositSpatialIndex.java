@@ -40,7 +40,8 @@ public final class LargeDepositSpatialIndex extends SavedData {
     private static final int CURRENT_DATA_VERSION = 5;
     private static final int TIER_BITS = 4;
     private static final int TIER_MASK = (1 << TIER_BITS) - 1;
-    private static final int CELL_SIZE = OreDepositConfig.MAX_LARGE_DEPOSIT_SPACING_LIMIT;
+    /** Fixed region size; spacing checks search as many regions as the configured maximum spacing needs. */
+    private static final int CELL_SIZE = OreDepositConfig.DEFAULT_MAX_LARGE_DEPOSIT_SPACING;
     private static final int MAX_RECORD_CENTER_TO_FOOTPRINT_DISTANCE = OreDepositFeature.MAX_DEPOSIT_FOOTPRINT_DIAMETER;
     private static final int MAX_DEBUG_SPACING_LOGS = 256;
     private static final AtomicInteger DEBUG_SPACING_LOGS = new AtomicInteger();
@@ -70,36 +71,30 @@ public final class LargeDepositSpatialIndex extends SavedData {
         int minimumSpacing = minimumSpacing();
         int maximumSpacing = maximumSpacing(minimumSpacing);
 
-        for (int offsetX = -1; offsetX <= 1; offsetX++) {
-            for (int offsetZ = -1; offsetZ <= 1; offsetZ++) {
-                List<DepositRecord> records = largeDepositsByRegion.get(regionKey(cellX + offsetX, cellZ + offsetZ));
-                if (records == null) {
+        for (List<DepositRecord> records : regionsNear(center, maximumSpacing)) {
+            for (DepositRecord nearby : records) {
+                if (nearby.tier() < OreDepositFeature.TIER_MEDIUM) {
                     continue;
                 }
-                for (DepositRecord nearby : records) {
-                    if (nearby.tier() < OreDepositFeature.TIER_MEDIUM) {
-                        continue;
-                    }
-                    DepositSpacingMath.SpacingBounds pairBounds = DepositSpacingMath.tierPairBounds(
-                            tier, nearby.tier(), OreDepositFeature.TIER_MEDIUM, OreDepositFeature.TIER_LARGE,
-                            minimumSpacing, maximumSpacing
-                    );
-                    DepositSpacingMath.SpacingCalculation spacing = DepositSpacingMath.requiredDistance(
-                            normalizedScale,
-                            nearby.normalizedScale(),
-                            pairBounds.minimum(),
-                            pairBounds.maximum(),
-                            OreDepositConfig.LARGE_DEPOSIT_SPACING_CURVE,
-                            OreDepositConfig.LARGE_DEPOSIT_SPACING_VARIATION,
-                            random.nextDouble() * 2.0D - 1.0D
-                    );
-                    double actualDistance = horizontalDistance(center, nearby.center());
-                    boolean accepted = actualDistance >= spacing.requiredDistance();
-                    logSpacing(tier, normalizedScale, nearby, spacing.combinedScale(),
-                            spacing.requiredDistance(), actualDistance, accepted);
-                    if (!accepted) {
-                        return false;
-                    }
+                DepositSpacingMath.SpacingBounds pairBounds = DepositSpacingMath.tierPairBounds(
+                        tier, nearby.tier(), OreDepositFeature.TIER_MEDIUM, OreDepositFeature.TIER_LARGE,
+                        minimumSpacing, maximumSpacing
+                );
+                DepositSpacingMath.SpacingCalculation spacing = DepositSpacingMath.requiredDistance(
+                        normalizedScale,
+                        nearby.normalizedScale(),
+                        pairBounds.minimum(),
+                        pairBounds.maximum(),
+                        OreDepositConfig.LARGE_DEPOSIT_SPACING_CURVE,
+                        OreDepositConfig.LARGE_DEPOSIT_SPACING_VARIATION,
+                        random.nextDouble() * 2.0D - 1.0D
+                );
+                double actualDistance = horizontalDistance(center, nearby.center());
+                boolean accepted = actualDistance >= spacing.requiredDistance();
+                logSpacing(tier, normalizedScale, nearby, spacing.combinedScale(),
+                        spacing.requiredDistance(), actualDistance, accepted);
+                if (!accepted) {
+                    return false;
                 }
             }
         }
@@ -171,43 +166,64 @@ public final class LargeDepositSpatialIndex extends SavedData {
 
     /** Conservative early-out used before any cave blocks are scanned. */
     public synchronized boolean canPossiblyFit(BlockPos center, int tier, double relocationAllowance) {
-        int cellX = Math.floorDiv(center.getX(), CELL_SIZE);
-        int cellZ = Math.floorDiv(center.getZ(), CELL_SIZE);
         int minimumSpacing = minimumSpacing();
         int maximumSpacing = maximumSpacing(minimumSpacing);
 
-        for (int offsetX = -1; offsetX <= 1; offsetX++) {
-            for (int offsetZ = -1; offsetZ <= 1; offsetZ++) {
-                List<DepositRecord> records = largeDepositsByRegion.get(regionKey(cellX + offsetX, cellZ + offsetZ));
-                if (records == null) {
+        for (List<DepositRecord> records : regionsNear(center, maximumSpacing + Mth.ceil(relocationAllowance))) {
+            for (DepositRecord nearby : records) {
+                if (nearby.tier() < OreDepositFeature.TIER_MEDIUM) {
                     continue;
                 }
-                for (DepositRecord nearby : records) {
-                    if (nearby.tier() < OreDepositFeature.TIER_MEDIUM) {
-                        continue;
-                    }
-                    DepositSpacingMath.SpacingBounds pairBounds = DepositSpacingMath.tierPairBounds(
-                            tier, nearby.tier(), OreDepositFeature.TIER_MEDIUM, OreDepositFeature.TIER_LARGE,
-                            minimumSpacing, maximumSpacing
-                    );
-                    // New scale 0 and minimum random variation form the smallest legal distance this pair
-                    // could ever request. If even that cannot fit after center relocation, rejection is exact.
-                    double minimumRequired = DepositSpacingMath.requiredDistance(
-                            0.0D,
-                            nearby.normalizedScale(),
-                            pairBounds.minimum(),
-                            pairBounds.maximum(),
-                            OreDepositConfig.LARGE_DEPOSIT_SPACING_CURVE,
-                            OreDepositConfig.LARGE_DEPOSIT_SPACING_VARIATION,
-                            -1.0D
-                    ).requiredDistance();
-                    if (horizontalDistance(center, nearby.center()) + relocationAllowance < minimumRequired) {
-                        return false;
-                    }
+                DepositSpacingMath.SpacingBounds pairBounds = DepositSpacingMath.tierPairBounds(
+                        tier, nearby.tier(), OreDepositFeature.TIER_MEDIUM, OreDepositFeature.TIER_LARGE,
+                        minimumSpacing, maximumSpacing
+                );
+                // New scale 0 and minimum random variation form the smallest legal distance this pair
+                // could ever request. If even that cannot fit after center relocation, rejection is exact.
+                double minimumRequired = DepositSpacingMath.requiredDistance(
+                        0.0D,
+                        nearby.normalizedScale(),
+                        pairBounds.minimum(),
+                        pairBounds.maximum(),
+                        OreDepositConfig.LARGE_DEPOSIT_SPACING_CURVE,
+                        OreDepositConfig.LARGE_DEPOSIT_SPACING_VARIATION,
+                        -1.0D
+                ).requiredDistance();
+                if (horizontalDistance(center, nearby.center()) + relocationAllowance < minimumRequired) {
+                    return false;
                 }
             }
         }
         return true;
+    }
+
+    /**
+     * Record lists of every region within {@code radius} blocks of {@code center}. A large maximum spacing
+     * spans many regions, so past the number of occupied regions the occupied ones are filtered instead.
+     */
+    private List<List<DepositRecord>> regionsNear(BlockPos center, int radius) {
+        int cellX = Math.floorDiv(center.getX(), CELL_SIZE);
+        int cellZ = Math.floorDiv(center.getZ(), CELL_SIZE);
+        long cells = (long) Math.max(1, Mth.ceil((double) radius / CELL_SIZE));
+        List<List<DepositRecord>> result = new ArrayList<>();
+        if ((2 * cells + 1) * (2 * cells + 1) > largeDepositsByRegion.size()) {
+            for (Map.Entry<Long, List<DepositRecord>> entry : largeDepositsByRegion.entrySet()) {
+                long key = entry.getKey();
+                if (Math.abs((long) (int) (key >> 32) - cellX) <= cells && Math.abs((long) (int) key - cellZ) <= cells) {
+                    result.add(entry.getValue());
+                }
+            }
+            return result;
+        }
+        for (long offsetX = -cells; offsetX <= cells; offsetX++) {
+            for (long offsetZ = -cells; offsetZ <= cells; offsetZ++) {
+                List<DepositRecord> records = largeDepositsByRegion.get(regionKey((int) (cellX + offsetX), (int) (cellZ + offsetZ)));
+                if (records != null) {
+                    result.add(records);
+                }
+            }
+        }
+        return result;
     }
 
     /** Returns indexed centers near the query, ordered nearest first for /locate. */

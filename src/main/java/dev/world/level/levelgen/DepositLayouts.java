@@ -70,9 +70,9 @@ public final class DepositLayouts {
         try {
             spacingBlocks = OreDepositConfig.MAX_LARGE_DEPOSIT_SPACING.get();
         } catch (LinkageError | RuntimeException unavailableRuntime) {
-            // Plain unit tests intentionally run without the NeoForge runtime. The compile-time upper
-            // bound is also the config default, so pure layout tests still exercise the production grid.
-            spacingBlocks = OreDepositConfig.MAX_LARGE_DEPOSIT_SPACING_LIMIT;
+            // Plain unit tests intentionally run without the NeoForge runtime. The config default keeps
+            // pure layout tests on the production grid.
+            spacingBlocks = OreDepositConfig.DEFAULT_MAX_LARGE_DEPOSIT_SPACING;
         }
         spacingBlocks = Math.max(
                 OreDepositConfig.MIN_LARGE_DEPOSIT_SPACING_LIMIT,

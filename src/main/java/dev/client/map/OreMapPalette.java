@@ -125,4 +125,24 @@ final class OreMapPalette {
     static String formatAmount(long amount) {
         return String.format(Locale.ROOT, "%,d", amount).replace(',', ' ');
     }
+
+    static String compactAmount(long amount) {
+        long positive = Math.max(0L, amount);
+        if (positive < 1_000L) {
+            return Long.toString(positive);
+        }
+        if (positive < 1_000_000L) {
+            return compact(positive / 1_000.0D, "k");
+        }
+        if (positive < 1_000_000_000L) {
+            return compact(positive / 1_000_000.0D, "M");
+        }
+        return compact(positive / 1_000_000_000.0D, "G");
+    }
+
+    private static String compact(double value, String suffix) {
+        return (value >= 100.0D || Math.abs(value - Math.rint(value)) < 0.05D
+                ? String.format(Locale.ROOT, "%.0f", value)
+                : String.format(Locale.ROOT, "%.1f", value)) + suffix;
+    }
 }

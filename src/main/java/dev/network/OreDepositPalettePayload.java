@@ -12,7 +12,8 @@ import java.util.List;
 public record OreDepositPalettePayload(
         List<ResourceLocation> bases,
         List<ResourceLocation> ores,
-        List<ResourceLocation> drops
+        List<ResourceLocation> drops,
+        boolean vanillaLikeGeneration
 ) implements CustomPacketPayload {
     public static final Type<OreDepositPalettePayload> TYPE = new Type<>(
             ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "ore_deposit_palette")
@@ -20,7 +21,7 @@ public record OreDepositPalettePayload(
     public static final StreamCodec<RegistryFriendlyByteBuf, OreDepositPalettePayload> STREAM_CODEC = new StreamCodec<>() {
         @Override
         public OreDepositPalettePayload decode(RegistryFriendlyByteBuf buffer) {
-            return new OreDepositPalettePayload(readIds(buffer), readIds(buffer), readIds(buffer));
+            return new OreDepositPalettePayload(readIds(buffer), readIds(buffer), readIds(buffer), buffer.readBoolean());
         }
 
         @Override
@@ -28,6 +29,7 @@ public record OreDepositPalettePayload(
             writeIds(buffer, payload.bases());
             writeIds(buffer, payload.ores());
             writeIds(buffer, payload.drops());
+            buffer.writeBoolean(payload.vanillaLikeGeneration());
         }
     };
 

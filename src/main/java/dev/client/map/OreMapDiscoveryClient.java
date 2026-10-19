@@ -2,6 +2,8 @@ package dev.client.map;
 
 import dev.network.OreDepositDiscoveryRequestPayload;
 import dev.registry.ModBlocks;
+import dev.world.level.levelgen.OreDepositData;
+import dev.world.level.levelgen.OreDepositTier;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
@@ -29,7 +31,6 @@ public final class OreMapDiscoveryClient {
             {-14, -18}, {14, -18}, {-14, 18}, {14, 18},
     };
     private static final int REPORT_COOLDOWN_TICKS = 40;
-    private static final long PATCH_REFRESH_MILLIS = 5_000L;
     private static final Map<Long, Integer> LAST_REPORT_TICK = new HashMap<>();
     private static Object lastLevel;
     private static int ticks;
@@ -83,8 +84,12 @@ public final class OreMapDiscoveryClient {
         if (minecraft.level == null || !minecraft.level.getBlockState(pos).is(ModBlocks.ORE_DEPOSIT.get())) {
             return;
         }
-        // A patch the server just described needs no second answer for each of its hundreds of blocks.
-        if (OreMapMarkers.recentlyRefreshed(minecraft.level.dimension().location(), pos, PATCH_REFRESH_MILLIS)) {
+        // Only medium and large deposits are charted. The client knows the tier, so the server never hears of the rest.
+        if (OreDepositData.readTierAt(minecraft.level, pos) < OreDepositTier.MEDIUM.index()) {
+            return;
+        }
+        // A charted patch is kept current from client chunk data; the server only describes new ones.
+        if (OreMapMarkers.isCharted(minecraft.level.dimension().location(), pos)) {
             return;
         }
         long key = pos.asLong();

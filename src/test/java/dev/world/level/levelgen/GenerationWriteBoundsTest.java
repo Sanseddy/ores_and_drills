@@ -32,6 +32,31 @@ class GenerationWriteBoundsTest {
     }
 
     @Test
+    void squareMustFitOnEverySide() {
+        GenerationWriteBounds bounds = GenerationWriteBounds.around(0, 0, 1);
+
+        assertTrue(bounds.containsSquare(-13, 28, 3));
+        assertFalse(bounds.containsSquare(-14, 0, 3));
+        assertFalse(bounds.containsSquare(29, 0, 3));
+        assertFalse(bounds.containsSquare(0, -14, 3));
+        assertFalse(bounds.containsSquare(0, 29, 3));
+    }
+
+    @Test
+    void insetShrinksEverySideAndCanBecomeEmpty() {
+        GenerationWriteBounds inset = GenerationWriteBounds.around(0, 0, 1).inset(4);
+
+        assertEquals(-12, inset.minimumX());
+        assertEquals(27, inset.maximumX());
+        assertEquals(-12, inset.minimumZ());
+        assertEquals(27, inset.maximumZ());
+        GenerationWriteBounds exhausted = GenerationWriteBounds.around(0, 0, 0).inset(8);
+        for (int x = -2; x <= 17; x++) {
+            assertFalse(exhausted.contains(x, 8));
+        }
+    }
+
+    @Test
     void negativeChunkCoordinatesRetainCorrectInclusiveBlockBounds() {
         GenerationWriteBounds bounds = GenerationWriteBounds.around(-2, -3, 1);
 

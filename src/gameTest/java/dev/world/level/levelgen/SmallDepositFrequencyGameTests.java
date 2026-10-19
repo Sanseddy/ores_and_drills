@@ -32,8 +32,10 @@ public final class SmallDepositFrequencyGameTests {
                 helper.assertTrue(OreDepositFeature.passesDataDrivenFrequency(level,x,z,biome,ore,tier,forced),
                         "Final spawn retention changed a forced rule");
             }
+            double retained=4096*dev.config.OreDepositConfig.TINY_SMALL_SPAWN_RETENTION;
             if(tier<OreDepositFeature.TIER_MEDIUM)
-                helper.assertTrue(accepted>1800 && accepted<2300,"Small tier was not approximately halved: "+accepted);
+                helper.assertTrue(Math.abs(accepted-retained)<=Math.max(1,retained*0.06),
+                        "Small tier did not keep its configured retention: "+accepted+" of "+retained);
             else helper.assertTrue(accepted==4096,"Small-tier retention changed MEDIUM/LARGE");
         }
         helper.succeed();

@@ -5,6 +5,7 @@ import dev.config.OreDimensionOverrides;
 import dev.world.level.levelgen.OreSpawnDimensions;
 import dev.world.level.levelgen.OreUnifier;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.ContainerObjectSelectionList;
@@ -342,8 +343,7 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
             DimensionOption option = row.dimensionInfo.options().get(i);
             boolean enabled = row.dimensionEnabled.get(option.id());
             renderSquareToggle(graphics, x + 3, optionY + 2, enabled, hovered);
-            graphics.drawString(Minecraft.getInstance().font,
-                    fit(option.label(), width - 25), x + 21, optionY + 5, 0xFFFFFFFF);
+            drawScrollingLabel(graphics, option.label(), x + 21, optionY + 5, width - 25, 0xFFFFFFFF);
         }
         graphics.pose().popPose();
     }
@@ -684,7 +684,7 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
             for (DimensionOption option : options) {
                 int color = dimensionEnabled.getOrDefault(option.id(), true) ? 0xD0D0D0 : 0xFF777777;
                 int labelWidth = options.size() > 1 ? dimensionWidth - 25 : dimensionWidth - 8;
-                guiGraphics.drawString(Minecraft.getInstance().font, fit(option.label(), labelWidth), x, y, color);
+                drawScrollingLabel(guiGraphics, option.label(), x, y, labelWidth, color);
                 y += DIMENSION_LINE_HEIGHT;
             }
             if (options.size() > 1) {
@@ -820,6 +820,21 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
             case "the_end" -> 2;
             default -> 3;
         };
+    }
+
+    /**
+     * Draws a left-aligned label at {@code (x, y)}. A label wider than {@code maxWidth} scrolls back and forth
+     * inside that width, like vanilla button captions, so the full name can be read instead of an ellipsis.
+     */
+    private static void drawScrollingLabel(GuiGraphics graphics, Component text, int x, int y, int maxWidth, int color) {
+        Font font = Minecraft.getInstance().font;
+        if (font.width(text) <= maxWidth) {
+            graphics.drawString(font, text, x, y, color);
+            return;
+        }
+        // Vanilla places the text at (minY + maxY - 9) / 2 + 1; these bounds put it exactly on y and keep the
+        // shadow inside the scissor.
+        AbstractWidget.renderScrollingString(graphics, font, text, x, y - 2, x + Math.max(0, maxWidth), y + 9, color);
     }
 
     private static Component fit(Component component, int maxWidth) {

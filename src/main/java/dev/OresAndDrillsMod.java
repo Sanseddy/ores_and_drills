@@ -3,6 +3,7 @@ package dev;
 import dev.config.OreDepositConfig;
 import dev.config.OreWorldSettingsApplier;
 import dev.command.OreDepositLocateCommand;
+import dev.command.OreDepositLocateService;
 import dev.config.OreSettingsPresetManager;
 import dev.network.ModNetworking;
 import dev.network.OreDepositPaletteSync;
@@ -51,6 +52,10 @@ public final class OresAndDrillsMod {
         modEventBus.addListener(OreWorldSettingsApplier::onConfigLoading);
         modEventBus.addListener(dev.config.ConfigReloader::onConfigReloading);
         NeoForge.EVENT_BUS.addListener(OreDepositLocateCommand::register);
+        NeoForge.EVENT_BUS.addListener(OreDepositLocateService::onServerTick);
+        NeoForge.EVENT_BUS.addListener(OreDepositLocateService::onServerStopped);
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerStoppingEvent event) ->
+                dev.world.level.levelgen.SmallDepositDiagnostics.logAll());
         NeoForge.EVENT_BUS.addListener(OreSettingsPresetManager::addReloadListener);
         NeoForge.EVENT_BUS.addListener(OreDepositExplosionHandler::onDetonate);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, OreDepositMiningSpeed::onBreakSpeed);

@@ -41,6 +41,7 @@ import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfiguration;
 import net.minecraft.world.level.levelgen.feature.configurations.OreConfiguration;
+import net.minecraft.world.level.levelgen.placement.PlacementModifier;
 import net.minecraft.world.level.levelgen.structure.templatesystem.RuleTest;
 
 import it.unimi.dsi.fastutil.longs.LongSet;
@@ -93,12 +94,18 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
      */
     private static final int MAX_DEPOSIT_ENTRIES_PER_CHUNK = 360;
     /**
-     * TINY/SMALL deposits inherit arbitrary third-party placed-feature counts. Keep the expensive
-     * cave-wall search bounded when every ore is set to its maximum frequency. The configurable
-     * rare-tier ceiling is honoured up to this hard runtime ceiling, so ordinary settings retain their
-     * configured budget while pathological presets cannot monopolize worldgen workers.
+     * Vanilla-like veins reproduce ordinary ore volume: a few hundred ore blocks per chunk, more in
+     * mountains. Compact MEDIUM/LARGE bodies already store up to 1,792 entries in one chunk.
      */
-    private static final int MAX_SMALL_DEPOSIT_ATTEMPTS_PER_CHUNK = 12;
+    private static final int MAX_VANILLA_LIKE_ENTRIES_PER_CHUNK = 2_048;
+    /** OreFeature veins of size 1-3 usually place nothing; size 4 is vanilla's smallest dependable vein. */
+    static final int MIN_TINY_VEIN_SIZE = 4;
+    static final float TINY_VEIN_SIZE_FRACTION = 0.5F;
+    /** TINY/SMALL CAVE_WALL placement: how far a candidate looks for a wall and how hard it tries to face it. */
+    static final int SMALL_WALL_SEARCH_HORIZONTAL_RADIUS = 16;
+    static final int SMALL_WALL_SEARCH_VERTICAL_RADIUS = 12;
+    static final int SMALL_WALL_SEARCH_CHECKS = 8_192;
+    static final int SMALL_WALL_VEIN_ORIENTATIONS = 4;
     private static final double BASE_DEPOSIT_ATTEMPTS_PER_CHUNK = 2.0D;
     private static final double SOURCE_DENSITY_SATURATION = 64.0D;
     public static final int MAX_UNDERGROUND_DEPTH = 5;
@@ -123,8 +130,6 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
     private static final long ANCHOR_SEED_Z = 132897987541L;
     /** Salt for the immutable per-deposit plan (shape, block count and reserve). */
     private static final long DEPOSIT_PLAN_SALT = 0x504C414E4F52454CL;
-    /** Salt for the TINY/SMALL retention decision shared by generation and /locate. */
-    private static final long SMALL_TIER_GATE_SALT = 0x534D414C4C474154L;
     /** Salt and bounded probe budget for selecting a real position inside a data-driven 3D biome. */
     private static final long DATA_DRIVEN_BIOME_SEARCH_SALT = 0x42494F4D45534541L;
     private static final ResourceLocation DATA_DRIVEN_BIOME_ANCHOR_ID =
@@ -153,8 +158,6 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
      * spawning several deposits of one material where the weighted lottery only budgeted for one.
      */
     private static final Set<Long> CLAIMED_MATERIAL_SLOTS = ConcurrentHashMap.newKeySet();
-    /** Per-chunk reservations made before a small deposit starts its cave-wall search. */
-    private static final ConcurrentHashMap<Long, AtomicInteger> CLAIMED_SMALL_ATTEMPTS = new ConcurrentHashMap<>();
     /**
      * Both claim sets above only ever get checked while their own chunk is still being decorated — once a
      * chunk finishes, none of its keys can ever be queried again (chunks don't redecorate). Left unbounded,
@@ -165,8 +168,6 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
      */
     private static final int MAX_CLAIM_CACHE_ENTRIES = 400_000;
     private static volatile boolean loggedTierTable;
-    private static final Map<SmallDiagnosticKey, SmallAttemptStats> SMALL_ATTEMPT_DIAGNOSTICS = new ConcurrentHashMap<>();
-    private static final Set<String> LOGGED_SMALL_BUDGETS = ConcurrentHashMap.newKeySet();
 
     public OreDepositFeature(Codec<Configuration> codec) {
         super(codec);
@@ -190,11 +191,16 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
      */
     private static Holder<Biome> chunkSampleBiome(ServerLevel level, int chunkX, int chunkZ) {
         BlockPos sample = chunkSamplePos(chunkX, chunkZ, chunkSampleY(level));
-        return level.getUncachedNoiseBiome(
+        return BiomeNoiseCache.get(level,
                 QuartPos.fromBlock(sample.getX()),
                 QuartPos.fromBlock(sample.getY()),
                 QuartPos.fromBlock(sample.getZ())
         );
+    }
+
+    static ResourceLocation automaticSourceBiomeId(ServerLevel level, int chunkX, int chunkZ) {
+        return chunkSampleBiome(level, chunkX, chunkZ)
+                .unwrapKey().map(key -> key.location()).orElse(null);
     }
 
     /** One immutable automatic source biome per cell prevents candidate count from scaling with biome count. */
@@ -255,14 +261,6 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
                 OreDepositConfig.LARGER_TIER_RARITY,
                 OreDepositConfig.DEPOSIT_SIZE_RARITY_WEIGHT,
                 OreDepositConfig.ORE_AMOUNT_RARITY_WEIGHT
-        );
-    }
-
-    private static DepositTierMath.SmallTierParameters smallTierParameters() {
-        return new DepositTierMath.SmallTierParameters(
-                OreDepositConfig.SMALL_DEPOSIT_FREQUENCY_SHARE,
-                OreDepositConfig.MIN_SMALL_DEPOSIT_FREQUENCY_SHARE,
-                OreDepositConfig.SMALL_TO_TINY_FREQUENCY_RATIO
         );
     }
 
@@ -376,42 +374,6 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
         ));
     }
 
-    /**
-     * Decides the TINY/SMALL retention gate from immutable world data.  Keeping this separate from the
-     * placed-feature random stream lets /locate reject chunks that cannot retain this material before it
-     * has to generate and inspect them.
-     */
-    private static boolean passesSmallTierRetentionGate(
-            ServerLevel level,
-            int chunkX,
-            int chunkZ,
-            int tier,
-            String materialKey,
-            ResourceLocation biomeId,
-            double probability
-    ) {
-        if (probability <= 0.0D) {
-            return false;
-        }
-        if (probability >= 1.0D) {
-            return true;
-        }
-        long seed = DepositSeedMath.cellSeed(
-                level.getSeed(),
-                level.dimension().location().toString(),
-                biomeId == null ? "" : biomeId.toString(),
-                materialKey,
-                DepositLayouts.tierSalt(tier),
-                chunkX,
-                chunkZ,
-                0,
-                SMALL_TIER_GATE_SALT,
-                ANCHOR_SEED_X,
-                ANCHOR_SEED_Z
-        );
-        return SmallTierSeedMath.unitDouble(seed) < probability;
-    }
-
     private static float liveFrequencyMultiplier(Block block) {
         return OreOverrides.lookupConfigured(block)
                 .map(OreOverrides.OreOverride::frequency)
@@ -422,6 +384,426 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
         return OreOverrides.lookupConfigured(block)
                 .map(OreOverrides.OreOverride::size)
                 .orElseGet(() -> OreSettingsPresetManager.resolve(block).multipliers().size());
+    }
+
+    /**
+     * Vanilla-like TINY/SMALL. This call is one attempt of the original ore feature, already positioned by
+     * its own placement modifiers, and the vein is built by {@code Feature.ORE} itself. Every block the
+     * vanilla feature would fill becomes a deposit block holding one unit (one mined ore), scaled by the
+     * Richness slider. The tier only labels the vein by its block count.
+     */
+    private static boolean placeVanillaVein(FeaturePlaceContext<Configuration> context, OreVein vein) {
+        WorldGenLevel level = context.level();
+        RandomSource random = context.random();
+        Configuration config = context.config();
+        BlockPos origin = context.origin();
+        List<OreConfiguration.TargetBlockState> targets = config.targets();
+        if (targets.isEmpty()) {
+            return false;
+        }
+        // A weighted random-selector branch keeps the probability the original selector gave it.
+        if (config.sourceProbability() < 1.0F && random.nextFloat() >= config.sourceProbability()) {
+            return false;
+        }
+        // Each biome owns a copy of the source feature; like BiomeFilter on the shared original, a copy
+        // places only inside its own biome. Chunk biome data is already generated at this step.
+        ResourceLocation sourceBiome = config.sourceBiome().orElse(null);
+        if (!WorldgenReadArea.contains(level, origin)) {
+            return false;
+        }
+        if (sourceBiome != null && !level.getBiome(origin).is(ResourceKey.create(Registries.BIOME, sourceBiome))) {
+            return false;
+        }
+        Block ore = targets.getFirst().state.getBlock();
+        // Below 1 the Frequency slider drops attempts; above 1 it adds ore per block so veins keep their shape.
+        float frequency = Mth.clamp(liveFrequencyMultiplier(ore), 0.1F, 6.0F);
+        if (frequency < 1.0F && random.nextFloat() >= frequency) {
+            return false;
+        }
+        int size = Math.max(1, Math.round(vein.size() * Mth.clamp(liveSizeMultiplier(ore), 0.1F, 6.0F)));
+        List<DepositPosition> positions = limitByChunkCompatibilityBudget(
+                level,
+                collectOreVein(level, context.chunkGenerator(), random, origin, targets, size, vein.airExposureDiscard()),
+                MAX_VANILLA_LIKE_ENTRIES_PER_CHUNK
+        );
+        if (positions.isEmpty()) {
+            return false;
+        }
+
+        OreDepositPaletteData palette = OreDepositPaletteData.get(level.getLevel());
+        Map<Block, Integer> oreIndices = new IdentityHashMap<>();
+        for (DepositPosition position : positions) {
+            Block oreBlock = position.target().state.getBlock();
+            if (!oreIndices.containsKey(oreBlock)) {
+                int oreIndex = palette.oreIndex(oreBlock);
+                if (oreIndex < 0) {
+                    return false;
+                }
+                oreIndices.put(oreBlock, oreIndex);
+            }
+        }
+
+        int tier = positions.size() <= tierProfile(TIER_TINY).maximumBlockCount() ? TIER_TINY : TIER_SMALL;
+        float orePerBlock = Mth.clamp(config.richnessMultiplier(), 0.1F, 6.0F) * Math.max(1.0F, frequency);
+        double[] equalWeights = new double[positions.size()];
+        java.util.Arrays.fill(equalWeights, 1.0D);
+        int[] amounts = DepositTierMath.distributeOre(
+                Math.max(positions.size(), Math.round(positions.size() * orePerBlock)), equalWeights
+        );
+
+        Map<Block, Integer> baseIndices = new IdentityHashMap<>();
+        BlockState depositState = ModBlocks.ORE_DEPOSIT.get().defaultBlockState();
+        List<OreDepositData.GeneratedDeposit> generated = new ArrayList<>(positions.size());
+        for (int index = 0; index < positions.size(); index++) {
+            DepositPosition position = positions.get(index);
+            BlockPos pos = position.pos();
+            BlockState host = level.getBlockState(pos);
+            Integer baseIndex = baseIndices.get(host.getBlock());
+            if (baseIndex == null) {
+                baseIndex = palette.baseIndex(host.getBlock());
+                if (baseIndex >= 0) {
+                    baseIndices.put(host.getBlock(), baseIndex);
+                } else {
+                    baseIndex = OreDepositStonePalette.nearestByMapColor(
+                            level.getLevel(), position.target().state.getMapColor(level, pos).col
+                    );
+                }
+            }
+            // Same client-update suppression as every other deposit write during decoration.
+            if (!level.setBlock(pos, depositState, Block.UPDATE_NONE)) {
+                continue;
+            }
+            generated.add(new OreDepositData.GeneratedDeposit(
+                    pos, baseIndex, oreIndices.get(position.target().state.getBlock()), amounts[index], tier
+            ));
+        }
+        // Vanilla-like veins are as numerous as ordinary veins (dozens per chunk). Recording each one would
+        // grow the persistent locate index without bound, so they are written to chunk data only.
+        OreDepositData.setGeneratedBatch(level, generated);
+        return !generated.isEmpty();
+    }
+
+    /** Live per-ore Frequency slider, clamped to the menu range. */
+    static double liveFrequencyMultiplierFor(Block block) {
+        return Mth.clamp(liveFrequencyMultiplier(block), 0.1F, 6.0F);
+    }
+
+    /**
+     * Automatic TINY/SMALL for one source copy in one chunk. The source's own placement modifiers yield its
+     * original attempts (once, with a stable seed); each attempt inside this copy's biome that the selector
+     * branch really runs is one source attempt. The retention gate keeps
+     * {@code floor(lambda) + Bernoulli(frac(lambda))} candidates of a single tier from it, where
+     * {@code lambda = retention * Frequency}. Each candidate is one vanilla vein at the attempt position;
+     * a position in air simply finds no host rock and is refused, never moved elsewhere.
+     */
+    private static boolean placeSourceAttempts(FeaturePlaceContext<Configuration> context, OreVein vein) {
+        WorldGenLevel level = context.level();
+        Configuration config = context.config();
+        List<OreConfiguration.TargetBlockState> targets = config.targets();
+        if (targets.isEmpty()) {
+            return false;
+        }
+        ServerLevel serverLevel = level.getLevel();
+        ResourceLocation dimension = serverLevel.dimension().location();
+        ChunkPos chunk = new ChunkPos(context.origin());
+        Block ore = targets.getFirst().state.getBlock();
+        String material = OreUnifier.materialKeyFor(ore);
+        SmallDepositDiagnostics.Counters stats = SmallDepositDiagnostics.forMaterial(dimension, material);
+
+        long chainSeed = SmallDepositAttemptMath.chainSeed(
+                serverLevel.getSeed(), dimension.toString(), vein.sourceSignature(), chunk.x, chunk.z);
+        SmallDepositAttemptPlanner.AttemptStream stream = SmallDepositAttemptPlanner.evaluate(
+                level, context.chunkGenerator(), chunk, vein.sourcePlacement(), chainSeed, vein.sourceSignature());
+        if (stream.failed()) {
+            return stats.refuse(SmallDepositDiagnostics.Refusal.PLACEMENT_ERROR);
+        }
+        if (stream.truncated()) {
+            stats.refuse(SmallDepositDiagnostics.Refusal.ATTEMPT_LIMIT);
+        }
+        ResourceKey<Biome> sourceBiome = config.sourceBiome()
+                .map(id -> ResourceKey.create(Registries.BIOME, id)).orElse(null);
+        double lambda = SmallDepositAttemptMath.expectedCandidates(
+                OreDepositConfig.SMALL_DEPOSIT_ATTEMPT_RETENTION, liveFrequencyMultiplierFor(ore));
+        boolean placedAny = false;
+        List<BlockPos> attempts = stream.positions();
+        for (int index = 0; index < attempts.size(); index++) {
+            BlockPos attempt = attempts.get(index);
+            // A modded chain may offset positions out of the decorated chunks; their biome and terrain cannot be
+            // read yet. Each attempt has its own seed, so skipping one leaves the others unchanged.
+            if (!WorldgenReadArea.contains(level, attempt)) {
+                stats.refuse(SmallDepositDiagnostics.Refusal.OUTSIDE_GENERATION_AREA);
+                continue;
+            }
+            // Every biome owns a copy of the source and evaluates the same positions; like BiomeFilter on the
+            // shared original feature, each copy keeps only the attempts inside its own biome.
+            if (sourceBiome != null && !level.getBiome(attempt).is(sourceBiome)) {
+                continue;
+            }
+            long attemptSeed = SmallDepositAttemptMath.attemptSeed(chainSeed, index, attempt.asLong());
+            SmallDepositAttemptMath.Decision decision = SmallDepositAttemptMath.decide(
+                    attemptSeed, config.sourceProbability(), lambda, OreDepositConfig.SMALL_DEPOSIT_TINY_SHARE);
+            if (!decision.sourceAttempt()) {
+                continue;
+            }
+            stats.sourceAttempts.increment();
+            int tier = decision.tiny() ? TIER_TINY : TIER_SMALL;
+            for (int candidateIndex = 0; candidateIndex < decision.candidates(); candidateIndex++) {
+                stats.candidate(decision.tiny());
+                long candidateSeed = SmallDepositAttemptMath.candidateSeed(attemptSeed, candidateIndex);
+                BlockPos origin = candidateIndex == 0 ? attempt
+                        : SmallDepositAttemptPlanner.extraCandidateOrigin(attempt, chunk, candidateSeed, stream.inSquare());
+                if (candidateIndex > 0 && sourceBiome != null && !level.getBiome(origin).is(sourceBiome)) {
+                    stats.refuse(SmallDepositDiagnostics.Refusal.OUTSIDE_SOURCE_BIOME);
+                    continue;
+                }
+                placedAny |= placeSourceCandidate(level, context.chunkGenerator(), config, vein, tier, origin,
+                        candidateSeed, stats);
+            }
+        }
+        SmallDepositDiagnostics.maybeLog(dimension, material, stats);
+        return placedAny;
+    }
+
+    private static boolean placeSourceCandidate(
+            WorldGenLevel level,
+            ChunkGenerator generator,
+            Configuration config,
+            OreVein vein,
+            int tier,
+            BlockPos attemptOrigin,
+            long candidateSeed,
+            SmallDepositDiagnostics.Counters stats
+    ) {
+        List<OreConfiguration.TargetBlockState> targets = config.targets();
+        Block ore = targets.getFirst().state.getBlock();
+        boolean tiny = tier == TIER_TINY;
+        RandomSource planRandom = RandomSource.create(candidateSeed);
+        int veinSize = smallTierVeinSize(vein.size(), tier, liveSizeMultiplier(ore));
+
+        List<DepositPosition> positions = List.of();
+        boolean wallAnchored = false;
+        if (OreDepositConfig.SMALL_DEPOSIT_PLACEMENT.get() == OreDepositConfig.SmallDepositPlacement.CAVE_WALL
+                && SmallDepositAttemptMath.placesOnWall(candidateSeed,
+                        smallDepositWallChance(level.getLevel(), OreUnifier.materialKeyFor(ore)))) {
+            stats.wallRolls.increment();
+            // The vein is laid from the air block in front of the wall; the wall keeps that block and the
+            // vanilla feature's whole footprint around it inside the generated area.
+            GenerationWriteBounds writeBounds = generationWriteBounds(level);
+            GenerationWriteBounds wallArea = writeBounds == null ? null
+                    : writeBounds.inset(OreFeatureFootprint.horizontalReach(veinSize) + 1);
+            CaveWallAnchor wall = CaveWallDetector.findNearest(
+                    level, attemptOrigin, SMALL_WALL_SEARCH_HORIZONTAL_RADIUS, SMALL_WALL_SEARCH_VERTICAL_RADIUS,
+                    SMALL_WALL_SEARCH_CHECKS, 1, 2, null,
+                    pos -> (wallArea == null || wallArea.contains(pos.getX(), pos.getZ()))
+                            && level.ensureCanWrite(pos)
+            ).orElse(null);
+            if (wall != null) {
+                positions = collectWallVein(level, generator, planRandom, wall, targets, veinSize, candidateSeed);
+                wallAnchored = !positions.isEmpty();
+            }
+        }
+        if (positions.isEmpty()) {
+            // No usable wall nearby (or the cave swallowed the vein): the original attempt position.
+            positions = collectOreVein(level, generator, planRandom, attemptOrigin, targets, veinSize,
+                    vein.airExposureDiscard());
+        }
+        if (positions.isEmpty()) {
+            return stats.refuse(SmallDepositDiagnostics.Refusal.NO_HOST_ROCK);
+        }
+        if (touchesExistingDeposit(level, positions)) {
+            return stats.refuse(SmallDepositDiagnostics.Refusal.OVERLAP);
+        }
+
+        // Richness scales the whole-deposit reserve only; it never adds candidates or blocks.
+        float richness = Mth.clamp(config.richnessMultiplier(), 0.1F, 6.0F);
+        int reserve = tiny
+                ? SmallDepositAttemptMath.sampleReserve(OreDepositConfig.TINY_DEPOSIT_MIN_RESERVE,
+                        OreDepositConfig.TINY_DEPOSIT_MAX_RESERVE, richness, planRandom::nextDouble)
+                : SmallDepositAttemptMath.sampleReserve(OreDepositConfig.SMALL_DEPOSIT_MIN_RESERVE,
+                        OreDepositConfig.SMALL_DEPOSIT_MAX_RESERVE, richness, planRandom::nextDouble);
+        if (positions.size() > reserve) {
+            // Every placed block holds at least one unit, so a vein larger than its reserve is trimmed. Blocks
+            // a cave or the surface exposed are kept first: trimming must not hide veins from cave walls.
+            int[] xs = positions.stream().mapToInt(position -> position.pos().getX()).toArray();
+            int[] ys = positions.stream().mapToInt(position -> position.pos().getY()).toArray();
+            int[] zs = positions.stream().mapToInt(position -> position.pos().getZ()).toArray();
+            boolean[] exposed = new boolean[positions.size()];
+            for (int index = 0; index < exposed.length; index++) {
+                exposed[index] = isExposedToAir(level, positions.get(index).pos());
+            }
+            int[] kept = SmallDepositAttemptMath.keepForReserve(xs, ys, zs, exposed, reserve);
+            List<DepositPosition> trimmed = new ArrayList<>(kept.length);
+            for (int index : kept) {
+                trimmed.add(positions.get(index));
+            }
+            stats.blocksTrimmedToReserve.add(positions.size() - trimmed.size());
+            positions = trimmed;
+        }
+        positions = limitByChunkCompatibilityBudget(level, positions);
+        if (positions.isEmpty()) {
+            return stats.refuse(SmallDepositDiagnostics.Refusal.CHUNK_ENTRY_LIMIT);
+        }
+
+        OreDepositPaletteData palette = OreDepositPaletteData.get(level.getLevel());
+        Map<Block, Integer> oreIndices = new IdentityHashMap<>();
+        for (DepositPosition position : positions) {
+            Block oreBlock = position.target().state.getBlock();
+            if (!oreIndices.containsKey(oreBlock)) {
+                int oreIndex = palette.oreIndex(oreBlock);
+                if (oreIndex < 0) {
+                    return stats.refuse(SmallDepositDiagnostics.Refusal.PALETTE_FULL);
+                }
+                oreIndices.put(oreBlock, oreIndex);
+            }
+        }
+
+        Map<Block, Integer> baseIndices = new IdentityHashMap<>();
+        BlockState depositState = ModBlocks.ORE_DEPOSIT.get().defaultBlockState();
+        List<BlockPos> written = new ArrayList<>(positions.size());
+        List<int[]> indices = new ArrayList<>(positions.size());
+        boolean visible = false;
+        for (DepositPosition position : positions) {
+            BlockPos pos = position.pos();
+            BlockState host = level.getBlockState(pos);
+            if (!host.is(ModBlockTags.STONES) || !host.getFluidState().isEmpty()) {
+                continue;
+            }
+            Integer baseIndex = baseIndices.get(host.getBlock());
+            if (baseIndex == null) {
+                baseIndex = palette.baseIndex(host.getBlock());
+                if (baseIndex >= 0) {
+                    baseIndices.put(host.getBlock(), baseIndex);
+                } else {
+                    baseIndex = OreDepositStonePalette.nearestByMapColor(
+                            level.getLevel(), position.target().state.getMapColor(level, pos).col);
+                }
+            }
+            // Same client-update suppression as every other deposit write during decoration.
+            if (!level.setBlock(pos, depositState, Block.UPDATE_NONE)) {
+                continue;
+            }
+            written.add(pos);
+            indices.add(new int[] {baseIndex, oreIndices.get(position.target().state.getBlock())});
+            if (isExposedToAir(level, pos)) {
+                stats.exposedOreBlocks.increment();
+                visible = true;
+            }
+        }
+        if (written.isEmpty()) {
+            return stats.refuse(SmallDepositDiagnostics.Refusal.WRITE_REJECTED);
+        }
+        // The reserve is split over the blocks actually written: the sum is exact and no block is empty.
+        int[] amounts = SmallDepositAttemptMath.splitReserve(reserve, written.size());
+        List<OreDepositData.GeneratedDeposit> generated = new ArrayList<>(written.size());
+        for (int index = 0; index < written.size(); index++) {
+            generated.add(new OreDepositData.GeneratedDeposit(
+                    written.get(index), indices.get(index)[0], indices.get(index)[1], amounts[index], tier));
+        }
+        // Like vanilla-like veins these are far too numerous for the persistent locate index; /locate reads
+        // them from loaded chunk data instead.
+        OreDepositData.setGeneratedBatch(level, generated);
+        if (wallAnchored) {
+            stats.wallAnchoredDeposits.increment();
+        }
+        if (visible) {
+            stats.visibleDeposits.increment();
+        }
+        return stats.placed(tiny, written.size(), reserve);
+    }
+
+    /**
+     * A vanilla vein laid on a cave wall so that it is seen from the cave. Its origin is the air block in front
+     * of the wall, so the stone half of the vein is the wall's face; a few deterministic orientations are tried
+     * until one touches the air. The air-exposure discard is not applied: it would erase exactly that face
+     * (it is 1.0 for ancient debris or buried diamonds).
+     */
+    private static List<DepositPosition> collectWallVein(
+            WorldGenLevel level,
+            ChunkGenerator generator,
+            RandomSource planRandom,
+            CaveWallAnchor wall,
+            List<OreConfiguration.TargetBlockState> targets,
+            int veinSize,
+            long candidateSeed
+    ) {
+        BlockPos front = wall.position().relative(wall.exposedFace());
+        List<DepositPosition> best = List.of();
+        for (int attempt = 0; attempt < SMALL_WALL_VEIN_ORIENTATIONS; attempt++) {
+            RandomSource random = attempt == 0 ? planRandom : RandomSource.create(SeedMixer.mix(candidateSeed + attempt));
+            List<DepositPosition> positions = collectOreVein(level, generator, random, front, targets, veinSize, 0.0F);
+            for (DepositPosition position : positions) {
+                if (isExposedToAir(level, position.pos())) {
+                    return positions;
+                }
+            }
+            if (best.isEmpty()) {
+                best = positions;
+            }
+        }
+        return best;
+    }
+
+    /** CAVE_WALL share of a material's TINY/SMALL candidates; rarer ores stay buried more often. */
+    static double smallDepositWallChance(ServerLevel level, String materialKey) {
+        return smallDepositWallChance(SmallDepositAttemptPlanner.relativeAttemptFrequency(level, materialKey));
+    }
+
+    static double smallDepositWallChance(double relativeAttemptFrequency) {
+        return SmallDepositAttemptMath.wallChance(relativeAttemptFrequency,
+                OreDepositConfig.SMALL_DEPOSIT_WALL_CHANCE_COMMON, OreDepositConfig.SMALL_DEPOSIT_WALL_CHANCE_RARE,
+                OreDepositConfig.SMALL_DEPOSIT_WALL_RARITY_DECADES);
+    }
+
+    /** Same notion as vanilla's air-exposure check: any of the six neighbours is air. */
+    private static boolean isExposedToAir(WorldGenLevel level, BlockPos pos) {
+        BlockPos.MutableBlockPos neighbor = new BlockPos.MutableBlockPos();
+        for (Direction direction : Direction.values()) {
+            neighbor.setWithOffset(pos, direction);
+            if (WorldgenReadArea.contains(level, neighbor)
+                    && CaveWallDetector.isOpenCaveSpace(level.getBlockState(neighbor))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Regular-planner vein size: SMALL is the source feature's own vein, TINY a halved copy of it, and the
+     * Size slider scales both. {@link #MIN_TINY_VEIN_SIZE} keeps a TINY vein able to place a block at all.
+     */
+    static int smallTierVeinSize(int sourceSize, int tier, float sizeMultiplier) {
+        int size = tier == TIER_TINY
+                ? Math.max(MIN_TINY_VEIN_SIZE, Math.round(sourceSize * TINY_VEIN_SIZE_FRACTION))
+                : Math.max(MIN_TINY_VEIN_SIZE, sourceSize);
+        return Mth.clamp(Math.round(size * Mth.clamp(sizeMultiplier, 0.1F, 6.0F)), 1, 64);
+    }
+
+    /**
+     * One {@code Feature.ORE} vein of {@code size} at {@code origin}, built by the vanilla feature with the
+     * source's targets and air-exposure discard. Only positions over a {@code #c:stones} host are kept: a
+     * deposit block stores that host in its palette.
+     */
+    private static List<DepositPosition> collectOreVein(
+            WorldGenLevel level,
+            ChunkGenerator generator,
+            RandomSource random,
+            BlockPos origin,
+            List<OreConfiguration.TargetBlockState> targets,
+            int size,
+            float airExposureDiscard
+    ) {
+        List<DepositPosition> vein = VanillaOreVein.collect(
+                level, generator, random, origin,
+                new OreConfiguration(targets, Mth.clamp(size, 0, 64), Mth.clamp(airExposureDiscard, 0.0F, 1.0F))
+        );
+        List<DepositPosition> hosted = new ArrayList<>(vein.size());
+        for (DepositPosition position : vein) {
+            BlockState host = level.getBlockState(position.pos());
+            if (host.is(ModBlockTags.STONES) && host.getFluidState().isEmpty()) {
+                hosted.add(position);
+            }
+        }
+        return hosted;
     }
 
     /** Builds the immutable geometry plan used by both placement and /locate. */
@@ -952,11 +1334,8 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
         return guaranteedAttempts + (extraAttempt ? 1 : 0);
     }
 
-    /** Per-tier frequency tuning on top of the shared tier curves: SMALL rarer, LARGE more common. */
+    /** Per-tier frequency tuning on top of the shared tier curves: LARGE more common. */
     private static double tierFrequencyMultiplier(int tier) {
-        if (tier == TIER_SMALL) {
-            return OreDepositConfig.SMALL_DEPOSIT_FREQUENCY_MULTIPLIER;
-        }
         if (tier == TIER_LARGE) {
             return OreDepositConfig.LARGE_DEPOSIT_FREQUENCY_MULTIPLIER;
         }
@@ -994,38 +1373,6 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
     private static void trimIfOversized(Set<Long> claimCache) {
         if (claimCache.size() > MAX_CLAIM_CACHE_ENTRIES) {
             claimCache.clear();
-        }
-    }
-
-    private static int smallAttemptLimitPerMaterial() {
-        return DepositTierMath.smallAttemptBudget(
-                OreDepositConfig.MAX_GENERATION_ATTEMPTS_PER_CHUNK,
-                MAX_SMALL_DEPOSIT_ATTEMPTS_PER_CHUNK
-        );
-    }
-
-    /**
-     * Reserves one bounded expensive attempt before cave-wall discovery. Failed searches deliberately
-     * keep their reservation: otherwise a dense max-frequency preset can repeatedly spend one
-     * material's search budget on failures.
-     */
-    private static boolean claimSmallAttempt(ServerLevel level, int chunkX, int chunkZ, int tier, String materialKey) {
-        // Keep the safety limit per material. A shared per-chunk cap made a high Frequency setting for
-        // coal consume the entire TINY/SMALL budget and silently suppress iron, copper, etc.
-        long key = computeMaterialClaimKey(level, chunkX, chunkZ, tier, materialKey);
-        AtomicInteger attempts = CLAIMED_SMALL_ATTEMPTS.computeIfAbsent(key, ignored -> new AtomicInteger());
-        int limit = smallAttemptLimitPerMaterial();
-        while (true) {
-            int current = attempts.get();
-            if (current >= limit) {
-                return false;
-            }
-            if (attempts.compareAndSet(current, current + 1)) {
-                if (CLAIMED_SMALL_ATTEMPTS.size() > MAX_CLAIM_CACHE_ENTRIES) {
-                    CLAIMED_SMALL_ATTEMPTS.clear();
-                }
-                return true;
-            }
         }
     }
 
@@ -1089,57 +1436,12 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
             String materialKey,
             ResourceLocation biomeId
     ) {
-        if (tier < 0 || tier >= TIER_COUNT) {
+        if (tier < TIER_MEDIUM || tier >= TIER_COUNT) {
+            // Automatic TINY/SMALL have no cell plan; they are predicted by SmallDepositAttemptPlanner.
             return false;
         }
         TierShares shares = computeTierShares();
         if (!isTierAnchorChunk(chunkX, chunkZ, tier)) {
-            return false;
-        }
-        if (tier < TIER_MEDIUM) {
-            List<OreGenerationWeights.OreGenerationData> entries = OreGenerationWeights.eligibleEntries(
-                    level.dimension().location(), biomeId
-            );
-            if (entries.isEmpty()) {
-                // Bootstrap without weights still uses the same final retention as real placement.
-                return !OreGenerationWeights.hasRecordedData(level.dimension().location(), biomeId)
-                        && passesSmallTierRetentionGate(level,chunkX,chunkZ,tier,materialKey,biomeId,
-                                retainedSpawnChance(tier,1.0D));
-            }
-            double maximum = OreGenerationWeights.maxOriginalFrequency(entries);
-            for (OreGenerationWeights.OreGenerationData entry : entries) {
-                if (!entry.materialKey().equals(materialKey)) {
-                    continue;
-                }
-                DepositTierMath.SmallTierPlan plan = DepositTierMath.smallTierPlan(
-                        entry.originalFrequency(), maximum,
-                        new DepositTierMath.TierDistribution(
-                                shares.profiles(), new double[TIER_COUNT], shares.normalizedScale(),
-                                shares.spawnWeight(), shares.share()
-                        ),
-                        smallTierParameters(),
-                        OreGenerationWeights.rarityParameters()
-                );
-                if (tier >= plan.gateProbabilities().length) {
-                    return false;
-                }
-                Block block = BuiltInRegistries.BLOCK.get(entry.oreId());
-                if (block == null) {
-                    return false;
-                }
-                DepositTierLayout layout = DepositLayouts.forTier(
-                        OreDepositTier.fromIndex(tier).orElseThrow()
-                );
-                double gateProbability = DepositTierMath.cellCandidateProbability(
-                        plan.expectedAttempts()[tier] * tierFrequencyMultiplier(tier),
-                        layout.cellSizeChunks(),
-                        liveFrequencyMultiplier(block)
-                );
-                gateProbability = retainedSpawnChance(tier, gateProbability);
-                return passesSmallTierRetentionGate(
-                        level, chunkX, chunkZ, tier, materialKey, biomeId, gateProbability
-                );
-            }
             return false;
         }
         int attempts = attemptsForChunkTier(level, chunkX, chunkZ, biomeId, tier, shares);
@@ -1158,9 +1460,6 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
             if (OreGenerationWeights.isMaterialSelectedForRegion(
                     dimension, biomeId, materialKey, tier, randomValue
             )) {
-                if (tier < TIER_MEDIUM) {
-                    return true;
-                }
                 // The same seed-only arbitration is used by the receiving-chunk decoration pass.
                 return compactSpacingAllows(level, chunkX, chunkZ, tier);
             }
@@ -1793,6 +2092,15 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
                         context.level().getLevel().dimension().location())) {
             return false;
         }
+        OreVein vanillaVein = context.config().vein().filter(OreVein::vanillaPlacement).orElse(null);
+        if (vanillaVein != null) {
+            return depositStatesRegistered() && placeVanillaVein(context, vanillaVein);
+        }
+        if (context.config().sizeTier() < TIER_MEDIUM && context.config().dataDriven().isEmpty()) {
+            // Automatic TINY/SMALL: thinned original attempts. Datapack rules keep their own planner below.
+            OreVein sourceVein = context.config().vein().orElse(null);
+            return sourceVein != null && depositStatesRegistered() && placeSourceAttempts(context, sourceVein);
+        }
         if(context.config().sizeTier()>=TIER_MEDIUM && context.config().dataDriven().map(DataDrivenSettings::forced).orElse(false))
             return placeForcedCompact(context);
         if (context.config().sizeTier() >= TIER_MEDIUM
@@ -1849,7 +2157,7 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
                     return false;
                 }
                 origin = plannedCandidate.center();
-                claim = new AttemptClaim(plannedCandidate.depositId(), false, null, null);
+                claim = new AttemptClaim(plannedCandidate.depositId(), false, null);
             } else {
                 int cellX = Math.floorDiv(chunkX, layout.cellSizeChunks());
                 int cellZ = Math.floorDiv(chunkZ, layout.cellSizeChunks());
@@ -1884,7 +2192,7 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
                 origin = plannedCandidate.center();
                 chunkX = plannedCandidate.sourceChunkX();
                 chunkZ = plannedCandidate.sourceChunkZ();
-                claim = new AttemptClaim(plannedCandidate.depositId(), false, null, null);
+                claim = new AttemptClaim(plannedCandidate.depositId(), false, null);
             }
         } else {
             claim = findEligibleAttempt(
@@ -2048,6 +2356,7 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
             return rejectAttempt(claim, "large_spacing_precheck");
         }
 
+        // Only datapack rules reach this point: automatic TINY/SMALL returned from placeSourceAttempts.
         List<DepositPosition> positions = compactShape != null
                 ? collectCompactPositions(level, origin, targets, compactShape, plannedCandidate.shapeSeed())
                 : wallAnchor == null
@@ -2334,6 +2643,14 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
             WorldGenLevel level,
             List<DepositPosition> positions
     ) {
+        return limitByChunkCompatibilityBudget(level, positions, MAX_DEPOSIT_ENTRIES_PER_CHUNK);
+    }
+
+    private static List<DepositPosition> limitByChunkCompatibilityBudget(
+            WorldGenLevel level,
+            List<DepositPosition> positions,
+            int maximumEntriesPerChunk
+    ) {
         if (positions.isEmpty()) {
             return positions;
         }
@@ -2350,7 +2667,7 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
                 used = existingDepositCount(level, pos);
                 usedByChunk.put(chunkKey, used);
             }
-            if (used >= MAX_DEPOSIT_ENTRIES_PER_CHUNK) {
+            if (used >= maximumEntriesPerChunk) {
                 skipped++;
                 continue;
             }
@@ -2361,7 +2678,7 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
         if (skipped > 0) {
             OresAndDrillsMod.LOGGER.debug(
                     "Ore deposits: trimmed {} blocks from a chunk-safe placement budget of {} entries",
-                    skipped, MAX_DEPOSIT_ENTRIES_PER_CHUNK
+                    skipped, maximumEntriesPerChunk
             );
         }
         return limited;
@@ -2970,11 +3287,7 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
     }
 
     private static GenerationWriteBounds generationWriteBounds(WorldGenLevel level) {
-        if (!(level instanceof WorldGenRegion region)) {
-            return null;
-        }
-        ChunkPos center = region.getCenter();
-        return GenerationWriteBounds.around(center.x, center.z, FEATURE_WRITE_RADIUS_CHUNKS);
+        return WorldgenReadArea.of(level);
     }
 
     private static double normalizedDistance(BlockPos pos, BlockPos origin, int radiusX, int radiusZ) {
@@ -3074,58 +3387,8 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
         }
 
         if (tier < TIER_MEDIUM) {
-            // RandomFeatureConfiguration and placement modifiers were already included while the source
-            // feature's expected frequency was scanned. Candidate existence now comes only from the cell seed.
-            OreGenerationWeights.MaterialFrequency frequency = OreGenerationWeights.materialFrequency(
-                    level.dimension().location(), biomeId, candidateOreId
-            );
-            double originalFrequency = frequency.originalFrequency() > 0.0D
-                    ? frequency.originalFrequency()
-                    : 1.0D;
-            double maximumOriginalFrequency = frequency.maximumOriginalFrequency() > 0.0D
-                    ? frequency.maximumOriginalFrequency()
-                    : originalFrequency;
-            DepositTierMath.SmallTierPlan plan = DepositTierMath.smallTierPlan(
-                    originalFrequency,
-                    maximumOriginalFrequency,
-                    new DepositTierMath.TierDistribution(
-                            shares.profiles(), new double[TIER_COUNT], shares.normalizedScale(),
-                            shares.spawnWeight(), shares.share()
-                    ),
-                    smallTierParameters(),
-                    OreGenerationWeights.rarityParameters()
-            );
-            logSmallMaterialBudget(
-                    level, biomeId, candidateOreId, frequency, plan, shares, frequencyMultiplier
-            );
-            SmallDiagnosticKey diagnosticKey = new SmallDiagnosticKey(
-                    level.dimension().location(),
-                    biomeId == null ? "<direct>" : biomeId.toString(),
-                    frequency.materialKey().isEmpty() ? candidateMaterialKey : frequency.materialKey(),
-                    candidateOreId,
-                    tier
-            );
-            SmallAttemptStats stats = SMALL_ATTEMPT_DIAGNOSTICS.computeIfAbsent(
-                    diagnosticKey, ignored -> new SmallAttemptStats()
-            );
-            stats.sourceAttempts.increment();
-            // The observed source stream has already been reduced to an expected frequency. The immutable
-            // per-cell gate below is now the sole owner of candidate existence for both generation and locate.
-            if (!predictsMaterialForChunk(level, chunkX, chunkZ, tier, candidateMaterialKey, biomeId)) {
-                return null;
-            }
-            // TINY/SMALL retain the source material identity. Selecting from the global weighted table here
-            // would apply rarity twice and let one ore's slider move every other ore's small deposits.
-            if (!claimSmallAttempt(level, chunkX, chunkZ, tier, candidateMaterialKey)) {
-                return null;
-            }
-            stats.launchedAttempts.increment();
-            return new AttemptClaim(
-                    0L,
-                    false,
-                    diagnosticKey,
-                    candidateOreId
-            );
+            // Automatic TINY/SMALL never enter the shared lottery; see placeSourceAttempts.
+            return null;
         }
 
         int attemptIndex = findWinningAttemptSlot(level, chunkX, chunkZ, candidateOreId, tier, biomeId, shares);
@@ -3148,7 +3411,6 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
         return new AttemptClaim(
                 computeAttemptClaimKey(level, chunkX, chunkZ, tier, attemptIndex),
                 true,
-                null,
                 selectedOreId
         );
     }
@@ -3294,7 +3556,7 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
                     int quartZ = horizontalQuart >> 2;
                     int sampleX = startX + (quartX << 2) + 2;
                     int sampleZ = startZ + (quartZ << 2) + 2;
-                    ResourceLocation biomeId = level.getUncachedNoiseBiome(
+                    ResourceLocation biomeId = BiomeNoiseCache.get(level,
                                     QuartPos.fromBlock(sampleX),
                                     QuartPos.fromBlock(sampleY),
                                     QuartPos.fromBlock(sampleZ)
@@ -3404,62 +3666,6 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
     /** Called whenever new worldgen observations arrive, so the debug table re-logs with fresh data. */
     static void resetDebugLog() {
         loggedTierTable = false;
-        LOGGED_SMALL_BUDGETS.clear();
-    }
-
-    private static void logSmallMaterialBudget(
-            ServerLevel level,
-            ResourceLocation biomeId,
-            ResourceLocation oreId,
-            OreGenerationWeights.MaterialFrequency frequency,
-            DepositTierMath.SmallTierPlan plan,
-            TierShares shares,
-            float frequencyMultiplier
-    ) {
-        if (!OresAndDrillsMod.LOGGER.isDebugEnabled() || frequency.originalFrequency() <= 0.0D) {
-            return;
-        }
-        String biomeName = biomeId == null ? "<direct>" : biomeId.toString();
-        String logKey = level.dimension().location() + "|" + biomeName + "|" + frequency.materialKey();
-        if (!LOGGED_SMALL_BUDGETS.add(logKey)) {
-            return;
-        }
-
-        double mediumExpected = expectedLargeTierMaterialAttempts(
-                level, biomeId, oreId, TIER_MEDIUM, shares
-        );
-        double largeExpected = expectedLargeTierMaterialAttempts(
-                level, biomeId, oreId, TIER_LARGE, shares
-        );
-        double tinyExpected = plan.expectedAttempts().length > TIER_TINY
-                ? plan.expectedAttempts()[TIER_TINY] * frequencyMultiplier
-                : 0.0D;
-        double smallExpected = plan.expectedAttempts().length > TIER_SMALL
-                ? plan.expectedAttempts()[TIER_SMALL] * tierFrequencyMultiplier(TIER_SMALL) * frequencyMultiplier
-                : 0.0D;
-        OresAndDrillsMod.LOGGER.debug(
-                "Ore deposit frequency: Ore ID={} | Original expected frequency={} | Small-deposit budget={} | TINY expected attempts={} | SMALL expected attempts={} | TINY + SMALL total={} | Percentage of original frequency retained={}% | MEDIUM expected attempts={} | LARGE expected attempts={} | Biome={}",
-                oreId,
-                formatDiagnostic(frequency.originalFrequency()),
-                formatDiagnostic(frequency.originalFrequency()
-                * OreDepositConfig.SMALL_DEPOSIT_FREQUENCY_SHARE * frequencyMultiplier),
-                formatDiagnostic(tinyExpected),
-                formatDiagnostic(smallExpected),
-                formatDiagnostic(plan.combinedExpectedAttempts() * frequencyMultiplier),
-                formatDiagnostic(plan.retainedFraction() * frequencyMultiplier * 100.0D),
-                formatDiagnostic(mediumExpected),
-                formatDiagnostic(largeExpected),
-                biomeName
-        );
-
-        double minimumRetention = OreDepositConfig.MIN_SMALL_DEPOSIT_FREQUENCY_SHARE;
-        if (plan.retainedFraction() + 1.0E-9D < minimumRetention) {
-            OresAndDrillsMod.LOGGER.debug(
-                    "Ore deposits: TINY+SMALL retain only {}% of original frequency for {} in {} (configured minimum {}%)",
-                    formatDiagnostic(plan.retainedFraction() * 100.0D), oreId, biomeName,
-                    formatDiagnostic(minimumRetention * 100.0D)
-            );
-        }
     }
 
     private static double expectedLargeTierMaterialAttempts(
@@ -3484,56 +3690,17 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
 
     private static boolean rejectAttempt(AttemptClaim claim, String reason) {
         if (claim != null && claim.claimKey() != 0L && !claim.requiresSharedClaim()
-                && claim.smallDiagnosticKey() == null && claim.selectedOreId() == null) {
+                && claim.selectedOreId() == null) {
             OresAndDrillsMod.LOGGER.debug(
                     "Data-driven ore-deposit candidate {} rejected: {}",
                     Long.toUnsignedString(claim.claimKey()), reason
             );
         }
-        if (claim != null && claim.smallDiagnosticKey() != null) {
-            SmallAttemptStats stats = SMALL_ATTEMPT_DIAGNOSTICS.get(claim.smallDiagnosticKey());
-            if (stats != null) {
-                stats.rejections.computeIfAbsent(reason, ignored -> new LongAdder()).increment();
-                maybeLogSmallAttemptStats(claim.smallDiagnosticKey(), stats);
-            }
-        }
         return false;
     }
 
     private static boolean completeAttempt(AttemptClaim claim) {
-        if (claim != null && claim.smallDiagnosticKey() != null) {
-            SmallAttemptStats stats = SMALL_ATTEMPT_DIAGNOSTICS.get(claim.smallDiagnosticKey());
-            if (stats != null) {
-                stats.successfulDeposits.increment();
-                maybeLogSmallAttemptStats(claim.smallDiagnosticKey(), stats);
-            }
-        }
         return true;
-    }
-
-    private static void maybeLogSmallAttemptStats(SmallDiagnosticKey key, SmallAttemptStats stats) {
-        long launched = stats.launchedAttempts.sum();
-        if (launched <= 0L || (launched & (launched - 1L)) != 0L) {
-            return;
-        }
-        long successful = stats.successfulDeposits.sum();
-        double successRate = successful / (double) launched;
-        String reasons = stats.rejections.entrySet().stream()
-                .sorted(Map.Entry.comparingByKey())
-                .map(entry -> entry.getKey() + "=" + entry.getValue().sum())
-                .collect(java.util.stream.Collectors.joining(", "));
-        OresAndDrillsMod.LOGGER.debug(
-                "Ore deposit placement: Tier={} | Ore ID={} | Source attempts={} | Launched attempts={} | Successful deposits={} | Success rate={}% | Rejections=[{}]",
-                DepositTier.byIndex(key.tier()).serializedName(), key.oreId(), stats.sourceAttempts.sum(),
-                launched, successful, formatDiagnostic(successRate * 100.0D), reasons
-        );
-        if (launched >= 16L && successRate < 0.25D && stats.lowSuccessWarning.compareAndSet(false, true)) {
-            OresAndDrillsMod.LOGGER.debug(
-                    "Ore deposits: most {} attempts for {} are rejected by placement conditions (success rate {}%, reasons: [{}])",
-                    DepositTier.byIndex(key.tier()).serializedName(), key.oreId(),
-                    formatDiagnostic(successRate * 100.0D), reasons
-            );
-        }
     }
 
     private static String formatDiagnostic(double value) {
@@ -3549,26 +3716,8 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
     private record AttemptClaim(
             long claimKey,
             boolean requiresSharedClaim,
-            SmallDiagnosticKey smallDiagnosticKey,
             ResourceLocation selectedOreId
     ) {
-    }
-
-    private record SmallDiagnosticKey(
-            ResourceLocation dimension,
-            String biome,
-            String materialKey,
-            ResourceLocation oreId,
-            int tier
-    ) {
-    }
-
-    private static final class SmallAttemptStats {
-        private final LongAdder sourceAttempts = new LongAdder();
-        private final LongAdder launchedAttempts = new LongAdder();
-        private final LongAdder successfulDeposits = new LongAdder();
-        private final Map<String, LongAdder> rejections = new ConcurrentHashMap<>();
-        private final AtomicBoolean lowSuccessWarning = new AtomicBoolean();
     }
 
     private record ShapeDimensions(int radiusX, int radiusZ, int depth) {
@@ -3590,12 +3739,28 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
             float sizeMultiplier,
             float richnessMultiplier,
             Optional<ResourceLocation> sourceBiome,
-            Optional<DataDrivenSettings> dataDriven
+            Optional<DataDrivenSettings> dataDriven,
+            Optional<OreVein> vein
     ) implements FeatureConfiguration {
         public Configuration {
             targets = List.copyOf(targets);
             sourceBiome = sourceBiome == null ? Optional.empty() : sourceBiome;
             dataDriven = dataDriven == null ? Optional.empty() : dataDriven;
+            vein = vein == null ? Optional.empty() : vein;
+        }
+
+        public Configuration(
+                List<OreConfiguration.TargetBlockState> targets,
+                int sizeTier,
+                float sourceProbability,
+                float frequencyMultiplier,
+                float sizeMultiplier,
+                float richnessMultiplier,
+                Optional<ResourceLocation> sourceBiome,
+                Optional<DataDrivenSettings> dataDriven
+        ) {
+            this(targets, sizeTier, sourceProbability, frequencyMultiplier, sizeMultiplier,
+                    richnessMultiplier, sourceBiome, dataDriven, Optional.empty());
         }
 
         public Configuration(
@@ -3608,7 +3773,7 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
                 Optional<ResourceLocation> sourceBiome
         ) {
             this(targets, sizeTier, sourceProbability, frequencyMultiplier, sizeMultiplier,
-                    richnessMultiplier, sourceBiome, Optional.empty());
+                    richnessMultiplier, sourceBiome, Optional.empty(), Optional.empty());
         }
 
         public static final Codec<Configuration> CODEC = RecordCodecBuilder.create(instance -> instance.group(
@@ -3619,8 +3784,42 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
                 Codec.FLOAT.optionalFieldOf("size_multiplier", 1.0F).forGetter(Configuration::sizeMultiplier),
                 Codec.FLOAT.optionalFieldOf("richness_multiplier", 1.0F).forGetter(Configuration::richnessMultiplier),
                 ResourceLocation.CODEC.optionalFieldOf("source_biome").forGetter(Configuration::sourceBiome),
-                DataDrivenSettings.CODEC.optionalFieldOf("data_driven").forGetter(Configuration::dataDriven)
+                DataDrivenSettings.CODEC.optionalFieldOf("data_driven").forGetter(Configuration::dataDriven),
+                OreVein.CODEC.optionalFieldOf("vein").forGetter(Configuration::vein)
         ).apply(instance, Configuration::new));
+    }
+
+    /**
+     * The original ore feature's own vein parameters; TINY/SMALL build their bodies with {@code Feature.ORE}
+     * from them. With {@code vanillaPlacement} Minecraft runs the feature under that source's placement
+     * modifiers ("vanilla-like" mode). Otherwise {@code sourcePlacement} holds those modifiers and the feature
+     * evaluates them itself with a stable seed, thinning the resulting attempts into TINY/SMALL candidates.
+     * {@code sourceSignature} keeps two different source features distinct after replacement.
+     */
+    public record OreVein(
+            int size,
+            float airExposureDiscard,
+            boolean vanillaPlacement,
+            String sourceSignature,
+            List<PlacementModifier> sourcePlacement
+    ) {
+        public static final Codec<OreVein> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+                Codec.INT.fieldOf("size").forGetter(OreVein::size),
+                Codec.FLOAT.fieldOf("air_exposure_discard").forGetter(OreVein::airExposureDiscard),
+                Codec.BOOL.optionalFieldOf("vanilla_placement", false).forGetter(OreVein::vanillaPlacement),
+                Codec.STRING.optionalFieldOf("source", "").forGetter(OreVein::sourceSignature),
+                PlacementModifier.CODEC.listOf().optionalFieldOf("source_placement", List.of())
+                        .forGetter(OreVein::sourcePlacement)
+        ).apply(instance, OreVein::new));
+
+        public OreVein {
+            sourceSignature = sourceSignature == null ? "" : sourceSignature;
+            sourcePlacement = sourcePlacement == null ? List.of() : List.copyOf(sourcePlacement);
+        }
+
+        public OreVein(int size, float airExposureDiscard, boolean vanillaPlacement, String sourceSignature) {
+            this(size, airExposureDiscard, vanillaPlacement, sourceSignature, List.of());
+        }
     }
 
     public enum PlacementMode {

@@ -42,7 +42,7 @@ import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.animatable.client.GeoRenderProvider;
 import software.bernie.geckolib.model.GeoModel;
-import software.bernie.geckolib.renderer.GeoBlockRenderer;
+import dev.client.drill.DrillGeoRenderer;
 import software.bernie.geckolib.renderer.GeoItemRenderer;
 
 public final class ElectricMiningDrill {
@@ -207,7 +207,7 @@ public final class ElectricMiningDrill {
         }
     }
 
-    public static class Renderer extends GeoBlockRenderer<BlockEntity> {
+    public static class Renderer extends DrillGeoRenderer<BlockEntity> {
         private static final double CENTER_FORWARD_OFFSET = 1.0D;
         private static final double CENTER_LEFT_OFFSET = 0D;
         private static final float MODEL_YAW_DEGREES = 180.0F;

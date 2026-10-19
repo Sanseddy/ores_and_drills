@@ -21,6 +21,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.HitResult;
 
+import java.util.List;
 import java.util.function.BiConsumer;
 
 public class OreDepositBlock extends Block {
@@ -135,13 +136,15 @@ public class OreDepositBlock extends Block {
     protected void onExplosionHit(BlockState state, Level level, BlockPos pos, Explosion explosion, BiConsumer<ItemStack, BlockPos> dropConsumer) {
         if (state.isAir()
                 || explosion.getBlockInteraction() == Explosion.BlockInteraction.TRIGGER_BLOCK
-                || !(level instanceof ServerLevel serverLevel)) {
+                || !(level instanceof ServerLevel serverLevel)
+                || OreDepositData.ignoresExplosions(serverLevel, pos)) {
             return;
         }
 
-        ItemStack mined = OreDepositData.mineOne(serverLevel, pos);
-        if (!mined.isEmpty() && state.canDropFromExplosion(level, pos, explosion)) {
-            dropConsumer.accept(mined, pos);
+        List<ItemStack> mined = OreDepositData.mineByExplosion(
+                serverLevel, pos, OreDepositExplosionHandler.unitsFor(explosion, pos));
+        if (state.canDropFromExplosion(level, pos, explosion)) {
+            mined.forEach(drop -> dropConsumer.accept(drop, pos));
         }
     }
 

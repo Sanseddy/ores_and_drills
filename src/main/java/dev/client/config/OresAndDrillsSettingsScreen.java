@@ -25,6 +25,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.function.IntConsumer;
 
 /**
  * The mod's own config screen (mod list "Config" button). Edits are held here and written to the common
@@ -46,9 +47,10 @@ public final class OresAndDrillsSettingsScreen extends Screen {
         int maxSpacing;
         double growth;
         double maxMultiplier;
-        List<String> disabledOres;
+        List<String> ignoredOres;
         List<String> modPriorities;
         String preset;
+        OreDepositConfig.SmallDepositPlacement smallPlacement;
 
         static Values current() {
             Values values = new Values();
@@ -56,9 +58,10 @@ public final class OresAndDrillsSettingsScreen extends Screen {
             values.maxSpacing = get(OreDepositConfig.MAX_LARGE_DEPOSIT_SPACING);
             values.growth = get(OreDepositConfig.ORE_MINING_EXPONENTIAL_GROWTH);
             values.maxMultiplier = get(OreDepositConfig.ORE_MINING_MAX_EXPONENTIAL_MULTIPLIER);
-            values.disabledOres = List.copyOf(get(OreDepositConfig.DISABLED_DEPOSIT_ORES));
+            values.ignoredOres = List.copyOf(get(OreDepositConfig.IGNORED_ORES));
             values.modPriorities = List.copyOf(get(OreDepositConfig.MOD_PRIORITIES));
             values.preset = get(OreDepositConfig.ACTIVE_PRESET);
+            values.smallPlacement = get(OreDepositConfig.SMALL_DEPOSIT_PLACEMENT);
             return values;
         }
 
@@ -68,9 +71,10 @@ public final class OresAndDrillsSettingsScreen extends Screen {
             values.maxSpacing = OreDepositConfig.MAX_LARGE_DEPOSIT_SPACING.getDefault();
             values.growth = OreDepositConfig.ORE_MINING_EXPONENTIAL_GROWTH.getDefault();
             values.maxMultiplier = OreDepositConfig.ORE_MINING_MAX_EXPONENTIAL_MULTIPLIER.getDefault();
-            values.disabledOres = List.copyOf(OreDepositConfig.DISABLED_DEPOSIT_ORES.getDefault());
+            values.ignoredOres = List.copyOf(OreDepositConfig.IGNORED_ORES.getDefault());
             values.modPriorities = List.copyOf(OreDepositConfig.MOD_PRIORITIES.getDefault());
             values.preset = OreDepositConfig.ACTIVE_PRESET.getDefault();
+            values.smallPlacement = OreDepositConfig.SMALL_DEPOSIT_PLACEMENT.getDefault();
             return values;
         }
 
@@ -114,10 +118,13 @@ public final class OresAndDrillsSettingsScreen extends Screen {
         int max = OreDepositConfig.MAX_LARGE_DEPOSIT_SPACING_LIMIT;
 
         list.section("deposits");
-        list.setting("min_spacing", new RangeSlider(WIDGET_WIDTH, min, max, 10, values.minSpacing,
-                value -> blocks(value), value -> values.minSpacing = (int) value));
-        list.setting("max_spacing", new RangeSlider(WIDGET_WIDTH, min, max, 10, values.maxSpacing,
-                value -> blocks(value), value -> values.maxSpacing = (int) value));
+        list.setting("min_spacing", integerBox(values.minSpacing, min, max, value -> values.minSpacing = value));
+        list.setting("max_spacing", integerBox(values.maxSpacing, min, max, value -> values.maxSpacing = value));
+        list.setting("small_placement", CycleButton.<OreDepositConfig.SmallDepositPlacement>builder(
+                        placement -> Component.translatable(KEY + "small_placement." + placement.name().toLowerCase(Locale.ROOT)))
+                .withValues(OreDepositConfig.SmallDepositPlacement.values()).withInitialValue(values.smallPlacement)
+                .displayOnlyValue()
+                .create(0, 0, WIDGET_WIDTH, 20, Component.empty(), (button, value) -> values.smallPlacement = value));
 
         list.section("mining");
         list.setting("growth", new RangeSlider(WIDGET_WIDTH, 0.0D, 1.0D, 0.01D, values.growth,
@@ -127,14 +134,14 @@ public final class OresAndDrillsSettingsScreen extends Screen {
 
         list.section("generation");
         list.setting("preset", presetWidget());
-        list.setting("disabled_ores", Button.builder(
-                Component.translatable(KEY + "edit", values.disabledOres.size()),
+        list.setting("ignored_ores", Button.builder(
+                Component.translatable(KEY + "edit", values.ignoredOres.size()),
                 button -> this.minecraft.setScreen(new StringListScreen(this,
-                        Component.translatable(KEY + "disabled_ores"),
-                        Component.translatable(KEY + "disabled_ores.hint"),
-                        values.disabledOres,
+                        Component.translatable(KEY + "ignored_ores"),
+                        Component.translatable(KEY + "ignored_ores.hint"),
+                        values.ignoredOres,
                         OresAndDrillsSettingsScreen::isBlockOrTagId,
-                        edited -> values.disabledOres = List.copyOf(edited))))
+                        edited -> values.ignoredOres = List.copyOf(edited))))
                 .size(WIDGET_WIDTH, 20).build());
         list.setting("mod_priorities", Button.builder(Component.translatable(KEY + "configure"),
                 button -> this.minecraft.setScreen(new ModPrioritiesScreen(this, values.modPriorities,
@@ -142,8 +149,26 @@ public final class OresAndDrillsSettingsScreen extends Screen {
                 .size(WIDGET_WIDTH, 20).build());
     }
 
-    private static Component blocks(double value) {
-        return Component.translatable(KEY + "blocks", (int) value);
+    /** A typed whole number; out-of-range or non-numeric text turns red and keeps the last valid value. */
+    private EditBox integerBox(int initial, int min, int max, IntConsumer onValid) {
+        EditBox box = new EditBox(this.font, 0, 0, WIDGET_WIDTH, 20, Component.empty());
+        box.setMaxLength(String.valueOf(max).length());
+        box.setFilter(text -> text.chars().allMatch(Character::isDigit));
+        box.setValue(String.valueOf(initial));
+        box.setResponder(text -> {
+            int value;
+            try {
+                value = Integer.parseInt(text);
+            } catch (NumberFormatException exception) {
+                value = -1;
+            }
+            boolean valid = value >= min && value <= max;
+            box.setTextColor(valid ? 0xE0E0E0 : 0xFF5555);
+            if (valid) {
+                onValid.accept(value);
+            }
+        });
+        return box;
     }
 
     /** Presets come from datapacks, so outside a world the list may be unknown; then the id is typed in. */
@@ -176,9 +201,10 @@ public final class OresAndDrillsSettingsScreen extends Screen {
         to.maxSpacing = from.maxSpacing;
         to.growth = from.growth;
         to.maxMultiplier = from.maxMultiplier;
-        to.disabledOres = from.disabledOres;
+        to.ignoredOres = from.ignoredOres;
         to.modPriorities = from.modPriorities;
         to.preset = from.preset;
+        to.smallPlacement = from.smallPlacement;
     }
 
     private void onDone() {
@@ -186,8 +212,9 @@ public final class OresAndDrillsSettingsScreen extends Screen {
         OreDepositConfig.MAX_LARGE_DEPOSIT_SPACING.set(Math.max(values.minSpacing, values.maxSpacing));
         OreDepositConfig.ORE_MINING_EXPONENTIAL_GROWTH.set(values.growth);
         OreDepositConfig.ORE_MINING_MAX_EXPONENTIAL_MULTIPLIER.set(values.maxMultiplier);
-        OreDepositConfig.DISABLED_DEPOSIT_ORES.set(values.disabledOres);
+        OreDepositConfig.IGNORED_ORES.set(values.ignoredOres);
         OreDepositConfig.MOD_PRIORITIES.set(values.modPriorities);
+        OreDepositConfig.SMALL_DEPOSIT_PLACEMENT.set(values.smallPlacement);
         if (ResourceLocation.tryParse(values.preset) != null) OreDepositConfig.ACTIVE_PRESET.set(values.preset);
         OreDepositConfig.SPEC.save();
         ConfigReloader.reload();

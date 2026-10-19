@@ -12,6 +12,9 @@ import net.minecraft.client.renderer.GameRenderer;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 
+import java.util.HashSet;
+import java.util.Set;
+
 /**
  * Draws a patch as Factorio does: every resource tile is a flat coloured square painted straight over the
  * terrain. Each map integration only supplies the {@link OreMapTransform} from patch-local block offsets to
@@ -32,7 +35,12 @@ public final class OreMapPainter {
 
     public static void paint(GuiGraphics graphics, OreMapPatch patch, OreMapTransform transform, float alpha,
                              TileFilter filter) {
-        paint(graphics, patch, transform, alpha, filter, transform.pixelsPerBlock());
+        paint(graphics, patch, transform, alpha, filter, transform.pixelsPerBlock(), false);
+    }
+
+    public static void paint(GuiGraphics graphics, OreMapPatch patch, OreMapTransform transform, float alpha,
+                             TileFilter filter, boolean hovered) {
+        paint(graphics, patch, transform, alpha, filter, transform.pixelsPerBlock(), hovered);
     }
 
     /**
@@ -41,6 +49,12 @@ public final class OreMapPainter {
      */
     public static void paint(GuiGraphics graphics, OreMapPatch patch, OreMapTransform transform, float alpha,
                              TileFilter filter, double screenPixelsPerBlock) {
+        paint(graphics, patch, transform, alpha, filter, screenPixelsPerBlock, false);
+    }
+
+    /** On hover, alternating resource tiles are darkened like Factorio's resource map grid. */
+    public static void paint(GuiGraphics graphics, OreMapPatch patch, OreMapTransform transform, float alpha,
+                             TileFilter filter, double screenPixelsPerBlock, boolean hovered) {
         if (patch.isEmpty() || alpha <= 0.0F) {
             return;
         }
@@ -54,6 +68,7 @@ public final class OreMapPainter {
         Matrix4f pose = graphics.pose().last().pose();
         int alphaBits = Math.round(Math.max(0.0F, Math.min(1.0F, alpha)) * 255.0F) << 24;
         int step = tiles.step();
+        Set<Long> visibleTiles = hovered ? new HashSet<>() : null;
         BufferBuilder buffer = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
         for (int index = 0; index < tiles.size(); index++) {
             int dx = tiles.xs()[index];
@@ -61,11 +76,21 @@ public final class OreMapPainter {
             if (filter != null && !filter.keep(dx + step * 0.5D, dz + step * 0.5D, step)) {
                 continue;
             }
+            if (visibleTiles != null) {
+                visibleTiles.add(tileKey(dx, dz));
+            }
+            // Factorio's map grid leaves every second resource square transparent so terrain shows through.
+            if (!checkerFilled(dx, dz, step)) {
+                continue;
+            }
             int color = alphaBits | tiles.colors()[index] & 0xFFFFFF;
             vertex(buffer, pose, transform, dx, dz, color);
             vertex(buffer, pose, transform, dx, dz + step, color);
             vertex(buffer, pose, transform, dx + step, dz + step, color);
             vertex(buffer, pose, transform, dx + step, dz, color);
+        }
+        if (visibleTiles != null) {
+            addHoverOutline(buffer, pose, transform, visibleTiles, step, screenPixelsPerBlock);
         }
         MeshData mesh = buffer.build();
         if (mesh == null) {
@@ -93,6 +118,43 @@ public final class OreMapPainter {
         if (!blend) {
             RenderSystem.disableBlend();
         }
+    }
+
+    static boolean checkerFilled(int x, int z, int step) {
+        return ((Math.floorDiv(x, step) + Math.floorDiv(z, step)) & 1) == 0;
+    }
+
+    private static void addHoverOutline(BufferBuilder buffer, Matrix4f pose, OreMapTransform transform,
+                                        Set<Long> tiles, int step, double screenPixelsPerBlock) {
+        double thickness = Math.min(step * 0.4D, 2.0D / Math.max(0.01D, screenPixelsPerBlock));
+        for (long key : tiles) {
+            int x = (int) (key >> 32);
+            int z = (int) key;
+            if (!tiles.contains(tileKey(x - step, z))) {
+                quad(buffer, pose, transform, x, z, x + thickness, z + step, 0xFFFFFFFF);
+            }
+            if (!tiles.contains(tileKey(x + step, z))) {
+                quad(buffer, pose, transform, x + step - thickness, z, x + step, z + step, 0xFFFFFFFF);
+            }
+            if (!tiles.contains(tileKey(x, z - step))) {
+                quad(buffer, pose, transform, x, z, x + step, z + thickness, 0xFFFFFFFF);
+            }
+            if (!tiles.contains(tileKey(x, z + step))) {
+                quad(buffer, pose, transform, x, z + step - thickness, x + step, z + step, 0xFFFFFFFF);
+            }
+        }
+    }
+
+    private static void quad(BufferBuilder buffer, Matrix4f pose, OreMapTransform transform,
+                             double minX, double minZ, double maxX, double maxZ, int color) {
+        vertex(buffer, pose, transform, minX, minZ, color);
+        vertex(buffer, pose, transform, minX, maxZ, color);
+        vertex(buffer, pose, transform, maxX, maxZ, color);
+        vertex(buffer, pose, transform, maxX, minZ, color);
+    }
+
+    private static long tileKey(int x, int z) {
+        return (long) x << 32 | z & 0xFFFFFFFFL;
     }
 
     private static void vertex(BufferBuilder buffer, Matrix4f pose, OreMapTransform transform, double dx, double dz, int color) {

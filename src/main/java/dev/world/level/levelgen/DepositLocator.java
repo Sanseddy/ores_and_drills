@@ -1,7 +1,7 @@
 package dev.world.level.levelgen;
 
 import dev.OresAndDrillsMod;
-import dev.config.OreDepositConfig;
+import dev.config.OreGenerationMode;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.StringTag;
@@ -31,6 +31,19 @@ public final class DepositLocator {
 
     public DepositLocator(DepositTerrainValidator terrainValidator) {
         this.terrainValidator = terrainValidator;
+    }
+
+    /**
+     * Vanilla-like TINY/SMALL deposits are as common as ordinary veins and are neither predicted nor
+     * indexed; only an explicit datapack rule keeps those tiers locatable for its ore. Regular-mode
+     * automatic TINY/SMALL are located through {@link SmallDepositLocate}.
+     */
+    public static boolean isLocatable(ServerLevel level, ResourceLocation ore, OreDepositTier tier) {
+        if (tier.index() >= OreDepositFeature.TIER_MEDIUM || !OreGenerationMode.vanillaLikeGeneration()) {
+            return true;
+        }
+        Block block = BuiltInRegistries.BLOCK.get(ore);
+        return block != null && DataDrivenOreDepositBiomeModifier.explicitlyConfigured(level, block);
     }
 
     public Optional<LocatedDeposit> findNearest(
@@ -68,8 +81,9 @@ public final class DepositLocator {
 
         boolean dataDriven = requestedBlock != null
                 && DataDrivenOreDepositBiomeModifier.explicitlyConfigured(level, requestedBlock);
-        if (!dataDriven && requestedTier.prefersCaveWall() && OreDepositConfig.STRICT_WALL_DEPOSIT_LOCATE.get()) {
-            return Optional.ofNullable(best);
+        if (SmallDepositLocate.usesSourceAttempts(requestedTier, dataDriven)) {
+            return findNearestSourceAttemptDeposit(level, origin, effectiveOre, requestedTier, searchRadius, best,
+                    decoratedChunks);
         }
 
         TierDepositResolver resolver = DepositResolvers.forTier(requestedTier);
@@ -231,6 +245,55 @@ public final class DepositLocator {
         return Optional.ofNullable(best);
     }
 
+    /** Synchronous counterpart of the automatic TINY/SMALL branch of {@link IncrementalDepositSearch}. */
+    private static Optional<LocatedDeposit> findNearestSourceAttemptDeposit(
+            ServerLevel level,
+            BlockPos origin,
+            ResourceLocation effectiveOre,
+            OreDepositTier tier,
+            int searchRadius,
+            LocatedDeposit best,
+            Map<Long, Boolean> decoratedChunks
+    ) {
+        long searchRadiusSquared = (long) searchRadius * searchRadius;
+        int originChunkX = origin.getX() >> 4;
+        int originChunkZ = origin.getZ() >> 4;
+        int chunkRadius = Mth.ceil(searchRadius / 16.0D) + 1;
+        for (int ring = 0; ring <= chunkRadius; ring++) {
+            int perimeter = ring == 0 ? 1 : ring * 8;
+            for (int cursor = 0; cursor < perimeter; cursor++) {
+                long offset = ringOffset(ring, cursor);
+                int chunkX = originChunkX + (int) (offset >> 32);
+                int chunkZ = originChunkZ + (int) offset;
+                if (SmallDepositLocate.isLoaded(level, chunkX, chunkZ)) {
+                    LocatedDeposit confirmed = SmallDepositLocate.confirmedInLoadedChunk(
+                            level, chunkX, chunkZ, effectiveOre, tier, origin);
+                    if (confirmed != null && horizontalDistanceSquared(origin, confirmed.candidate().center())
+                            <= searchRadiusSquared) {
+                        best = nearer(origin, best, confirmed);
+                    }
+                    continue;
+                }
+                for (SmallDepositAttemptPlanner.Prediction prediction
+                        : SmallDepositLocate.predictions(level, chunkX, chunkZ, effectiveOre, tier)) {
+                    DepositCandidate candidate = prediction.candidate();
+                    long distanceSquared = horizontalDistanceSquared(origin, candidate.center());
+                    if (distanceSquared > searchRadiusSquared || best != null && distanceSquared
+                            >= horizontalDistanceSquared(origin, best.candidate().center())
+                            || sourceChunkAlreadyDecorated(level, candidate, decoratedChunks)) {
+                        continue;
+                    }
+                    best = nearer(origin, best, new LocatedDeposit(candidate, DepositLocateStatus.SEED_PREDICTED,
+                            floorDistance(distanceSquared), prediction.hostCoverage()));
+                }
+            }
+            if (best != null && nextRingCannotBeat(ring + 1, 16, 16, origin, best.candidate().center())) {
+                break;
+            }
+        }
+        return Optional.ofNullable(best);
+    }
+
     private static boolean sourceChunkAlreadyDecorated(
             ServerLevel level,
             DepositCandidate candidate,
@@ -260,7 +323,7 @@ public final class DepositLocator {
         });
     }
 
-    private static java.util.function.Predicate<BlockPos> dataDrivenWriteBounds(DepositCandidate candidate) {
+    static java.util.function.Predicate<BlockPos> dataDrivenWriteBounds(DepositCandidate candidate) {
         int radius = OreDepositFeature.FEATURE_WRITE_RADIUS_CHUNKS;
         int minimumX = (candidate.sourceChunkX() - radius) << 4;
         int maximumX = ((candidate.sourceChunkX() + radius + 1) << 4) - 1;
@@ -270,7 +333,7 @@ public final class DepositLocator {
                 && pos.getZ() >= minimumZ && pos.getZ() <= maximumZ;
     }
 
-    private static DepositCandidate confirmedCandidate(ConfirmedDeposit deposit) {
+    static DepositCandidate confirmedCandidate(ConfirmedDeposit deposit) {
         return new DepositCandidate(
                 deposit.depositId(),
                 deposit.oreId(),
@@ -287,7 +350,7 @@ public final class DepositLocator {
         );
     }
 
-    private static boolean nextRingCannotBeat(
+    static boolean nextRingCannotBeat(
             int nextRing,
             int cellSizeBlocks,
             int maximumRadius,
@@ -302,7 +365,7 @@ public final class DepositLocator {
         return guaranteedDistance * guaranteedDistance >= bestDistanceSquared;
     }
 
-    private static LocatedDeposit nearer(
+    static LocatedDeposit nearer(
             BlockPos origin,
             LocatedDeposit current,
             LocatedDeposit candidate
@@ -321,7 +384,7 @@ public final class DepositLocator {
         return current;
     }
 
-    private static int floorDistance(long distanceSquared) {
+    static int floorDistance(long distanceSquared) {
         return (int) Math.sqrt(distanceSquared);
     }
 
