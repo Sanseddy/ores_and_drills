@@ -16,6 +16,7 @@ out/
 .classpath
 .project
 *.launch
+CLAUDE.md
 
 *.log
 hs_err_pid*
