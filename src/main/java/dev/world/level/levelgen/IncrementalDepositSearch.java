@@ -1,6 +1,7 @@
 package dev.world.level.levelgen;
 
 import dev.OresAndDrillsMod;
+import net.minecraft.Util;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -64,6 +65,8 @@ public final class IncrementalDepositSearch {
     private int cursor;
     private List<DataDrivenOreDepositBiomeModifier.PlannedDeposit> dataPlans = List.of();
     private List<DepositCandidate> candidates = List.of();
+    /** Candidates of the active cell while they are still being resolved off the server thread. */
+    private CompletableFuture<List<DepositCandidate>> cellCandidates;
     private int candidateIndex;
     private boolean cellActive;
     private CandidateWork candidateWork;
@@ -106,9 +109,15 @@ public final class IncrementalDepositSearch {
         }
         while (!done && operations < maximumOperations && System.nanoTime() < deadlineNanos) {
             if (pending != null) {
-                if (!pending.decorated().isDone()) return;
+                if (!pending.decorated().isDone() || !pending.validation().isDone()) return;
                 finishPending();
                 operations++;
+                continue;
+            }
+            if (cellCandidates != null) {
+                if (!cellCandidates.isDone()) return;
+                candidates = cellCandidates.join();
+                cellCandidates = null;
                 continue;
             }
             if (candidateWork != null) {
@@ -238,15 +247,23 @@ public final class IncrementalDepositSearch {
         } else if (dataDriven && !dataSearchCells.contains(ChunkPos.asLong(cellX, cellZ))) {
             dataPlans = List.of();
             candidates = List.of();
+        } else if (dataDriven) {
+            dataPlans = DataDrivenOreDepositBiomeModifier.plansForCell(
+                    level, cellX, cellZ, requestedOre, requestedTier
+            );
+            candidates = dataPlans.stream().map(DataDrivenOreDepositBiomeModifier.PlannedDeposit::candidate).toList();
         } else {
-            dataPlans = dataDriven
-                    ? DataDrivenOreDepositBiomeModifier.plansForCell(
-                            level, cellX, cellZ, requestedOre, requestedTier
-                    )
-                    : List.of();
-            candidates = dataDriven
-                    ? dataPlans.stream().map(DataDrivenOreDepositBiomeModifier.PlannedDeposit::candidate).toList()
-                    : resolver.getCandidatesForCell(level, cellX, cellZ, effectiveOre);
+            // Automatic MEDIUM/LARGE: moving a predicted lens into its source biome reads base columns and can take
+            // half a second, so it is resolved beside worldgen (which runs the same code) instead of in the tick.
+            dataPlans = List.of();
+            candidates = List.of();
+            cellCandidates = CompletableFuture.supplyAsync(
+                    () -> resolver.getCandidatesForCell(level, cellX, cellZ, effectiveOre), Util.backgroundExecutor()
+            ).exceptionally(failure -> {
+                OresAndDrillsMod.LOGGER.debug("Could not resolve ore-deposit cell [{}, {}] in {}",
+                        cellX, cellZ, level.dimension().location(), failure);
+                return List.of();
+            });
         }
         candidateIndex = 0;
         cellActive = true;
@@ -289,12 +306,7 @@ public final class IncrementalDepositSearch {
                 >= DepositLocator.horizontalDistanceSquared(origin, best.candidate().center())) {
             return;
         }
-        long chunkKey = ChunkPos.asLong(candidate.sourceChunkX(), candidate.sourceChunkZ());
-        CompletableFuture<Boolean> decorated = decoratedChunks.computeIfAbsent(
-                chunkKey, ignored -> inspectDecoratedChunk(candidate));
-        pending = new PendingCandidate(candidate, SmallDepositLocate.predictedValidation(predictedCoverage[index]),
-                distanceSquared, decorated);
-        if (decorated.isDone()) finishPending();
+        startPending(candidate, candidate, distanceSquared, SmallDepositLocate.predictedValidation(predictedCoverage[index]));
     }
 
     private void finishCell() {
@@ -351,12 +363,16 @@ public final class IncrementalDepositSearch {
                 candidateWork = null;
                 return;
             }
-            work.validation = work.dataDriven
-                    ? terrainValidator.beginValidationMatching(
-                            level, work.locatedCandidate, layout,
-                            work.predictedReplacement, work.writeBounds
-                    )
-                    : terrainValidator.beginValidation(level, work.locatedCandidate, layout);
+            if (!work.dataDriven) {
+                // Automatic MEDIUM/LARGE: selecting the lens body for sampling and building the worldgen plan each
+                // take hundreds of milliseconds for a LARGE lens, so both run beside worldgen, off the server thread.
+                candidateWork = null;
+                startPending(work.sourceCandidate, work.locatedCandidate, work.distanceSquared, null);
+                return;
+            }
+            work.validation = terrainValidator.beginValidationMatching(
+                    level, work.locatedCandidate, layout, work.predictedReplacement, work.writeBounds
+            );
         }
         work.validation.advance(deadlineNanos, maximumOperations);
         if (!work.validation.isDone()) return;
@@ -364,16 +380,32 @@ public final class IncrementalDepositSearch {
         candidateWork = null;
         ValidationResult validation = work.validation.result();
         if (!validation.viable()) return;
+        startPending(work.sourceCandidate, work.locatedCandidate, work.distanceSquared, validation);
+    }
 
-        DepositCandidate sourceCandidate = work.sourceCandidate;
+    /**
+     * Waits for the saved chunk status and, without a {@code knownValidation}, for the automatic MEDIUM/LARGE check:
+     * sampled host rock first, then the worldgen plan itself, which a sampled pass alone could wrongly accept.
+     */
+    private void startPending(DepositCandidate sourceCandidate, DepositCandidate located, long distanceSquared,
+            ValidationResult knownValidation) {
         long chunkKey = ChunkPos.asLong(sourceCandidate.sourceChunkX(), sourceCandidate.sourceChunkZ());
         CompletableFuture<Boolean> decorated = decoratedChunks.computeIfAbsent(
                 chunkKey, ignored -> inspectDecoratedChunk(sourceCandidate)
         );
-        pending = new PendingCandidate(
-                work.locatedCandidate, validation, work.distanceSquared, decorated
-        );
-        if (decorated.isDone()) finishPending();
+        CompletableFuture<ValidationResult> validation = knownValidation != null
+                ? CompletableFuture.completedFuture(knownValidation)
+                : decorated.thenApplyAsync(alreadyDecorated -> {
+                    if (alreadyDecorated) return null;
+                    ValidationResult sampled = terrainValidator.validate(level, located, layout);
+                    return sampled.viable() && OreDepositFeature.compactCandidateGenerates(level, located) ? sampled : null;
+                }, Util.backgroundExecutor()).exceptionally(failure -> {
+                    OresAndDrillsMod.LOGGER.debug("Could not plan ore-deposit candidate {} in {}",
+                            located.depositId(), level.dimension().location(), failure);
+                    return null;
+                });
+        pending = new PendingCandidate(located, distanceSquared, decorated, validation);
+        if (decorated.isDone() && validation.isDone()) finishPending();
     }
 
     private CompletableFuture<Boolean> inspectDecoratedChunk(DepositCandidate candidate) {
@@ -398,22 +430,22 @@ public final class IncrementalDepositSearch {
     private void finishPending() {
         PendingCandidate completed = pending;
         pending = null;
-        if (completed.decorated().join()) return;
-        // Last, as it builds the worldgen plan: a sampled pass can still accept a lens that worldgen rejects.
-        if (!sourceAttempts && !dataDriven && !OreDepositFeature.compactCandidateGenerates(level, completed.candidate())) return;
+        ValidationResult validation = completed.validation().join();
+        if (completed.decorated().join() || validation == null || !validation.viable()) return;
         LocatedDeposit located = new LocatedDeposit(
                 completed.candidate(), DepositLocateStatus.SEED_PREDICTED,
                 DepositLocator.floorDistance(completed.distanceSquared()),
-                completed.validation().stoneCoverage()
+                validation.stoneCoverage()
         );
         best = DepositLocator.nearer(origin, best, located);
     }
 
     private record PendingCandidate(
             DepositCandidate candidate,
-            ValidationResult validation,
             long distanceSquared,
-            CompletableFuture<Boolean> decorated
+            CompletableFuture<Boolean> decorated,
+            /** Completes with {@code null} when the candidate is rejected. */
+            CompletableFuture<ValidationResult> validation
     ) {
     }
 

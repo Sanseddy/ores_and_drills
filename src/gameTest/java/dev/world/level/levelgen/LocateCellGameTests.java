@@ -16,6 +16,7 @@ public final class LocateCellGameTests {
     /**
      * /locate walks cells around the player; a cell must yield its own candidates. Swapped anchor axes once
      * returned the cell mirrored across x = z, so far from that diagonal every MEDIUM/LARGE search came up empty.
+     * Each candidate must also be validated the way worldgen will place it.
      */
     @GameTest(template = "empty", timeoutTicks = 400)
     public static void locateCandidatesBelongToTheirCell(GameTestHelper helper) {
@@ -38,6 +39,14 @@ public final class LocateCellGameTests {
                                                 && Math.floorDiv(candidate.sourceChunkZ(), cellChunks) == cellZ,
                                         tier + " " + material + " cell " + cellX + "," + cellZ + " returned source chunk "
                                                 + candidate.sourceChunkX() + "," + candidate.sourceChunkZ());
+                                // LARGE validation requires stone at the exact center, which must therefore be sampled.
+                                helper.assertTrue(new TieredDepositSampler().createSamples(candidate, resolver.layout()).stream()
+                                                .anyMatch(sample -> sample.pos().equals(candidate.center())),
+                                        tier + " " + material + " validation does not sample the center " + candidate.center());
+                                // Worldgen fits the lens height before planning; locate must already report that center.
+                                var fitted = OreDepositFeature.fitCompactCandidate(nether, tier.index(), null, candidate);
+                                helper.assertTrue(fitted != null && fitted.center().equals(candidate.center()),
+                                        tier + " " + material + " candidate " + candidate.center() + " is not height-fitted like worldgen");
                             }
                         }
                     }
