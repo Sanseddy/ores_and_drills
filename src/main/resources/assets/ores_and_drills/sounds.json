@@ -1,0 +1,11 @@
+{
+  "block.ultimate_mining_drill.work": {
+    "subtitle": "subtitles.ores_and_drills.block.ultimate_mining_drill.work",
+    "sounds": [
+      {
+        "name": "ores_and_drills:block/ultimate_drill_noise",
+        "attenuation_distance": 24
+      }
+    ]
+  }
+}

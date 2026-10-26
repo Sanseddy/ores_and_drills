@@ -87,7 +87,7 @@ public final class OreDepositSettingsScreen extends Screen {
         // On a narrow window the centred row would run under the checkbox; shift it left just enough.
         int rowX = Math.max(CORNER_MARGIN,
                 Math.min(this.width / 2 - 155, checkboxX - BUTTON_GAP - (BUTTON_WIDTH * 3 + BUTTON_GAP * 2)));
-        addRenderableWidget(Button.builder(Component.translatable("gui.ores_and_drills.mod_priorities.open_button"), button -> openModPriorities())
+        addRenderableWidget(Button.builder(Component.translatable("gui.ores_and_drills.mod_priorities.title"), button -> openModPriorities())
                 .bounds(rowX, rowY, BUTTON_WIDTH, 20)
                 .build());
         addRenderableWidget(Button.builder(Component.translatable("gui.ores_and_drills.ore_settings.done"), button -> onDone())

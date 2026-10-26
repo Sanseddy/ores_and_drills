@@ -21,7 +21,6 @@ import java.util.List;
 
 public abstract class AbstractDrillBlockItem extends BlockItem implements GeoItem {
     private static final String TOOLTIP = "tooltip.ores_and_drills.mining_drill.";
-    private static final double TICKS_PER_SECOND = 20.0D;
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
     private final MiningDrillTier tier;
@@ -31,7 +30,8 @@ public abstract class AbstractDrillBlockItem extends BlockItem implements GeoIte
 
     /**
      * @param energy              {@code null} for a drill that burns solid fuel instead of FE
-     * @param productivityPercent bonus progress per cycle towards an extra ore; 0 when the drill has none
+     * @param productivityPercent Factorio-style productivity: bar progress each cycle adds towards a free copy of
+     *                            the cycle result; 0 when the drill has none
      */
     protected AbstractDrillBlockItem(Block block, Item.Properties properties, MiningDrillTier tier,
                                      @Nullable EnergyProfile energy, int productivityPercent) {
@@ -52,8 +52,7 @@ public abstract class AbstractDrillBlockItem extends BlockItem implements GeoIte
         // Width × length × height of the drill body.
         tooltip.add(stat("dimensions", Component.literal(size + "×" + size + "×" + structureHeight())));
         tooltip.add(stat("area", Component.literal(areaSize + "×" + areaSize)));
-        double oresPerSecond = tier.oreUnitsPerCycle() * TICKS_PER_SECOND / tier.miningDuration();
-        tooltip.add(stat("speed", Component.translatable(TOOLTIP + "speed.value", number(oresPerSecond))));
+        tooltip.add(stat("speed", Component.translatable(TOOLTIP + "speed.value", number(tier.oresPerSecond()))));
         if (energy == null) {
             tooltip.add(stat("fuel", Component.translatable(TOOLTIP + "fuel.value")));
         } else {

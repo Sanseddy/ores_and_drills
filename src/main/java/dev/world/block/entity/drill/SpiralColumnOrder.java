@@ -11,6 +11,7 @@ final class SpiralColumnOrder {
     private SpiralColumnOrder() {
     }
 
+
     static List<Offset> between(int minInclusive, int maxExclusive) {
         int side = maxExclusive - minInclusive;
         if (side <= 0) return List.of();

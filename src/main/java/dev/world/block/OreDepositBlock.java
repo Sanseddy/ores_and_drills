@@ -141,10 +141,14 @@ public class OreDepositBlock extends Block {
             return;
         }
 
-        List<ItemStack> mined = OreDepositData.mineByExplosion(
-                serverLevel, pos, OreDepositExplosionHandler.unitsFor(explosion, pos));
+        int units = OreDepositExplosionHandler.unitsFor(explosion, pos);
+        int remaining = OreDepositData.remainingOreAt(serverLevel, pos);
+        List<ItemStack> mined = OreDepositData.mineByExplosion(serverLevel, pos, units);
         if (state.canDropFromExplosion(level, pos, explosion)) {
             mined.forEach(drop -> dropConsumer.accept(drop, pos));
+        }
+        if (OreDepositExplosionHandler.blastOutlastsOre(serverLevel, pos, units, remaining)) {
+            serverLevel.getBlockState(pos).onExplosionHit(serverLevel, pos, explosion, dropConsumer);
         }
     }
 

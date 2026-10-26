@@ -4,12 +4,14 @@ import dev.OresAndDrillsMod;
 import dev.registry.ModBlockEntities;
 import dev.registry.ModBlocks;
 import dev.registry.ModMenuTypes;
+import dev.registry.ModSounds;
 import dev.world.block.AbstractDrillBlock;
 import dev.world.block.AbstractDrillPartBlock;
 import dev.world.block.DrillStructure;
 import dev.world.block.EnergyProfile;
 import dev.world.block.MiningDrillTier;
 import dev.world.block.entity.AbstractEnergyDrillBlockEntity;
+import dev.world.block.entity.drill.DrillBit;
 import dev.world.inventory.AbstractEnergyDrillMenu;
 import dev.world.item.AbstractDrillBlockItem;
 import dev.client.AbstractEnergyDrillScreen;
@@ -24,6 +26,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.Container;
@@ -46,12 +49,14 @@ import dev.client.drill.DrillGeoRenderer;
 import software.bernie.geckolib.renderer.GeoItemRenderer;
 
 public final class UltimateMiningDrill {
-    public static final MiningDrillTier TIER = new MiningDrillTier(7, 4, 1, new ItemStack(Items.NETHERITE_PICKAXE), 6);
+    public static final MiningDrillTier TIER = new MiningDrillTier(7, 10, 1, new ItemStack(Items.NETHERITE_PICKAXE), 6);
     public static final int STRUCTURE_HEIGHT = 9;
-    public static final EnergyProfile ENERGY = new EnergyProfile(128_000, 400);
+    public static final EnergyProfile ENERGY = new EnergyProfile(128_000, 800);
     public static final int PRODUCTIVITY_PERCENT = 70;
+    /** The bit sits under the model centre, three blocks in front of the main block, as placed by {@link Renderer}. */
+    public static final DrillBit DRILL_BIT = new DrillBit(0.0D, 3.0D, 1.1D, 6.4D);
 
-    private static final Component MENU_TITLE = Component.translatable("container.ores_and_drills.ultimate_mining_drill");
+    private static final Component MENU_TITLE = Component.translatable("block.ores_and_drills.ultimate_mining_drill");
 
     private UltimateMiningDrill() {
     }
@@ -121,6 +126,16 @@ public final class UltimateMiningDrill {
     public static class BlockEntity extends AbstractEnergyDrillBlockEntity {
         public BlockEntity(BlockPos pos, BlockState state) {
             super(ModBlockEntities.ULTIMATE_MINING_DRILL.get(), pos, state, TIER, ENERGY, ModBlocks.ULTIMATE_STRUCTURE, PRODUCTIVITY_PERCENT, 20_000);
+        }
+
+        @Override
+        protected DrillBit drillBit() {
+            return DRILL_BIT;
+        }
+
+        @Override
+        public SoundEvent workSound() {
+            return ModSounds.ULTIMATE_MINING_DRILL_WORK.get();
         }
 
         public static void tick(Level level, BlockPos pos, BlockState state, BlockEntity blockEntity) {

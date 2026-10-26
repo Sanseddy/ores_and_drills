@@ -28,6 +28,9 @@ import java.util.Optional;
 public record DrillMiningRecipe(HolderSet<Block> input, Optional<DrillMiningFluid> fluid, int minimumDrillTier,
                                 List<DrillMiningCondition> conditions, int priority, Optional<ItemStack> result)
         implements Recipe<DrillMiningInput> {
+    /** Only the advanced (3) and ultimate (4) drills have tanks, so fluid recipes never accept a lower tier. */
+    public static final int FLUID_MINIMUM_DRILL_TIER = 3;
+
     public static final MapCodec<DrillMiningRecipe> CODEC = RecordCodecBuilder.<DrillMiningRecipe>mapCodec(instance -> instance.group(
             RegistryCodecs.homogeneousList(Registries.BLOCK).fieldOf("input").forGetter(DrillMiningRecipe::input),
             DrillMiningFluid.CODEC.optionalFieldOf("fluid").forGetter(DrillMiningRecipe::fluid),
@@ -43,6 +46,7 @@ public record DrillMiningRecipe(HolderSet<Block> input, Optional<DrillMiningFlui
         result = result.map(ItemStack::copy);
         if (minimumDrillTier < 1
                 || result.filter(ItemStack::isEmpty).isPresent()) throw new IllegalArgumentException("Invalid mining recipe");
+        if (fluid.isPresent()) minimumDrillTier = Math.max(minimumDrillTier, FLUID_MINIMUM_DRILL_TIER);
     }
 
     public boolean accepts(BlockState state) { return input.contains(state.getBlockHolder()); }

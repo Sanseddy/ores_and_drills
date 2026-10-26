@@ -1675,8 +1675,12 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
     }
 
     private static DepositCandidate fitCompactCandidate(ServerLevel level,Configuration config,DepositCandidate candidate) {
-        ResourceLocation biome=config.sourceBiome().orElse(null);
-        CompactDepositGeometry geometry = compactGeometry(candidate.shapeSeed(), config.sizeTier(), candidate.geometrySize());
+        return fitCompactCandidate(level,config.sizeTier(),config.sourceBiome().orElse(null),candidate);
+    }
+
+    /** The height fit worldgen applies before planning; /locate must test and report the same center. */
+    static DepositCandidate fitCompactCandidate(ServerLevel level,int tier,@javax.annotation.Nullable ResourceLocation biome,DepositCandidate candidate) {
+        CompactDepositGeometry geometry = compactGeometry(candidate.shapeSeed(), tier, candidate.geometrySize());
         java.util.OptionalInt fittedY = geometry.fitOriginY(candidate.center().getY(),
                 level.getMinBuildHeight() + BEDROCK_CLEARANCE, level.getMaxBuildHeight());
         if (fittedY.isEmpty()) return null;
@@ -1685,6 +1689,25 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
             if (biome != null && !isNoiseBiome(level,candidate.center(),biome)) return null;
         }
         return candidate;
+    }
+
+    /**
+     * Whether automatic worldgen really places this MEDIUM/LARGE candidate: its own terrain plan exists and wins
+     * arbitration. Sampled locate validation cannot see plan connectivity, so a prediction is checked here last.
+     */
+    static boolean compactCandidateGenerates(ServerLevel level,DepositCandidate candidate) {
+        if(candidate.tier().index()<TIER_MEDIUM)return true;
+        int cellChunks=DepositLayouts.forTier(candidate.tier()).cellSizeChunks();
+        int cellX=Math.floorDiv(candidate.sourceChunkX(),cellChunks),cellZ=Math.floorDiv(candidate.sourceChunkZ(),cellChunks);
+        String material=OreUnifier.materialKeyFor(BuiltInRegistries.BLOCK.get(candidate.oreId()));
+        for(Configuration config:ReplaceOreFeaturesBiomeModifier.compactConfigurations()) {
+            if(config.sizeTier()!=candidate.tier().index()||config.dataDriven().isPresent()
+                    ||!OreUnifier.materialKeyFor(config.targets().getFirst().state.getBlock()).equals(material))continue;
+            Optional<CompactPlan> plan=cachedCompactPlan(level,config,cellX,cellZ);
+            if(plan.isPresent()&&plan.get().candidate().depositId()==candidate.depositId())
+                return compactPlanWins(level,plan.get());
+        }
+        return false;
     }
 
     static CompactPlan buildCompactPlanAt(ServerLevel level,Configuration config,DepositCandidate candidate) {
@@ -1957,7 +1980,13 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
         int updateFlags=level instanceof ServerLevel?Block.UPDATE_CLIENTS:Block.UPDATE_NONE;
         for (int i = 0; i < generated.size(); i++) {
             if (!level.setBlock(generated.get(i).pos(), depositState, updateFlags)) {
-                for (int j = i - 1; j >= 0; j--) level.setBlock(generated.get(j).pos(), originalHosts.get(j), updateFlags);
+                // The just-written blocks are already deposits: on a ServerLevel the removal guard would
+                // otherwise reject restoring their hosts and leave deposit blocks without metadata.
+                for (int j = i - 1; j >= 0; j--) {
+                    BlockPos written = generated.get(j).pos();
+                    BlockState host = originalHosts.get(j);
+                    OreDepositRemovalGuard.runAuthorized(level.getLevel(), written, () -> level.setBlock(written, host, updateFlags));
+                }
                 OresAndDrillsMod.LOGGER.debug("Compact ore patch {} chunk [{},{}] rolled back: block write failed at {}",
                         Long.toUnsignedString(candidate.depositId()),chunk.x,chunk.z,generated.get(i).pos());
                 return;

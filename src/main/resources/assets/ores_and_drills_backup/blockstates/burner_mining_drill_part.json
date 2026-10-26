@@ -1,0 +1,9 @@
+{
+  "multipart": [
+    {
+      "apply": {
+        "model": "ores_and_drills:block/burner_mining_drill"
+      }
+    }
+  ]
+}

@@ -4,8 +4,12 @@ import dev.registry.ModBlocks;
 import dev.recipe.DrillMiningInput;
 import dev.recipe.DrillMiningRecipe;
 import dev.recipe.DrillMiningRecipes;
+import dev.world.block.AbstractDrillBlock;
 import dev.world.block.DrillStructure;
 import dev.world.block.MiningDrillTier;
+import dev.world.block.entity.drill.DrillBit;
+import dev.world.block.entity.drill.DrillClientEffects;
+import dev.world.block.entity.drill.MiningFront;
 import dev.world.block.entity.drill.OreScanner;
 import dev.world.block.entity.drill.PreviewGrid;
 import dev.world.block.entity.drill.ResultSlot;
@@ -13,12 +17,15 @@ import dev.world.level.levelgen.OreDepositData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.ContainerHelper;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -30,6 +37,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.ItemHandlerHelper;
@@ -46,6 +54,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.HashSet;
 import java.util.Set;
+import javax.annotation.Nullable;
 
 public abstract class AbstractDrillBlockEntity extends BlockEntity implements GeoBlockEntity, DrillStatusProvider {
     protected static final RawAnimation DRILL_WORK = RawAnimation.begin().thenLoop("drill_work");
@@ -64,6 +73,11 @@ public abstract class AbstractDrillBlockEntity extends BlockEntity implements Ge
     protected int miningProgress;
     protected int guiAnimationTick;
     protected boolean active;
+    /** Turn within the working face, advanced by every mined unit; see {@link MiningFront}. */
+    protected int miningFaceTurn;
+    /** Ore whose debris the bit throws up; chosen on the server and synced so clients can draw particles. */
+    @Nullable
+    protected Block miningParticleBlock;
 
     protected AbstractDrillBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state,
                                         MiningDrillTier tier, DrillStructure structure,
@@ -162,7 +176,11 @@ public abstract class AbstractDrillBlockEntity extends BlockEntity implements Ge
         }
         miningProgress = tag.getInt("MiningProgress");
         guiAnimationTick = tag.getInt("GuiAnimationTick");
+        miningFaceTurn = tag.getInt("MiningFaceTurn");
         active = tag.getBoolean("Active");
+        miningParticleBlock = tag.contains("MiningParticleBlock", Tag.TAG_STRING)
+                ? BuiltInRegistries.BLOCK.getOptional(ResourceLocation.tryParse(tag.getString("MiningParticleBlock"))).orElse(null)
+                : null;
     }
 
     @Override
@@ -173,7 +191,61 @@ public abstract class AbstractDrillBlockEntity extends BlockEntity implements Ge
         tag.put("Inventory", inventoryTag);
         tag.putInt("MiningProgress", miningProgress);
         tag.putInt("GuiAnimationTick", guiAnimationTick);
+        tag.putInt("MiningFaceTurn", miningFaceTurn);
         tag.putBoolean("Active", active);
+        if (miningParticleBlock != null) {
+            tag.putString("MiningParticleBlock", BuiltInRegistries.BLOCK.getKey(miningParticleBlock).toString());
+        }
+    }
+
+    /** Where this drill's model bit meets the ground. */
+    protected abstract DrillBit drillBit();
+
+    /** Sound looped on clients while the drill works, or {@code null} for a silent drill. */
+    @Nullable
+    public SoundEvent workSound() {
+        return null;
+    }
+
+    /** World point where the bit enters the ground; the drill's debris and sounds come from here. */
+    public Vec3 bitGroundCenter() {
+        BlockState state = getBlockState();
+        Direction facing = state.hasProperty(AbstractDrillBlock.FACING) ? state.getValue(AbstractDrillBlock.FACING) : Direction.NORTH;
+        return drillBit().groundCenter(worldPosition, facing);
+    }
+
+    /** Horizontal radius of the bit at ground level. */
+    public double bitRadius() {
+        return drillBit().radius();
+    }
+
+    /** Debris particles the working bit throws up per tick at full particle settings. */
+    public double debrisPerTick() {
+        return drillBit().debrisPerTick();
+    }
+
+    /** Ore whose debris the bit throws up, or {@code null} before the drill has started on any. */
+    @Nullable
+    public Block miningParticleBlock() {
+        return miningParticleBlock;
+    }
+
+    protected static void tickClientEffects(AbstractDrillBlockEntity be) {
+        DrillClientEffects.tick(be);
+    }
+
+    /** Picks the ore the coming cycle mines first, so clients show its debris; syncs only when it changes. */
+    private void refreshMiningParticleBlock(ServerLevel level, List<OreScanner.Target> mineable) {
+        for (OreScanner.Target target : cycleOrder(mineable)) {
+            if (canMineTarget(target)) {
+                Block ore = DrillMiningRecipes.sourceState(level, target.pos()).getBlock();
+                if (ore != miningParticleBlock) {
+                    miningParticleBlock = ore;
+                    syncToClient();
+                }
+                return;
+            }
+        }
     }
 
     @Override
@@ -263,7 +335,7 @@ public abstract class AbstractDrillBlockEntity extends BlockEntity implements Ge
     protected static boolean canOutputTargets(AbstractDrillBlockEntity be, List<OreScanner.Target> mineable) {
         for (OreScanner.Target target : mineable) {
             if (be.canMineTarget(target)
-                    && be.outputSlot.canAccept(be.outputStackForInsertion(maxExpectedDrop(target)))) {
+                    && be.outputSlot.canAccept(be.cycleOutput(maxExpectedDrop(target)))) {
                 return true;
             }
         }
@@ -272,7 +344,10 @@ public abstract class AbstractDrillBlockEntity extends BlockEntity implements Ge
 
     protected static boolean advanceMining(AbstractDrillBlockEntity be, Level level, boolean poweredAndMining, List<OreScanner.Target> mineable) {
         if (poweredAndMining) {
-            be.miningProgress++;
+            if (be.miningProgress == 0 && level instanceof ServerLevel serverLevel) {
+                be.refreshMiningParticleBlock(serverLevel, mineable);
+            }
+            be.miningProgress += be.tier.progressPerTick();
             be.guiAnimationTick++;
             if (be.miningProgress >= be.tier.miningDuration()) {
                 if (!canOutputTargets(be, mineable)) {
@@ -285,7 +360,9 @@ public abstract class AbstractDrillBlockEntity extends BlockEntity implements Ge
                     be.miningProgress = Math.max(0, be.tier.miningDuration() - 1);
                     return true;
                 }
-                be.miningProgress = 0;
+                be.onMiningCycleCompleted();
+                // Overshoot carries into the next cycle so fractional cycle lengths average out exactly.
+                be.miningProgress -= be.tier.miningDuration();
             }
             return true;
         }
@@ -303,7 +380,23 @@ public abstract class AbstractDrillBlockEntity extends BlockEntity implements Ge
         return false;
     }
 
+    /**
+     * Targets in the order this cycle tries them, taking turns across the working face: every block of the
+     * lowest funnel stage that still holds ore. The scanner orders targets by stage, so the funnel starts as the
+     * single top centre block and only widens once everything inside it is worked out.
+     */
+    private List<OreScanner.Target> cycleOrder(List<OreScanner.Target> mineable) {
+        int faceSize = MiningFront.currentStageSize(mineable, OreScanner.Target::funnelStage);
+        return MiningFront.order(mineable, faceSize, miningFaceTurn);
+    }
+
     private static int mineCycle(AbstractDrillBlockEntity be, Level level, List<OreScanner.Target> mineable) {
+        int minedUnits = mineCycleInOrder(be, level, be.cycleOrder(mineable));
+        be.miningFaceTurn += minedUnits;
+        return minedUnits;
+    }
+
+    private static int mineCycleInOrder(AbstractDrillBlockEntity be, Level level, List<OreScanner.Target> mineable) {
         int minedUnits = 0;
         Set<DrillMiningRecipe> paidRecipes = new HashSet<>();
         List<TargetCursor> cursors = targetCursors(mineable);
@@ -325,7 +418,7 @@ public abstract class AbstractDrillBlockEntity extends BlockEntity implements Ge
                         || !paidRecipes.contains(recipe) && !be.hasMiningFluid(recipe.fluid().orElse(null))) {
                     continue;
                 }
-                ItemStack expectedOutput = be.outputStackForInsertion(maxExpectedDrop(target));
+                ItemStack expectedOutput = be.cycleOutput(maxExpectedDrop(target));
                 if (!be.outputSlot.canAccept(expectedOutput)) {
                     continue;
                 }
@@ -336,14 +429,13 @@ public abstract class AbstractDrillBlockEntity extends BlockEntity implements Ge
                     continue;
                 }
 
-                ItemStack output = be.outputStackForInsertion(mined);
+                ItemStack output = be.cycleOutput(mined);
                 if (!be.outputSlot.canAccept(output)) {
                     cursor.exhaust();
                     continue;
                 }
 
                 be.outputSlot.insert(output);
-                be.onOutputInserted(mined);
                 if (paidRecipes.add(recipe)) be.consumeMiningFluid(recipe.fluid().orElse(null));
                 cursor.consumeOne();
                 minedUnits++;
@@ -390,11 +482,11 @@ public abstract class AbstractDrillBlockEntity extends BlockEntity implements Ge
                     serverLevel,
                     target.pos(),
                     recipe.result().orElse(null),
-                    stack -> be.outputSlot.canAccept(be.outputStackForInsertion(stack))
+                    stack -> be.outputSlot.canAccept(be.cycleOutput(stack))
             );
         }
 
-        if (!be.outputSlot.canAccept(be.outputStackForInsertion(target.result()))) {
+        if (!be.outputSlot.canAccept(be.cycleOutput(target.result()))) {
             return ItemStack.EMPTY;
         }
         if (!level.setBlock(target.pos(), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL)) return ItemStack.EMPTY;
@@ -416,11 +508,20 @@ public abstract class AbstractDrillBlockEntity extends BlockEntity implements Ge
     protected boolean hasMiningFluid(dev.recipe.DrillMiningFluid required) { return required == null; }
     protected boolean consumeMiningFluid(dev.recipe.DrillMiningFluid required) { return required == null; }
 
-    protected ItemStack outputStackForInsertion(ItemStack stack) {
-        return stack.copy();
+    /**
+     * How many copies of each mined unit the cycle in progress outputs. Drills with productivity add the bonus
+     * copies this cycle earns, so the whole cycle result is repeated for free without depleting the deposit.
+     */
+    protected int cycleOutputMultiplier() {
+        return 1;
     }
 
-    protected void onOutputInserted(ItemStack stack) {
+    /** Called once after a cycle has mined at least one unit and placed its result in the output. */
+    protected void onMiningCycleCompleted() {
+    }
+
+    private ItemStack cycleOutput(ItemStack mined) {
+        return mined.copyWithCount(mined.getCount() * cycleOutputMultiplier());
     }
 
     private static final class TargetCursor {

@@ -88,7 +88,7 @@ public final class ModPrioritiesScreen extends Screen {
 
         int buttonY = this.height - 28;
         int left = this.width / 2 - 158;
-        addRenderableWidget(Button.builder(Component.translatable(KEY + "add"), button -> openEditor(-1))
+        addRenderableWidget(Button.builder(Component.translatable("gui.ores_and_drills.settings.list.add"), button -> openEditor(-1))
                 .bounds(left, buttonY, 76, 20).build());
         addRenderableWidget(Button.builder(Component.translatable(KEY + "reset"), button -> {
             load(OreDepositConfig.MOD_PRIORITIES.getDefault());

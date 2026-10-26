@@ -2,6 +2,7 @@ package dev.world.inventory;
 
 import dev.world.block.entity.AbstractEnergyDrillBlockEntity;
 import dev.world.block.DrillStructure;
+import dev.world.block.entity.drill.ProductivityBonus;
 import dev.util.ProgressMath;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerPlayer;
@@ -251,31 +252,21 @@ public abstract class AbstractEnergyDrillMenu extends AbstractContainerMenu {
     }
 
     public int getProductivityProgressWidth(int barSize) {
-        int visibleProgress = getVisibleProductivityProgress();
-        return visibleProgress <= 0 ? 0 : Math.max(1, visibleProgress * barSize / 100);
+        int visible = ProductivityBonus.visibleProgress(clientData[8], clientData[9], clientData[2], clientData[3]);
+        return ProgressMath.scaled(visible, ProductivityBonus.FULL_BAR, barSize);
     }
 
     public int getProductivityProgressPercent() {
-        return getVisibleProductivityProgress();
+        return ProductivityBonus.visiblePercent(clientData[8], clientData[9], clientData[2], clientData[3]);
     }
 
-    private int getVisibleProductivityProgress() {
-        int productivityProgress = clientData[8];
-        int productivityPercent = clientData[9];
-        int miningProgress = clientData[2];
-        int miningDuration = clientData[3];
-        if (productivityPercent <= 0) {
-            return 0;
-        }
+    public int getProductivityPercent() {
+        return clientData[9];
+    }
 
-        if (miningProgress <= 0 || miningDuration <= 0) {
-            return productivityProgress;
-        }
-
-        int cycleTarget = Math.min(100, productivityProgress + productivityPercent);
-        int currentCycleProgress = (cycleTarget - productivityProgress) * miningProgress / miningDuration;
-
-        return Math.min(99, productivityProgress + currentCycleProgress);
+    /** Bonus copies of the result the current cycle adds when it finishes. */
+    public int getPendingBonusCycles() {
+        return ProductivityBonus.pendingBonusCycles(clientData[8], clientData[9]);
     }
 
     public int getAnimationFrame() {

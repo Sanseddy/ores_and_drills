@@ -2,6 +2,7 @@ package dev.world.level.levelgen;
 
 import dev.OresAndDrillsMod;
 import dev.config.OreDepositConfig;
+import dev.world.level.storage.FastSavedData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -22,7 +23,7 @@ import java.util.Comparator;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /** Persistent spatial hash shared by MEDIUM and LARGE deposits in one dimension. */
-public final class LargeDepositSpatialIndex extends SavedData {
+public final class LargeDepositSpatialIndex extends FastSavedData {
     private static final String FILE_ID = OresAndDrillsMod.MOD_ID + "_large_deposit_index";
     private static final String TAG_DATA_VERSION = "DataVersion";
     private static final String TAG_MATERIALS = "Materials";

@@ -1,10 +1,17 @@
 package dev.compat;
 
+import dev.drill.AdvancedMiningDrill;
+import dev.drill.BurnerMiningDrill;
+import dev.drill.ElectricMiningDrill;
+import dev.drill.UltimateMiningDrill;
 import dev.recipe.DrillMiningCondition;
 import dev.recipe.DrillMiningFluid;
 import dev.recipe.DrillMiningRecipe;
 import dev.recipe.DrillMiningRecipes;
+import dev.registry.ModBlocks;
+import dev.world.block.MiningDrillTier;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import dev.world.level.levelgen.OreDepositOrePalette;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
@@ -16,6 +23,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeManager;
+import net.minecraft.world.level.ItemLike;
 import net.minecraft.world.level.block.Block;
 import net.neoforged.neoforge.fluids.FluidStack;
 
@@ -26,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 /** Drill recipes split into recipe viewer pages; shared by the JEI and EMI integrations. */
 public final class DrillRecipePages {
@@ -136,10 +145,69 @@ public final class DrillRecipePages {
         }
         List<DrillMiningRecipe> pages = new ArrayList<>();
         recipe.input().stream()
-                .filter(holder -> !new ItemStack(holder.value()).isEmpty() && effective.test(holder.value()))
-                .forEach(holder -> fluids.forEach(fluid -> pages.add(new DrillMiningRecipe(
-                        HolderSet.direct(holder), fluid, recipe.minimumDrillTier(),
-                        recipe.conditions(), recipe.priority(), recipe.result()))));
+                .filter(holder -> !new ItemStack(holder.value()).isEmpty() && effective.test(holder.value())
+                        && !isDepositContainer(holder.value()))
+                .forEach(holder -> {
+                    int tier = Math.max(recipe.minimumDrillTier(), lowestHarvestingTier(holder.value()));
+                    fluids.forEach(fluid -> pages.add(new DrillMiningRecipe(
+                            HolderSet.direct(holder), fluid, tier,
+                            recipe.conditions(), recipe.priority(), recipe.result())));
+                });
         return List.copyOf(pages);
+    }
+
+    /**
+     * The deposit blocks sit in c:ores for other mods, but they only hold a real ore that has its own page;
+     * drills mine that ore, so a page for the container itself is a meaningless duplicate.
+     */
+    private static boolean isDepositContainer(Block block) {
+        return block == ModBlocks.ORE_DEPOSIT.get() || block == ModBlocks.EXHAUSTED_ORE_DEPOSIT.get();
+    }
+
+    /** A standard drill and its item; listed in ascending recipe level. */
+    private record Drill(MiningDrillTier tier, Supplier<? extends ItemLike> item) {}
+
+    private static final List<Drill> DRILLS = List.of(
+            new Drill(BurnerMiningDrill.TIER, ModBlocks.BURNER_MINING_DRILL_ITEM),
+            new Drill(ElectricMiningDrill.TIER, ModBlocks.ELECTRIC_MINING_DRILL_ITEM),
+            new Drill(AdvancedMiningDrill.TIER, ModBlocks.ADVANCED_MINING_DRILL_ITEM),
+            new Drill(UltimateMiningDrill.TIER, ModBlocks.ULTIMATE_MINING_DRILL_ITEM));
+
+    private static final int MAX_DRILL_LEVEL = DRILLS.stream().mapToInt(drill -> drill.tier().recipeLevel()).max().orElse(1);
+
+    /**
+     * Drills also skip ores their representative pickaxe cannot harvest (a burner drill's stone pickaxe
+     * cannot get diamonds), so the page shows the first drill tier that can actually mine the ore.
+     */
+    private static int lowestHarvestingTier(Block ore) {
+        return DRILLS.stream().map(Drill::tier).filter(tier -> tier.canHarvest(ore.defaultBlockState()))
+                .mapToInt(MiningDrillTier::recipeLevel).min().orElse(MAX_DRILL_LEVEL + 1);
+    }
+
+    /**
+     * Drills able to mine a page, weakest first. Recipe viewers list workstations per category, so the page
+     * shows these as its own catalyst slots instead of the category listing every drill.
+     */
+    public static List<ItemStack> drills(DrillMiningRecipe page) {
+        return DRILLS.stream().filter(drill -> drill.tier().recipeLevel() >= page.minimumDrillTier())
+                .map(drill -> new ItemStack(drill.item().get())).toList();
+    }
+
+    /** Y of the first text line: below the drill slots, or in their place when no drill can mine the page. */
+    public static int infoTop(DrillMiningRecipe page) {
+        return drills(page).isEmpty() ? 96 : 116;
+    }
+
+    /** Text below the recipe artwork, one component per line. */
+    public static List<Component> infoLines(DrillMiningRecipe page) {
+        List<Component> lines = new ArrayList<>();
+        // No standard drill can mine the page, so there are no drill slots to show the requirement.
+        if (page.minimumDrillTier() > MAX_DRILL_LEVEL) {
+            lines.add(Component.translatable("recipe.ores_and_drills.minimum_tier", page.minimumDrillTier()));
+        }
+        if (!page.conditions().isEmpty()) {
+            lines.add(Component.translatable("recipe.ores_and_drills.conditions", page.conditions().size()));
+        }
+        return List.copyOf(lines);
     }
 }

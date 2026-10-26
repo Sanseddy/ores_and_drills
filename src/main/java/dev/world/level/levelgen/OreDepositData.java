@@ -625,6 +625,23 @@ public final class OreDepositData {
         return drops;
     }
 
+    /**
+     * A tiny or small deposit hit by another mod's explosion of unknown strength (see
+     * {@link ForeignExplosionDetector}) loses all its ore without loot, as if the blast outlasted it, and becomes
+     * an exhausted deposit for that explosion to destroy. Returns whether it did.
+     */
+    public static boolean wipeByExplosion(ServerLevel level, BlockPos pos) {
+        ChunkAccess chunk = chunk(level, pos);
+        OreDepositChunkData.Entry entry = entry(level, pos);
+        OreDepositChunkData data = chunk.getExistingDataOrNull(ModAttachments.ORE_DEPOSITS);
+        if (entry == null || data == null || entry.remainingOre() <= 0
+                || entry.tier() >= OreDepositTier.MEDIUM.index()) {
+            return false;
+        }
+        deplete(level, chunk, data, pos, entry, entry.remainingOre());
+        return true;
+    }
+
     /** The deposit's ore needs a mining fluid, so only Ores & Drills drills get anything out of it. */
     public static boolean isFluidLocked(ServerLevel level, BlockPos pos) {
         OreDepositChunkData.Entry entry = entry(level, pos);

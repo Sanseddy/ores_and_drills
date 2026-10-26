@@ -13,6 +13,7 @@ import dev.registry.ModBlocks;
 import dev.registry.ModRecipes;
 import dev.world.block.AbstractDrillBlock;
 import dev.world.block.MiningDrillTier;
+import dev.world.block.entity.drill.DrillBit;
 import dev.world.block.entity.drill.OreScanner;
 import dev.world.level.levelgen.OreDepositData;
 import dev.world.level.levelgen.OreDepositOrePalette;
@@ -85,6 +86,16 @@ public final class DrillMiningRecipeGameTests {
         var decoded = DrillMiningRecipe.CODEC.codec().parse(ops, encoded).getOrThrow();
         helper.assertTrue(decoded.accepts(Blocks.DEEPSLATE_GOLD_ORE.defaultBlockState()) && decoded.minimumDrillTier() == 3,
                 "JSON round trip lost block-list inputs or tier");
+        var lowTierWet = DrillMiningRecipe.CODEC.codec().parse(ops, JsonParser.parseString(
+                "{\"input\":[\"minecraft:gold_ore\"],\"fluid\":{\"id\":\"minecraft:water\",\"amount\":100},\"minimum_drill_tier\":1}"))
+                .getOrThrow();
+        var highTierWet = DrillMiningRecipe.CODEC.codec().parse(ops, JsonParser.parseString(
+                "{\"input\":[\"minecraft:gold_ore\"],\"fluid\":{\"id\":\"minecraft:water\",\"amount\":100},\"minimum_drill_tier\":4}"))
+                .getOrThrow();
+        var lowTierDry = DrillMiningRecipe.CODEC.codec().parse(ops, JsonParser.parseString(
+                "{\"input\":[\"minecraft:gold_ore\"]}")).getOrThrow();
+        helper.assertTrue(lowTierWet.minimumDrillTier() == 3 && highTierWet.minimumDrillTier() == 4
+                && lowTierDry.minimumDrillTier() == 1, "Fluid recipe accepted a drill without tanks");
         var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), level.registryAccess());
         try {
             var serializer = ModRecipes.DRILL_MINING_SERIALIZER.get();
@@ -251,7 +262,11 @@ public final class DrillMiningRecipeGameTests {
         helper.assertTrue(AbstractDrillBlockEntity.canOutputTargets(drill, iron), "Generic ore requires fluid");
         AbstractDrillBlockEntity.advanceMining(drill, level, true, iron);
         helper.assertTrue(OreDepositData.remainingOreAt(level, ore) == 1, "Dry mining failed to deplete ore");
-        level.setBlock(ore, Blocks.DIAMOND_ORE.defaultBlockState(), Block.UPDATE_ALL);
+        // The deposit still holds one unit; the removal guard rejects plain replacement of a persistent deposit.
+        OreDepositRemovalGuard.runAuthorized(level, ore,
+                () -> level.setBlock(ore, Blocks.DIAMOND_ORE.defaultBlockState(), Block.UPDATE_ALL));
+        helper.assertTrue(level.getBlockState(ore).is(Blocks.DIAMOND_ORE) && OreDepositData.remainingOreAt(level, ore) == 0,
+                "Deposit was not replaced by a plain ore block");
         var diamond = List.of(new OreScanner.Target(ore, new ItemStack(Items.DIAMOND), 1, 1, 1));
         helper.assertTrue(!AbstractDrillBlockEntity.canOutputTargets(drill, diamond), "Minimum drill tier bypassed");
         var recipe = DrillMiningRecipes.find(level, Blocks.DIAMOND_ORE.defaultBlockState());
@@ -401,6 +416,11 @@ public final class DrillMiningRecipeGameTests {
                     new MiningDrillTier(5, 1, units, new ItemStack(Items.DIAMOND_PICKAXE), 4), AdvancedMiningDrill.ENERGY,
                     ModBlocks.ADVANCED_STRUCTURE, 0, 10000);
             setLevel(level);
+        }
+
+        @Override
+        protected DrillBit drillBit() {
+            return AdvancedMiningDrill.DRILL_BIT;
         }
     }
 }

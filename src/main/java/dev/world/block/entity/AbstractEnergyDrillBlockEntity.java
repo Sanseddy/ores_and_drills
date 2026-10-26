@@ -6,6 +6,7 @@ import dev.world.block.DrillStructure;
 import dev.world.block.EnergyProfile;
 import dev.world.block.MiningDrillTier;
 import dev.world.block.entity.drill.EnergyBuffer;
+import dev.world.block.entity.drill.ProductivityBonus;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
@@ -39,10 +40,9 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
 
     protected final EnergyProfile energyProfile;
     protected final EnergyBuffer energyBuffer;
-    protected final int productivityPercent;
+    protected final ProductivityBonus productivity;
     protected final FluidTank[] fluidTanks;
     protected final IFluidHandler fluidHandler;
-    protected int productivityProgress;
 
     protected AbstractEnergyDrillBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state,
                                               MiningDrillTier tier, EnergyProfile energyProfile, DrillStructure structure) {
@@ -55,7 +55,7 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
         super(type, pos, state, tier, structure, 2, OUTPUT_SLOT);
         this.energyProfile = energyProfile;
         this.energyBuffer = new EnergyBuffer(energyProfile.capacity(), energyProfile.capacity(), this::setChanged);
-        this.productivityPercent = productivityPercent;
+        this.productivity = new ProductivityBonus(productivityPercent);
         this.fluidTanks = fluidCapacity > 0 ? new FluidTank[]{new DrillFluidTank(fluidCapacity), new DrillFluidTank(fluidCapacity)} : new FluidTank[0];
         this.fluidHandler = fluidCapacity > 0 ? new RoutedFluidHandler() : null;
     }
@@ -140,26 +140,18 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
         return tank >= 0 && tank < fluidTanks.length ? fluidTanks[tank].getFluid() : FluidStack.EMPTY;
     }
 
+    /** Productivity bar carried over from finished cycles, in {@link ProductivityBonus#FULL_BAR} units. */
     public int getProductivityProgress() {
-        return productivityProgress;
+        return productivity.progress();
     }
 
     public int getProductivityPercent() {
-        return productivityPercent;
+        return productivity.percent();
     }
 
-    public int getVisibleProductivityProgress() {
-        if (productivityPercent <= 0) {
-            return 0;
-        }
-
-        if (miningProgress <= 0 || getMiningDuration() <= 0) {
-            return productivityProgress;
-        }
-
-        int cycleTarget = Math.min(100, productivityProgress + productivityPercent);
-        int currentCycleProgress = (cycleTarget - productivityProgress) * miningProgress / getMiningDuration();
-        return Math.min(99, productivityProgress + currentCycleProgress);
+    /** Productivity bar fill including the current cycle, as a whole percentage. */
+    public int getVisibleProductivityPercent() {
+        return ProductivityBonus.visiblePercent(productivity.progress(), productivity.percent(), miningProgress, getMiningDuration());
     }
 
     @Override
@@ -192,7 +184,11 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
     }
 
     protected static void tickEnergy(Level level, BlockPos pos, BlockState state, AbstractEnergyDrillBlockEntity be, Block expectedBlock) {
-        if (level.isClientSide || !state.is(expectedBlock)) {
+        if (!state.is(expectedBlock)) {
+            return;
+        }
+        if (level.isClientSide) {
+            tickClientEffects(be);
             return;
         }
 
@@ -458,7 +454,12 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
         if (tag.contains("Energy")) {
             energyBuffer.deserializeNBT(registries, tag.get("Energy"));
         }
-        productivityProgress = tag.getInt("ProductivityProgress");
+        if (tag.contains("ProductivityBonusProgress")) {
+            productivity.setProgress(tag.getInt("ProductivityBonusProgress"));
+        } else {
+            // Worlds saved before the Factorio model stored whole percents.
+            productivity.setProgress(tag.getInt("ProductivityProgress") * (ProductivityBonus.FULL_BAR / 100));
+        }
         for (int tank = 0; tank < fluidTanks.length; tank++) {
             String key = "FluidTank" + tank;
             if (tag.contains(key)) {
@@ -471,32 +472,23 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
     protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.saveAdditional(tag, registries);
         tag.put("Energy", energyBuffer.serializeNBT(registries));
-        tag.putInt("ProductivityProgress", productivityProgress);
+        tag.putInt("ProductivityBonusProgress", productivity.progress());
         for (int tank = 0; tank < fluidTanks.length; tank++) {
             tag.put("FluidTank" + tank, fluidTanks[tank].writeToNBT(registries, new CompoundTag()));
         }
     }
 
     @Override
-    protected ItemStack outputStackForInsertion(ItemStack stack) {
-        if (productivityPercent <= 0 || stack.isEmpty()) {
-            return stack.copy();
-        }
-
-        int accumulated = productivityProgress + stack.getCount() * productivityPercent;
-        ItemStack result = stack.copy();
-        result.grow(accumulated / 100);
-        return result;
+    protected int cycleOutputMultiplier() {
+        return productivity.cycleOutputMultiplier();
     }
 
     @Override
-    protected void onOutputInserted(ItemStack stack) {
-        if (productivityPercent <= 0 || stack.isEmpty()) {
-            return;
+    protected void onMiningCycleCompleted() {
+        if (productivity.isActive()) {
+            productivity.completeCycle();
+            setChanged();
         }
-
-        productivityProgress = (productivityProgress + stack.getCount() * productivityPercent) % 100;
-        setChanged();
     }
 
     private final class DrillFluidTank extends FluidTank {

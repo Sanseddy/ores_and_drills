@@ -3,13 +3,18 @@ package dev.world.level.levelgen;
 import dev.OresAndDrillsMod;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
+import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.saveddata.SavedData;
+import net.neoforged.neoforge.common.IOUtilities;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
@@ -17,6 +22,8 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -84,6 +91,54 @@ public final class OreDepositStorageGameTests {
         helper.succeed();
     }
 
+    @GameTest(template="empty",timeoutTicks=400)
+    public static void worldSaveWritesPackedSlicesThroughFastGzip(GameTestHelper helper) throws Exception {
+        var registries=helper.getLevel().registryAccess();
+        // Earlier saves stored one compound per deposit; they must still load and then be repacked.
+        CompoundTag legacy=new CompoundTag();legacy.putInt("Format",1);ListTag slices=new ListTag();
+        for(int i=0;i<20000;i++) {
+            CompoundTag record=new CompoundTag();record.putLong("Id",SeedMixer.mix(i));
+            long[] chunks=new long[1+i%9];for(int c=0;c<chunks.length;c++)chunks[c]=ChunkPos.asLong(-4000+i/7+c,i%611-300);
+            record.putLongArray("Chunks",chunks);slices.add(record);
+        }
+        legacy.put("CompactSlices",slices);
+        var index=ConfirmedDepositIndex.load(legacy,registries);
+        for(int i=0;i<5000;i++)index.add(new ConfirmedDeposit(SeedMixer.mix(i),ResourceLocation.withDefaultNamespace("iron_ore"),
+                OreDepositTier.fromIndex(i&3).orElseThrow(),new BlockPos(-10000+i*2,-64+i%300,i%97),1+i%2000,1+i%7,null,false));
+        Path file=Files.createTempFile("ores_and_drills_index",".dat");
+        try {
+            index.setDirty();index.save(file.toFile(),registries);
+            helper.assertTrue(!index.isDirty(),"World save left the index dirty");
+            IOUtilities.waitUntilIOWorkerComplete();
+            CompoundTag data=NbtIo.readCompressed(file,NbtAccounter.unlimitedHeap()).getCompound("data");
+            helper.assertTrue(data.contains("SliceIds")&&!data.contains("CompactSlices"),"Completed slices were not repacked");
+            var loaded=ConfirmedDepositIndex.load(data,registries);
+            for(int i=0;i<20000;i++)for(int c=0;c<1+i%9;c++)helper.assertTrue(loaded.hasSlice(SeedMixer.mix(i),-4000+i/7+c,i%611-300),
+                    "Packed slices lost a completed chunk");
+            helper.assertTrue(!loaded.hasSlice(SeedMixer.mix(0),-4000+1,-300),"Packed slices invented a completed chunk");
+            helper.assertTrue(loaded.recordsWithin(new BlockPos(-5000,0,0),20000,null).size()==5000,"World save lost deposit records");
+
+            // Old: per-deposit slice compounds through NeoForge's default path (deep copy, gzip level 6).
+            SavedData previous=new SavedData() {
+                @Override
+                public CompoundTag save(CompoundTag tag,HolderLookup.Provider provider) {
+                    CompoundTag saved=index.save(tag,provider);
+                    saved.remove("SliceIds");saved.remove("SliceCounts");saved.remove("SliceChunks");
+                    saved.put("CompactSlices",legacy.getList("CompactSlices",Tag.TAG_COMPOUND).copy());
+                    return saved;
+                }
+            };
+            long[] oldCost=measureWorldSave(previous,file,registries),newCost=measureWorldSave(index,file,registries);
+            helper.assertTrue(newCost[0]+newCost[1]<oldCost[0]+oldCost[1],"Flushing world save of the index did not get faster");
+            System.out.printf(java.util.Locale.ROOT,"Ore index world save, 20000 sliced + 5000 deposits: server thread %.3f -> %.3f ms; "
+                    +"IO worker wait %.3f -> %.3f ms; file %d -> %d bytes%n",
+                    oldCost[0]/1e6,newCost[0]/1e6,oldCost[1]/1e6,newCost[1]/1e6,oldCost[2],newCost[2]);
+        } finally {
+            Files.deleteIfExists(file);
+        }
+        helper.succeed();
+    }
+
     @GameTest(template="empty",timeoutTicks=200)
     public static void obsoleteOreStorageIsRejectedInsteadOfSilentlyLosingEntries(GameTestHelper helper) {
         CompoundTag old=new CompoundTag();old.putIntArray("Keys",new int[]{0});old.putLongArray("Values",new long[]{1});
@@ -118,6 +173,17 @@ public final class OreDepositStorageGameTests {
         }
         java.util.Arrays.sort(time);java.util.Arrays.sort(allocated);
         return new long[]{time[time.length/2],allocated[allocated.length/2]};
+    }
+    /** Median server-thread time, median wait for the IO worker as a flushing save does, and file size. */
+    private static long[] measureWorldSave(SavedData data,Path file,HolderLookup.Provider registries) throws Exception {
+        long[] build=new long[9],write=new long[9];
+        for(int i=-3;i<build.length;i++) {
+            data.setDirty();long start=System.nanoTime();data.save(file.toFile(),registries);
+            long built=System.nanoTime();IOUtilities.waitUntilIOWorkerComplete();long written=System.nanoTime();
+            if(i>=0) {build[i]=built-start;write[i]=written-built;}
+        }
+        java.util.Arrays.sort(build);java.util.Arrays.sort(write);
+        return new long[]{build[build.length/2],write[write.length/2],Files.size(file)};
     }
     private static byte[] bytes(CompoundTag tag,boolean compressed) throws Exception {
         ByteArrayOutputStream out=new ByteArrayOutputStream();

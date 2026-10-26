@@ -4,6 +4,10 @@ import dev.OresAndDrillsMod;
 import dev.network.FluidTankClickPayload;
 import dev.world.block.entity.AbstractDrillBlockEntity;
 import dev.world.inventory.AbstractEnergyDrillMenu;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -32,7 +36,7 @@ public abstract class AbstractEnergyDrillScreen extends AbstractContainerScreen<
     private static final int DRILL_ICON_SHEET_HEIGHT = DRILL_ICON_HEIGHT * AbstractDrillBlockEntity.GUI_ANIMATION_FRAME_COUNT;
     private static final String ENERGY_TOOLTIP_KEY = "tooltip.ores_and_drills.mining_drill.energy";
     private static final String MINING_PROGRESS_TOOLTIP_KEY = "tooltip.ores_and_drills.mining_drill.progress";
-    private static final String PRODUCTIVITY_TOOLTIP_KEY = "tooltip.ores_and_drills.mining_drill.productivity";
+    private static final String PRODUCTIVITY_TOOLTIP_KEY = "tooltip.ores_and_drills.mining_drill.productivity_bar";
     private static final String FLUID_EMPTY_TOOLTIP_KEY = "tooltip.ores_and_drills.mining_drill.fluid_empty";
     private static final String FLUID_AMOUNT_TOOLTIP_KEY = "tooltip.ores_and_drills.mining_drill.fluid_amount";
 
@@ -173,6 +177,25 @@ public abstract class AbstractEnergyDrillScreen extends AbstractContainerScreen<
 
     private static boolean canHoldFluid(ItemStack stack) {
         return !stack.isEmpty() && (stack.is(Items.BUCKET) || stack.getCapability(Capabilities.FluidHandler.ITEM) != null);
+    }
+
+    /** A tank's fluid and its area in screen coordinates. */
+    public record HoveredFluid(FluidStack fluid, int x, int y, int width, int height) {}
+
+    /** The fluid of the tank under the mouse, so recipe viewers can look it up with the recipe/usage keys. */
+    public Optional<HoveredFluid> fluidUnderMouse(double mouseX, double mouseY) {
+        for (int tank = 0; tank < 2; tank++) {
+            int x = tank == 0 ? firstFluidTankX : secondFluidTankX;
+            int y = tank == 0 ? firstFluidTankY : secondFluidTankY;
+            if (x < 0 || y < 0 || fluidTankWidth <= 0 || fluidTankHeight <= 0
+                    || !isHovering(x, y, fluidTankWidth, fluidTankHeight, mouseX, mouseY)) {
+                continue;
+            }
+            FluidStack fluid = menu.getFluidForRender(tank);
+            return fluid.isEmpty() ? Optional.empty()
+                    : Optional.of(new HoveredFluid(fluid, leftPos + x, topPos + y, fluidTankWidth, fluidTankHeight));
+        }
+        return Optional.empty();
     }
 
     @Override
@@ -349,13 +372,21 @@ public abstract class AbstractEnergyDrillScreen extends AbstractContainerScreen<
 
         if (productivityProgressTexture != null
                 && isHovering(productivityProgressX, productivityProgressY, productivityProgressWidth, productivityProgressHeight, mouseX, mouseY)) {
-            guiGraphics.renderTooltip(
-                    font,
-                    plainTooltip(Component.translatable(PRODUCTIVITY_TOOLTIP_KEY, menu.getProductivityProgressPercent())),
-                    mouseX,
-                    mouseY
-            );
+            guiGraphics.renderComponentTooltip(font, productivityTooltip(), mouseX, mouseY);
         }
+    }
+
+    private List<Component> productivityTooltip() {
+        List<Component> lines = new ArrayList<>(4);
+        lines.add(plainTooltip(Component.translatable(PRODUCTIVITY_TOOLTIP_KEY, menu.getProductivityProgressPercent())));
+        lines.add(plainTooltip(Component.translatable(PRODUCTIVITY_TOOLTIP_KEY + ".rate", menu.getProductivityPercent()))
+                .withStyle(ChatFormatting.GRAY));
+        int pendingBonus = menu.getPendingBonusCycles();
+        if (pendingBonus > 0) {
+            lines.add(plainTooltip(Component.translatable(PRODUCTIVITY_TOOLTIP_KEY + ".pending", pendingBonus))
+                    .withStyle(ChatFormatting.LIGHT_PURPLE));
+        }
+        return lines;
     }
 
     private boolean renderFluidTooltip(GuiGraphics guiGraphics, int mouseX, int mouseY, int tank, int x, int y) {

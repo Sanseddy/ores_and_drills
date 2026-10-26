@@ -9,7 +9,7 @@ import net.minecraft.world.level.saveddata.SavedData;
 import java.util.UUID;
 
 /** Persistent identity used to keep client ore-map files separate after a server world reset. */
-public final class OreMapWorldId extends SavedData {
+public final class OreMapWorldId extends FastSavedData {
     private static final String FILE_ID = OresAndDrillsMod.MOD_ID + "_ore_map_world_id";
     private static final String TAG_ID = "Id";
     private static final SavedData.Factory<OreMapWorldId> FACTORY =

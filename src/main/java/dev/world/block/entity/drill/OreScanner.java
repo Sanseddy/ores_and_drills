@@ -36,11 +36,14 @@ public final class OreScanner {
 
     public static void clearDropRangeCache() { DROP_RANGE_CACHE.clear(); }
 
-    /** @param remainingInVein how much ore is still left at this exact deposit block, or 1 for a plain ore block */
+    /**
+     * @param remainingInVein how much ore is still left at this exact deposit block, or 1 for a plain ore block
+     * @param funnelStage     the step of the drill's growing funnel that reaches this block (see {@link ConeMiningOrder})
+     */
     public record Target(BlockPos pos, ItemStack result, int minCount, int maxCount, int remainingInVein,
-                         DrillMiningFluid requiredFluid) {
+                         DrillMiningFluid requiredFluid, int funnelStage) {
         public Target(BlockPos pos, ItemStack result, int minCount, int maxCount, int remainingInVein) {
-            this(pos, result, minCount, maxCount, remainingInVein, null);
+            this(pos, result, minCount, maxCount, remainingInVein, null, 0);
         }
     }
 
@@ -55,45 +58,40 @@ public final class OreScanner {
     }
 
     /**
-     * Scans every column in the drill's mining area from directly below it down through {@link #SCAN_DEPTH}
-     * blocks, collecting every ore position found along the way (plain stone/rock between ore is skipped,
-     * not mined) so a vein isn't limited to whatever single layer happens to sit right under the drill.
+     * Scans the drill's mining area from directly below it down through {@link #SCAN_DEPTH} blocks, collecting
+     * every ore position (plain stone/rock between ore is skipped, not mined) in the order the drill works them:
+     * the stages of a funnel that starts as the top centre block under the bit and widens and deepens from there
+     * (see {@link ConeMiningOrder}). The drill works the lowest stage that still holds ore, so the funnel only
+     * grows once everything inside it is worked out.
      */
     public static List<Target> scan(ServerLevel level, BlockPos origin, Direction facing, DrillStructure structure, MiningDrillTier tier) {
-        int size = structure.size();
         // The mining area extends past the body on every side (2x2 -> 2x2, 3x3 -> 5x5, 5x5 -> 13x13, 7x7 -> 19x19).
-        int margin = structure.miningAreaMargin();
+        List<ConeMiningOrder.Cell> cells = ConeMiningOrder.of(structure.size(), structure.miningAreaMargin(), SCAN_DEPTH);
         List<Target> targets = new ArrayList<>();
-
-        for (SpiralColumnOrder.Offset offset : SpiralColumnOrder.between(-margin, size + margin)) {
-            BlockPos columnTop = structure.offset(origin, facing, offset.x(), 0, offset.z()).below();
-            scanColumn(level, columnTop, tier, targets);
+        for (ConeMiningOrder.Cell cell : cells) {
+            BlockPos columnTop = structure.offset(origin, facing, cell.x(), 0, cell.z()).below();
+            scanBlock(level, columnTop.below(cell.depth()), cell.stage(), tier, targets);
         }
-
         return targets;
     }
 
-    /** Scans deepest-first so that, when more ore is found than a cycle can process, the drill works the vein from the bottom up. */
-    private static void scanColumn(ServerLevel level, BlockPos columnTop, MiningDrillTier tier, List<Target> targets) {
-        for (int depth = SCAN_DEPTH - 1; depth >= 0; depth--) {
-            BlockPos targetPos = columnTop.below(depth);
-            BlockState targetState = level.getBlockState(targetPos);
-            BlockState source = harvestCheckState(level, targetPos, targetState);
-            if ((!OreTags.isOre(targetState) && DrillMiningRecipes.find(level, source) == null) || !tier.canHarvest(source)) {
-                continue;
-            }
-
-            ItemStack result = miningResultFor(level, targetPos, targetState);
-            if (result.isEmpty()) {
-                continue;
-            }
-
-            DropRange range = dropRangeFor(level, targetPos, targetState, result);
-            int remainingInVein = remainingInVein(level, targetPos, targetState);
-            DrillMiningRecipe recipe = DrillMiningRecipes.find(level, source);
-            targets.add(new Target(targetPos, result, range.minCount(), range.maxCount(), remainingInVein,
-                    recipe == null ? null : recipe.fluid().orElse(null)));
+    private static void scanBlock(ServerLevel level, BlockPos targetPos, int funnelStage, MiningDrillTier tier, List<Target> targets) {
+        BlockState targetState = level.getBlockState(targetPos);
+        BlockState source = harvestCheckState(level, targetPos, targetState);
+        if ((!OreTags.isOre(targetState) && DrillMiningRecipes.find(level, source) == null) || !tier.canHarvest(source)) {
+            return;
         }
+
+        ItemStack result = miningResultFor(level, targetPos, targetState);
+        if (result.isEmpty()) {
+            return;
+        }
+
+        DropRange range = dropRangeFor(level, targetPos, targetState, result);
+        int remainingInVein = remainingInVein(level, targetPos, targetState);
+        DrillMiningRecipe recipe = DrillMiningRecipes.find(level, source);
+        targets.add(new Target(targetPos, result, range.minCount(), range.maxCount(), remainingInVein,
+                recipe == null ? null : recipe.fluid().orElse(null), funnelStage));
     }
 
     private static int remainingInVein(ServerLevel level, BlockPos targetPos, BlockState targetState) {

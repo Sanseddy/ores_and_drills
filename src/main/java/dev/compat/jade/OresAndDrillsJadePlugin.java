@@ -122,11 +122,16 @@ public class OresAndDrillsJadePlugin implements IWailaPlugin {
                     miningDuration > 0 ? miningProgress * 100 / miningDuration : 0
             ));
 
-            if (data.getInt(PRODUCTIVITY_PERCENT_KEY) > 0) {
+            int productivityPercent = data.getInt(PRODUCTIVITY_PERCENT_KEY);
+            if (productivityPercent > 0) {
                 tooltip.add(Component.translatable(
-                        "tooltip.ores_and_drills.mining_drill.productivity",
+                        "tooltip.ores_and_drills.mining_drill.productivity_bar",
                         data.getInt(PRODUCTIVITY_PROGRESS_KEY)
                 ));
+                tooltip.add(Component.translatable(
+                        "tooltip.ores_and_drills.mining_drill.productivity_bar.rate",
+                        productivityPercent
+                ).withStyle(ChatFormatting.GRAY));
             }
         }
 
@@ -144,7 +149,7 @@ public class OresAndDrillsJadePlugin implements IWailaPlugin {
 
             if (origin instanceof AbstractEnergyDrillBlockEntity energyDrill) {
                 tag.putInt(PRODUCTIVITY_PERCENT_KEY, energyDrill.getProductivityPercent());
-                tag.putInt(PRODUCTIVITY_PROGRESS_KEY, energyDrill.getVisibleProductivityProgress());
+                tag.putInt(PRODUCTIVITY_PROGRESS_KEY, energyDrill.getVisibleProductivityPercent());
             }
         }
 

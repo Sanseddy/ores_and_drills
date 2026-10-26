@@ -2,6 +2,9 @@ package dev.client;
 
 import dev.OresAndDrillsMod;
 import dev.client.config.OresAndDrillsSettingsScreen;
+import dev.client.drill.DrillMiningParticles;
+import dev.client.drill.DrillWorkSounds;
+import dev.world.block.entity.drill.DrillClientEffects;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
@@ -16,5 +19,9 @@ public final class OresAndDrillsClient {
     public OresAndDrillsClient(ModContainer container) {
         container.registerExtensionPoint(IConfigScreenFactory.class,
                 (IConfigScreenFactory) (mod, parent) -> new OresAndDrillsSettingsScreen(parent));
+        DrillClientEffects.setHandler(drill -> {
+            DrillMiningParticles.tick(drill);
+            DrillWorkSounds.tick(drill);
+        });
     }
 }

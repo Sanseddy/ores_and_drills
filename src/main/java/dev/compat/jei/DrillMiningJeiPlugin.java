@@ -1,6 +1,7 @@
 package dev.compat.jei;
 
 import dev.OresAndDrillsMod;
+import dev.client.AbstractEnergyDrillScreen;
 import dev.compat.DrillRecipePages;
 import dev.compat.RecipeViewerOres;
 import dev.recipe.DrillMiningRecipe;
@@ -8,18 +9,22 @@ import dev.registry.ModBlocks;
 import dev.world.block.entity.AbstractDrillBlockEntity;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
+import mezz.jei.api.gui.builder.IClickableIngredientFactory;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
 import mezz.jei.api.gui.drawable.IDrawable;
+import mezz.jei.api.gui.handlers.IGuiContainerHandler;
 import mezz.jei.api.gui.ingredient.IRecipeSlotsView;
 import mezz.jei.api.helpers.IGuiHelper;
+import mezz.jei.api.neoforge.NeoForgeTypes;
 import mezz.jei.api.recipe.IFocusGroup;
 import mezz.jei.api.recipe.IRecipeManager;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import mezz.jei.api.recipe.RecipeType;
 import mezz.jei.api.recipe.category.IRecipeCategory;
-import mezz.jei.api.registration.IRecipeCatalystRegistration;
+import mezz.jei.api.registration.IGuiHandlerRegistration;
 import mezz.jei.api.registration.IRecipeCategoryRegistration;
 import mezz.jei.api.registration.IRecipeRegistration;
+import mezz.jei.api.runtime.IClickableIngredient;
 import mezz.jei.api.runtime.IJeiRuntime;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -30,6 +35,7 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.crafting.RecipeManager;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 @JeiPlugin
@@ -107,12 +113,21 @@ public final class DrillMiningJeiPlugin implements IModPlugin {
     }
 
     @Override
-    public void registerRecipeCatalysts(IRecipeCatalystRegistration registration) {
-        registration.addRecipeCatalyst(new ItemStack(ModBlocks.BURNER_MINING_DRILL_ITEM.get()), TYPE);
-        registration.addRecipeCatalyst(new ItemStack(ModBlocks.ELECTRIC_MINING_DRILL_ITEM.get()), TYPE);
-        registration.addRecipeCatalyst(new ItemStack(ModBlocks.ADVANCED_MINING_DRILL_ITEM.get()), TYPE);
-        registration.addRecipeCatalyst(new ItemStack(ModBlocks.ULTIMATE_MINING_DRILL_ITEM.get()), TYPE);
+    public void registerGuiHandlers(IGuiHandlerRegistration registration) {
+        // Lets the recipe (R) and usage (U) keys work on the fluid in a drill tank, not only on items.
+        registration.addGuiContainerHandler(AbstractEnergyDrillScreen.class, new IGuiContainerHandler<>() {
+            @Override
+            public Optional<? extends IClickableIngredient<?>> getClickableIngredientUnderMouse(
+                    IClickableIngredientFactory factory, AbstractEnergyDrillScreen screen, double mouseX, double mouseY) {
+                return screen.fluidUnderMouse(mouseX, mouseY).flatMap(tank -> factory
+                        .createBuilder(NeoForgeTypes.FLUID_STACK, tank.fluid())
+                        .buildWithArea(tank.x(), tank.y(), tank.width(), tank.height()));
+            }
+        });
     }
+
+    // No category-wide catalysts: they would list every drill on every page. Each page carries catalyst
+    // slots with only the drills able to mine it, which also drive the "Uses" (U) lookup on a drill.
 
     private static final class Category implements IRecipeCategory<DrillMiningRecipe> {
         private final IDrawable icon;
@@ -127,7 +142,7 @@ public final class DrillMiningJeiPlugin implements IModPlugin {
         public IDrawable getIcon() { return icon; }
         public IDrawable getBackground() { return background; }
         public int getWidth() { return 142; }
-        public int getHeight() { return 116; }
+        public int getHeight() { return 127; }
         public void setRecipe(IRecipeLayoutBuilder builder, DrillMiningRecipe recipe, IFocusGroup focuses) {
             // Coordinates mirror AbstractEnergyDrillMenu: scanned ore preview at the top-right,
             // mining fluid in the left tank and the mined result (explicit result or the ore's loot
@@ -149,6 +164,12 @@ public final class DrillMiningJeiPlugin implements IModPlugin {
                     slot.addFluidStack(stack.getFluid(), stack.getAmount(), stack.getComponentsPatch());
                 }
             });
+            // Drills able to mine this ore, in the bottom-left corner below the notes.
+            List<ItemStack> drills = DrillRecipePages.drills(recipe);
+            for (int i = 0; i < drills.size(); i++) {
+                builder.addSlot(RecipeIngredientRole.CATALYST, 1 + i * 18, 97).addItemStack(drills.get(i))
+                        .setStandardSlotBackground();
+            }
         }
         @Override
         public void draw(DrillMiningRecipe recipe, IRecipeSlotsView slots, GuiGraphics gui, double mouseX, double mouseY) {
@@ -158,10 +179,10 @@ public final class DrillMiningJeiPlugin implements IModPlugin {
                     % AbstractDrillBlockEntity.GUI_ANIMATION_FRAME_COUNT);
             gui.blit(DRILL_ICON, 45, 3, 0, frame * 66, 46, 66, 46, 330);
             gui.blit(MINING_PROGRESS, 37, 77, 0, 0, 64, 3, 64, 3);
-            gui.drawString(font, Component.translatable("recipe.ores_and_drills.minimum_tier", recipe.minimumDrillTier()), 1, 96, 0x404040, false);
-            if (recipe.result().isEmpty()) gui.drawString(font, Component.translatable("recipe.ores_and_drills.ore_loot"), 1, 107, 0x404040, false);
-            if (!recipe.conditions().isEmpty()) gui.drawString(font,
-                    Component.translatable("recipe.ores_and_drills.conditions", recipe.conditions().size()), 71, 96, 0x404040, false);
+            // The minimum drill is shown by the drill slots, so only the remaining notes are text.
+            List<Component> lines = DrillRecipePages.infoLines(recipe);
+            int top = DrillRecipePages.infoTop(recipe);
+            for (int i = 0; i < lines.size(); i++) gui.drawString(font, lines.get(i), 1, top + i * 11, 0x404040, false);
         }
     }
 }

@@ -1,6 +1,7 @@
 package dev.world.level.levelgen;
 
 import dev.OresAndDrillsMod;
+import dev.world.level.storage.FastSavedData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -19,7 +20,7 @@ import java.util.Map;
  * A chunk reserves a slot before it builds a deposit and commits it only after the deposit is placed, so a
  * failed attempt leaves the slot for another chunk of the same instance and the total never exceeds count.
  */
-public final class DataDrivenDepositLedger extends SavedData {
+public final class DataDrivenDepositLedger extends FastSavedData {
     private static final String FILE_ID = OresAndDrillsMod.MOD_ID + "_data_driven_deposits";
     private static final SavedData.Factory<DataDrivenDepositLedger> FACTORY =
             new SavedData.Factory<>(DataDrivenDepositLedger::new, DataDrivenDepositLedger::load);

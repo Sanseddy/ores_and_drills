@@ -1,6 +1,7 @@
 package dev.world.level.levelgen;
 
 import dev.OresAndDrillsMod;
+import dev.world.level.storage.FastSavedData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
@@ -24,7 +25,7 @@ import java.util.HashSet;
 import net.minecraft.world.level.ChunkPos;
 
 /** Per-dimension SavedData index of deposits that were actually placed. */
-public final class ConfirmedDepositIndex extends SavedData {
+public final class ConfirmedDepositIndex extends FastSavedData {
     private static final String FILE_ID = OresAndDrillsMod.MOD_ID + "_confirmed_deposits";
     private static final int CELL_SIZE = 1_024;
     private static final SavedData.Factory<ConfirmedDepositIndex> FACTORY =
@@ -294,12 +295,26 @@ public final class ConfirmedDepositIndex extends SavedData {
                 OresAndDrillsMod.LOGGER.warn("Invalid saved forced ore plan: {}",invalid.getMessage());
             }
         }
-        ListTag completed = tag.getList("CompactSlices", Tag.TAG_COMPOUND);
-        for (int i = 0; i < completed.size(); i++) {
-            CompoundTag record = completed.getCompound(i);
-            Set<Long> chunks = new HashSet<>();
-            for (long key : record.getLongArray("Chunks")) chunks.add(key);
-            index.compactSlices.put(record.getLong("Id"), chunks);
+        if(tag.contains("SliceIds",Tag.TAG_LONG_ARRAY)) {
+            long[] sliceIds=tag.getLongArray("SliceIds"),sliceChunks=tag.getLongArray("SliceChunks");
+            int[] sliceCounts=tag.getIntArray("SliceCounts");
+            if(sliceCounts.length!=sliceIds.length)throw new IllegalArgumentException("Invalid packed compact slices");
+            int offset=0;
+            for(int i=0;i<sliceIds.length;i++) {
+                if(sliceCounts[i]<0||sliceCounts[i]>sliceChunks.length-offset)throw new IllegalArgumentException("Invalid packed compact slices");
+                Set<Long> chunks=new HashSet<>(Math.max(4,sliceCounts[i]*2));
+                for(int end=offset+sliceCounts[i];offset<end;offset++)chunks.add(sliceChunks[offset]);
+                index.compactSlices.put(sliceIds[i],chunks);
+            }
+        } else {
+            // Earlier Format=1 saves wrote one compound per deposit; read them, the next save repacks them.
+            ListTag completed = tag.getList("CompactSlices", Tag.TAG_COMPOUND);
+            for (int i = 0; i < completed.size(); i++) {
+                CompoundTag record = completed.getCompound(i);
+                Set<Long> chunks = new HashSet<>();
+                for (long key : record.getLongArray("Chunks")) chunks.add(key);
+                index.compactSlices.put(record.getLong("Id"), chunks);
+            }
         }
         if(tag.contains("DepositIds",Tag.TAG_LONG_ARRAY)) {
             long[] ids=tag.getLongArray("DepositIds"),centers=tag.getLongArray("DepositCenters");
@@ -340,14 +355,17 @@ public final class ConfirmedDepositIndex extends SavedData {
         tag.putInt("Format",1);
         tag.putLongArray("DepositIds",ids);tag.putLongArray("DepositCenters",centers);
         tag.putIntArray("DepositCounts",counts);tag.putIntArray("DepositKinds",kinds);tag.put("DepositOres",ores);
-        ListTag completed = new ListTag();
-        compactSlices.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
-            CompoundTag record = new CompoundTag();
-            record.putLong("Id", entry.getKey());
-            record.putLongArray("Chunks", entry.getValue().stream().mapToLong(Long::longValue).sorted().toArray());
-            completed.add(record);
-        });
-        tag.put("CompactSlices", completed);
+        // Completed slices of every MEDIUM/LARGE deposit only grow, so a large world holds many of them:
+        // three flat arrays instead of one compound per deposit keep both the build and the gzip pass short.
+        int sliceTotal=0;
+        for(Set<Long> chunks:compactSlices.values())sliceTotal+=chunks.size();
+        long[] sliceIds=new long[compactSlices.size()],sliceChunks=new long[sliceTotal];int[] sliceCounts=new int[sliceIds.length];
+        int slice=0,offset=0;
+        for(Map.Entry<Long,Set<Long>> entry:compactSlices.entrySet()) {
+            sliceIds[slice]=entry.getKey();sliceCounts[slice++]=entry.getValue().size();
+            for(long chunk:entry.getValue())sliceChunks[offset++]=chunk;
+        }
+        tag.putLongArray("SliceIds",sliceIds);tag.putIntArray("SliceCounts",sliceCounts);tag.putLongArray("SliceChunks",sliceChunks);
         ListTag pending=new ListTag();
         // An initial attempt is visible to gravel protection/arbitration, but cannot be
         // continued or saved before its first slice succeeds and earns the forced slot.

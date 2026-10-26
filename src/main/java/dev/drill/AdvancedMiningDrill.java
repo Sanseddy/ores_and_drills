@@ -10,6 +10,7 @@ import dev.world.block.DrillStructure;
 import dev.world.block.EnergyProfile;
 import dev.world.block.MiningDrillTier;
 import dev.world.block.entity.AbstractEnergyDrillBlockEntity;
+import dev.world.block.entity.drill.DrillBit;
 import dev.world.inventory.AbstractEnergyDrillMenu;
 import dev.world.item.AbstractDrillBlockItem;
 import dev.client.AbstractEnergyDrillScreen;
@@ -46,11 +47,15 @@ import dev.client.drill.DrillGeoRenderer;
 import software.bernie.geckolib.renderer.GeoItemRenderer;
 
 public final class AdvancedMiningDrill {
-    public static final MiningDrillTier TIER = new MiningDrillTier(5, 8, 1, new ItemStack(Items.DIAMOND_PICKAXE), 4);
-    public static final EnergyProfile ENERGY = new EnergyProfile(64_000, 160);
+    /** 0.75 ore/s: three cycles every 80 ticks (one cycle would need 26.67 ticks). */
+    public static final MiningDrillTier TIER = new MiningDrillTier(5, 80, 1, new ItemStack(Items.DIAMOND_PICKAXE), 4)
+            .withProgressPerTick(3);
+    public static final EnergyProfile ENERGY = new EnergyProfile(64_000, 320);
     public static final int PRODUCTIVITY_PERCENT = 20;
+    /** The model bit is 6 px ahead of the model centre, which {@link Renderer} places two blocks in front. */
+    public static final DrillBit DRILL_BIT = new DrillBit(0.0D, 2.0D + 6.0D / 16.0D, 0.45D, 3.8D);
 
-    private static final Component MENU_TITLE = Component.translatable("container.ores_and_drills.advanced_mining_drill");
+    private static final Component MENU_TITLE = Component.translatable("block.ores_and_drills.advanced_mining_drill");
 
     private AdvancedMiningDrill() {
     }
@@ -120,6 +125,11 @@ public final class AdvancedMiningDrill {
     public static class BlockEntity extends AbstractEnergyDrillBlockEntity {
         public BlockEntity(BlockPos pos, BlockState state) {
             super(ModBlockEntities.ADVANCED_MINING_DRILL.get(), pos, state, TIER, ENERGY, ModBlocks.ADVANCED_STRUCTURE, PRODUCTIVITY_PERCENT, 10_000);
+        }
+
+        @Override
+        protected DrillBit drillBit() {
+            return DRILL_BIT;
         }
 
         public static void tick(Level level, BlockPos pos, BlockState state, BlockEntity blockEntity) {

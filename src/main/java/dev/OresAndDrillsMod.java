@@ -11,18 +11,18 @@ import dev.registry.ModBlockEntities;
 import dev.registry.ModAttachments;
 import dev.registry.ModBlocks;
 import dev.registry.ModCapabilities;
+import dev.registry.ModCreativeTabs;
 import dev.registry.ModMenuTypes;
+import dev.registry.ModSounds;
 import dev.registry.ModWorldgen;
 import dev.world.block.OreDepositExplosionHandler;
 import dev.world.block.OreDepositMiningSpeed;
 import dev.world.level.levelgen.DepositTerrainValidator;
-import net.minecraft.world.item.CreativeModeTabs;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
-import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,13 +40,14 @@ public final class OresAndDrillsMod {
         ModBlocks.ITEMS.register(modEventBus);
         ModBlockEntities.BLOCK_ENTITY_TYPES.register(modEventBus);
         ModMenuTypes.MENU_TYPES.register(modEventBus);
+        ModSounds.SOUND_EVENTS.register(modEventBus);
+        ModCreativeTabs.CREATIVE_MODE_TABS.register(modEventBus);
         ModWorldgen.FEATURES.register(modEventBus);
         ModWorldgen.BIOME_MODIFIER_SERIALIZERS.register(modEventBus);
         dev.recipe.DrillMiningCondition.registerDefaults();
         dev.registry.ModRecipes.TYPES.register(modEventBus);
         dev.registry.ModRecipes.SERIALIZERS.register(modEventBus);
 
-        modEventBus.addListener(this::addCreativeTabItems);
         modEventBus.addListener(ModCapabilities::register);
         modEventBus.addListener(ModNetworking::register);
         modEventBus.addListener(OreWorldSettingsApplier::onConfigLoading);
@@ -64,14 +65,5 @@ public final class OresAndDrillsMod {
         NeoForge.EVENT_BUS.addListener(dev.recipe.DrillMiningRecipes::onTagsUpdated);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, dev.recipe.FluidLockedOreDrops::onBlockDrops);
         NeoForge.EVENT_BUS.addListener(dev.world.level.levelgen.OreDepositFeature::onCompactChunkLoad);
-    }
-
-    private void addCreativeTabItems(BuildCreativeModeTabContentsEvent event) {
-        if (event.getTabKey() == CreativeModeTabs.BUILDING_BLOCKS) {
-            event.accept(ModBlocks.BURNER_MINING_DRILL_ITEM.get());
-            event.accept(ModBlocks.ELECTRIC_MINING_DRILL_ITEM.get());
-            event.accept(ModBlocks.ADVANCED_MINING_DRILL_ITEM.get());
-            event.accept(ModBlocks.ULTIMATE_MINING_DRILL_ITEM.get());
-        }
     }
 }

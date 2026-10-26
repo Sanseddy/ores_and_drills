@@ -1,6 +1,7 @@
 package dev.world.level.levelgen;
 
 import dev.OresAndDrillsMod;
+import dev.world.level.storage.FastSavedData;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -19,7 +20,7 @@ import java.util.HashMap;
 import java.util.Set;
 
 /** Keeps block-state palette indices stable for the lifetime of a world. */
-public final class OreDepositPaletteData extends SavedData {
+public final class OreDepositPaletteData extends FastSavedData {
     private static final String FILE_ID = OresAndDrillsMod.MOD_ID + "_ore_deposit_palette";
     private static final String TAG_BASES = "Bases";
     private static final String TAG_ORES = "Ores";

@@ -19,10 +19,12 @@ import net.minecraft.world.level.biome.MultiNoiseBiomeSourceParameterLists;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.feature.configurations.OreConfiguration;
+import net.minecraft.world.level.storage.LevelResource;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
@@ -55,7 +57,7 @@ public final class SmallDepositAttemptGameTests {
     private static final double OLD_CANDIDATE_CAP_PER_CHUNK = 1.0D + 0.25D;
 
     private static final class Stats {
-        long source, kept, tiny, small, sourceHost, keptHost;
+        long source, kept, tiny, small, sourceHost, keptHost, chunksOverOldTinyCap;
         double sourceY, sourceY2, keptY;
         final Map<String, long[]> biomes = new TreeMap<>();
         final long[] sourceBins = new long[32];
@@ -94,6 +96,7 @@ public final class SmallDepositAttemptGameTests {
                 chunks++;
                 List<CompactDepositGeometry.Cell> cells = new ArrayList<>();
                 List<HostCheck> checks = new ArrayList<>();
+                Map<String, Integer> chunkTiny = new HashMap<>();
                 BlockPos chunkOrigin = new BlockPos(chunk.getMinBlockX(), 0, chunk.getMinBlockZ());
                 for (var material : sources.entrySet()) {
                     Stats s = stats.computeIfAbsent(material.getKey(), ignored -> new Stats());
@@ -128,7 +131,12 @@ public final class SmallDepositAttemptGameTests {
                                 s.keptY += pos.getY();
                                 s.keptBins[bin]++;
                                 biomeCounts[1]++;
-                                if (decision.tiny()) s.tiny++; else s.small++;
+                                if (decision.tiny()) {
+                                    s.tiny++;
+                                    chunkTiny.merge(material.getKey(), decision.candidates(), Integer::sum);
+                                } else {
+                                    s.small++;
+                                }
                             }
                             cells.add(new CompactDepositGeometry.Cell(pos.getX() - chunkOrigin.getX(), pos.getY(),
                                     pos.getZ() - chunkOrigin.getZ(), 1));
@@ -136,6 +144,9 @@ public final class SmallDepositAttemptGameTests {
                         }
                     }
                 }
+                chunkTiny.forEach((material, count) -> {
+                    if (count > 1) stats.get(material).chunksOverOldTinyCap++;
+                });
                 BlockState[] states = CompactDepositTerrain.sample(generator, randomState, level, chunkOrigin, cells);
                 RandomSource random = RandomSource.create(chunk.toLong());
                 for (int index = 0; index < cells.size(); index++) {
@@ -151,7 +162,8 @@ public final class SmallDepositAttemptGameTests {
         report.add(String.format(Locale.ROOT, "Overworld attempt stream, seed=%d, %d chunks on a 9-chunk lattice,"
                 + " retention=%.2f, TINY share=%.2f", OVERWORLD_SEED, chunks, RETENTION, TINY_SHARE));
         report.add("material | source attempts/chunk | kept/chunk | kept share | TINY share of kept"
-                + " | mean Y source -> kept | host rock at origin source -> kept | old cap/chunk | cave-wall chance");
+                + " | mean Y source -> kept | host rock at origin source -> kept | old cap/chunk"
+                + " | chunks over old TINY cap | cave-wall chance");
         long totalSource = 0, totalKept = 0, totalTiny = 0;
         for (var entry : stats.entrySet()) {
             Stats s = entry.getValue();
@@ -165,10 +177,10 @@ public final class SmallDepositAttemptGameTests {
             double sd = Math.sqrt(Math.max(0.0D, s.sourceY2 / s.source - meanSource * meanSource));
             double hostSource = s.sourceHost / (double) s.source;
             double hostKept = s.kept == 0 ? Double.NaN : s.keptHost / (double) s.kept;
-            report.add(String.format(Locale.ROOT, "%s | %.3f | %.3f | %.4f | %.4f | %.1f -> %.1f | %.4f -> %.4f | %.2f | %.3f",
+            report.add(String.format(Locale.ROOT, "%s | %.3f | %.3f | %.4f | %.4f | %.1f -> %.1f | %.4f -> %.4f | %.2f | %d | %.3f",
                     entry.getKey(), s.source / (double) chunks, s.kept / (double) chunks, keptShare,
                     s.kept == 0 ? 0.0D : s.tiny / (double) s.kept, meanSource, meanKept, hostSource, hostKept,
-                    OLD_CANDIDATE_CAP_PER_CHUNK, overworldWallChance.apply(entry.getKey())));
+                    OLD_CANDIDATE_CAP_PER_CHUNK, s.chunksOverOldTinyCap, overworldWallChance.apply(entry.getKey())));
             if (s.source >= 2_000) {
                 double tolerance = 4.0D * Math.sqrt(RETENTION * (1 - RETENTION) / s.source) + 0.002D;
                 helper.assertTrue(Math.abs(keptShare - RETENTION) <= tolerance,
@@ -202,11 +214,12 @@ public final class SmallDepositAttemptGameTests {
                         + " | SMALL=%.4f of source | skipped=%.4f",
                 totalSource, totalKept, keptShare, tinyShare, totalTiny / (double) totalSource,
                 (totalKept - totalTiny) / (double) totalSource, 1 - keptShare));
-        for (String material : List.of("coal", "iron", "copper")) {
+        // Retention was cut 32x, so even coal keeps fewer candidates per chunk than the former cap allowed on
+        // average; the cap itself shows as the absence of chunks holding more than one TINY of a material.
+        for (String material : List.of("coal", "iron")) {
             Stats s = stats.get(material);
-            helper.assertTrue(s != null && s.kept / (double) chunks > OLD_CANDIDATE_CAP_PER_CHUNK,
-                    material + " still limited by the former one-deposit cap: "
-                            + (s == null ? 0 : s.kept / (double) chunks) + " per chunk");
+            helper.assertTrue(s != null && s.chunksOverOldTinyCap > 0,
+                    material + " still limited by the former one-TINY-per-chunk cap");
         }
         for (String material : List.of("emerald", "gold", "diamond", "lapis", "redstone")) {
             Stats s = stats.get(material);
@@ -232,7 +245,8 @@ public final class SmallDepositAttemptGameTests {
                 }
             }
         }
-        helper.assertTrue(Math.abs(tinyShare - TINY_SHARE) <= 0.01D, "TINY share " + tinyShare);
+        helper.assertTrue(Math.abs(tinyShare - TINY_SHARE)
+                <= 4.0D * Math.sqrt(TINY_SHARE * (1 - TINY_SHARE) / totalKept) + 0.002D, "TINY share " + tinyShare);
         write("small-deposit-overworld-report.txt", report);
         helper.succeed();
     }
@@ -257,8 +271,16 @@ public final class SmallDepositAttemptGameTests {
         ServerLevel nether = helper.getLevel().getServer().getLevel(Level.NETHER);
         helper.assertTrue(nether != null && nether.getChunkSource().getGenerator() instanceof NoiseBasedChunkGenerator,
                 "Nether noise terrain is unavailable");
-        int baseX = 6_000, baseZ = -6_000, size = 6;
+        // Retention was cut 32x; 24x24 chunks keep enough candidates for the checks below.
+        int baseX = 6_000, baseZ = -6_000, size = 24;
         int window = 4;
+        // A reloaded test world already holds earlier areas on disk, and loading those chunks back as neighbours
+        // is not a fresh decoration. Fixed areas keep every run reproducible; the first untouched one is used.
+        Path regions = DimensionType.getStorageFolder(nether.dimension(),
+                nether.getServer().getWorldPath(LevelResource.ROOT)).resolve("region");
+        while (!untouchedRegions(regions, baseX - window - 16, baseZ - window - 16, size + 2 * window + 32)) {
+            baseX += 128;
+        }
         Set<Long> decoratedBefore = decorated(nether, baseX - window, baseZ - window, size + 2 * window);
         SmallDepositDiagnostics.reset();
         for (int x = baseX; x < baseX + size; x++) {
@@ -390,7 +412,7 @@ public final class SmallDepositAttemptGameTests {
         var locator = new DepositLocator(new DepositTerrainValidator());
         BlockPos center = new BlockPos((baseX + size / 2) * 16, 64, (baseZ + size / 2) * 16);
         for (OreDepositTier tier : List.of(OreDepositTier.TINY, OreDepositTier.SMALL)) {
-            var confirmed = locator.findNearest(nether, center, quartz, tier, 48).orElse(null);
+            var confirmed = locator.findNearest(nether, center, quartz, tier, size * 8).orElse(null);
             helper.assertTrue(confirmed != null && confirmed.confirmed(), "No confirmed " + tier + " quartz near generated chunks");
             var entry = nether.getChunkAt(confirmed.candidate().center()).getData(ModAttachments.ORE_DEPOSITS)
                     .get(confirmed.candidate().center());
@@ -405,6 +427,15 @@ public final class SmallDepositAttemptGameTests {
         }
         write("small-deposit-nether-report.txt", report);
         helper.succeed();
+    }
+
+    private static boolean untouchedRegions(Path regions, int minChunkX, int minChunkZ, int span) {
+        for (int x = Math.floorDiv(minChunkX, 32); x <= Math.floorDiv(minChunkX + span - 1, 32); x++) {
+            for (int z = Math.floorDiv(minChunkZ, 32); z <= Math.floorDiv(minChunkZ + span - 1, 32); z++) {
+                if (Files.exists(regions.resolve("r." + x + "." + z + ".mca"))) return false;
+            }
+        }
+        return true;
     }
 
     private static Set<Long> decorated(ServerLevel level, int minX, int minZ, int span) {

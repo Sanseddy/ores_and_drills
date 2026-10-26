@@ -10,6 +10,7 @@ import dev.world.block.DrillStructure;
 import dev.world.block.EnergyProfile;
 import dev.world.block.MiningDrillTier;
 import dev.world.block.entity.AbstractEnergyDrillBlockEntity;
+import dev.world.block.entity.drill.DrillBit;
 import dev.world.inventory.AbstractEnergyDrillMenu;
 import dev.world.item.AbstractDrillBlockItem;
 import dev.client.AbstractEnergyDrillScreen;
@@ -46,10 +47,14 @@ import dev.client.drill.DrillGeoRenderer;
 import software.bernie.geckolib.renderer.GeoItemRenderer;
 
 public final class ElectricMiningDrill {
-    public static final MiningDrillTier TIER = new MiningDrillTier(3, 40, 1, new ItemStack(Items.IRON_PICKAXE), 1);
-    public static final EnergyProfile ENERGY = new EnergyProfile(32_000, 40);
+    /** 0.325 ore/s: thirteen cycles every 800 ticks (one cycle would need 61.54 ticks). */
+    public static final MiningDrillTier TIER = new MiningDrillTier(3, 800, 1, new ItemStack(Items.IRON_PICKAXE), 1)
+            .withProgressPerTick(13);
+    public static final EnergyProfile ENERGY = new EnergyProfile(32_000, 80);
+    /** The bit sits under the model centre, one block in front of the main block, as placed by {@link Renderer}. */
+    public static final DrillBit DRILL_BIT = new DrillBit(0.0D, 1.0D, 0.3D, 1.6D);
 
-    private static final Component MENU_TITLE = Component.translatable("container.ores_and_drills.electric_mining_drill");
+    private static final Component MENU_TITLE = Component.translatable("block.ores_and_drills.electric_mining_drill");
 
     private ElectricMiningDrill() {
     }
@@ -119,6 +124,11 @@ public final class ElectricMiningDrill {
     public static class BlockEntity extends AbstractEnergyDrillBlockEntity {
         public BlockEntity(BlockPos pos, BlockState state) {
             super(ModBlockEntities.ELECTRIC_MINING_DRILL.get(), pos, state, TIER, ENERGY, ModBlocks.ELECTRIC_STRUCTURE);
+        }
+
+        @Override
+        protected DrillBit drillBit() {
+            return DRILL_BIT;
         }
 
         public static void tick(Level level, BlockPos pos, BlockState state, BlockEntity blockEntity) {

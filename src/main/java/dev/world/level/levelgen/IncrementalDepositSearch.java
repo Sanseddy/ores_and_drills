@@ -399,6 +399,8 @@ public final class IncrementalDepositSearch {
         PendingCandidate completed = pending;
         pending = null;
         if (completed.decorated().join()) return;
+        // Last, as it builds the worldgen plan: a sampled pass can still accept a lens that worldgen rejects.
+        if (!sourceAttempts && !dataDriven && !OreDepositFeature.compactCandidateGenerates(level, completed.candidate())) return;
         LocatedDeposit located = new LocatedDeposit(
                 completed.candidate(), DepositLocateStatus.SEED_PREDICTED,
                 DepositLocator.floorDistance(completed.distanceSquared()),

@@ -1,6 +1,7 @@
 package dev.compat.emi;
 
 import dev.OresAndDrillsMod;
+import dev.client.AbstractEnergyDrillScreen;
 import dev.compat.DrillRecipePages;
 import dev.compat.RecipeViewerOres;
 import dev.emi.emi.api.EmiEntrypoint;
@@ -11,6 +12,7 @@ import dev.emi.emi.api.recipe.EmiRecipe;
 import dev.emi.emi.api.recipe.EmiRecipeCategory;
 import dev.emi.emi.api.stack.EmiIngredient;
 import dev.emi.emi.api.stack.EmiStack;
+import dev.emi.emi.api.stack.EmiStackInteraction;
 import dev.emi.emi.api.widget.WidgetHolder;
 import dev.recipe.DrillMiningFluid;
 import dev.recipe.DrillMiningRecipe;
@@ -42,15 +44,26 @@ public final class DrillMiningEmiPlugin implements EmiPlugin {
             OresAndDrillsMod.MOD_ID, "textures/gui/progress_2.png");
     private static final EmiRecipeCategory CATEGORY = new EmiRecipeCategory(
             ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "drill_mining"),
-            EmiStack.of(ModBlocks.ADVANCED_MINING_DRILL_ITEM.get()));
+            EmiStack.of(ModBlocks.ADVANCED_MINING_DRILL_ITEM.get())) {
+        // Same title as the JEI category instead of EMI's own emi.category.* key.
+        @Override
+        public Component getName() {
+            return Component.translatable("recipe.ores_and_drills.drill_mining");
+        }
+    };
 
     @Override
     public void register(EmiRegistry registry) {
+        // No category workstations: they would list every drill on every page. Each recipe carries its own
+        // catalysts with only the drills able to mine it, which also drive the "Uses" lookup on a drill.
         registry.addCategory(CATEGORY);
-        registry.addWorkstation(CATEGORY, EmiStack.of(ModBlocks.BURNER_MINING_DRILL_ITEM.get()));
-        registry.addWorkstation(CATEGORY, EmiStack.of(ModBlocks.ELECTRIC_MINING_DRILL_ITEM.get()));
-        registry.addWorkstation(CATEGORY, EmiStack.of(ModBlocks.ADVANCED_MINING_DRILL_ITEM.get()));
-        registry.addWorkstation(CATEGORY, EmiStack.of(ModBlocks.ULTIMATE_MINING_DRILL_ITEM.get()));
+        // Lets the recipe and usage keys work on the fluid in a drill tank, not only on items. EMI looks
+        // providers up by exact screen class, so one generic provider covers every drill screen.
+        registry.addGenericStackProvider((screen, x, y) -> screen instanceof AbstractEnergyDrillScreen drill
+                ? drill.fluidUnderMouse(x, y)
+                        .map(tank -> new EmiStackInteraction(NeoForgeEmiStack.of(tank.fluid())))
+                        .orElse(EmiStackInteraction.EMPTY)
+                : EmiStackInteraction.EMPTY);
 
         RecipeManager manager = registry.getRecipeManager();
         List<DrillMiningRecipe> pages = DrillRecipePages.pages(manager);
@@ -75,6 +88,7 @@ public final class DrillMiningEmiPlugin implements EmiPlugin {
         private final EmiStack output;
         private final List<EmiIngredient> inputs = new ArrayList<>();
         private final List<EmiStack> outputs = new ArrayList<>();
+        private final List<EmiIngredient> drills;
 
         DrillRecipe(DrillMiningRecipe recipe) {
             this.recipe = recipe;
@@ -84,6 +98,7 @@ public final class DrillMiningEmiPlugin implements EmiPlugin {
                             .map(NeoForgeEmiStack::of).toList(), requirement.amount()))
                     .orElse(EmiStack.EMPTY);
             this.output = EmiStack.of(DrillRecipePages.output(recipe));
+            this.drills = DrillRecipePages.drills(recipe).stream().<EmiIngredient>map(EmiStack::of).toList();
             inputs.add(ore);
             if (!fluid.isEmpty()) inputs.add(fluid);
             // Outputs drive the "Recipes" key (R) lookup; the ores are listed too so R on an ore finds
@@ -93,11 +108,12 @@ public final class DrillMiningEmiPlugin implements EmiPlugin {
         }
 
         @Override public EmiRecipeCategory getCategory() { return CATEGORY; }
+        @Override public List<EmiIngredient> getCatalysts() { return drills; }
         @Override public ResourceLocation getId() { return null; }
         @Override public List<EmiIngredient> getInputs() { return inputs; }
         @Override public List<EmiStack> getOutputs() { return outputs; }
         @Override public int getDisplayWidth() { return 142; }
-        @Override public int getDisplayHeight() { return 116; }
+        @Override public int getDisplayHeight() { return 127; }
         @Override public boolean supportsRecipeTree() { return false; }
 
         @Override
@@ -124,12 +140,12 @@ public final class DrillMiningEmiPlugin implements EmiPlugin {
             widgets.addSlot(ore, 106, 0).drawBack(false);
             widgets.addSlot(output, 106, 74).drawBack(false).recipeContext(this);
 
-            widgets.addText(Component.translatable("recipe.ores_and_drills.minimum_tier", recipe.minimumDrillTier()),
-                    1, 96, 0x404040, false);
-            if (recipe.result().isEmpty()) widgets.addText(Component.translatable("recipe.ores_and_drills.ore_loot"),
-                    1, 107, 0x404040, false);
-            if (!recipe.conditions().isEmpty()) widgets.addText(Component.translatable(
-                    "recipe.ores_and_drills.conditions", recipe.conditions().size()), 71, 96, 0x404040, false);
+            // The minimum drill is shown by the drill slots, so only the remaining notes are text.
+            List<Component> lines = DrillRecipePages.infoLines(recipe);
+            int top = DrillRecipePages.infoTop(recipe);
+            for (int i = 0; i < lines.size(); i++) widgets.addText(lines.get(i), 1, top + i * 11, 0x404040, false);
+            // Drills able to mine this ore, in the bottom-left corner below the notes.
+            for (int i = 0; i < drills.size(); i++) widgets.addSlot(drills.get(i), i * 18, 96).catalyst(true);
         }
     }
 }

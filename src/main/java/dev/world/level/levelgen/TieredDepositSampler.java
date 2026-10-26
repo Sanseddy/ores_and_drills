@@ -28,6 +28,9 @@ public final class TieredDepositSampler implements DepositSampler {
             List<CompactDepositGeometry.Cell> body = CompactDepositGeometry.selectOreCells(geometry.cells(),
                     CompactDepositGeometry.oreBlockBudget(CompactDepositGeometry.totalOre(candidate.shapeSeed(),
                             candidate.tier() == OreDepositTier.LARGE, 0, 1)),center.getX(),center.getZ());
+            // LARGE validation requires stone at the exact center. The strided body walk starts at a grid corner
+            // and reaches the center only by chance, which rejected nearly every LARGE candidate in /locate.
+            add(points, candidate, center);
             int stride = Math.max(1, body.size() / sampleCount);
             for (int i = 0; i < body.size() && points.size() < sampleCount; i += stride) {
                 CompactDepositGeometry.Cell cell = body.get(i);

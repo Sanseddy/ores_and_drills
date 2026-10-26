@@ -220,6 +220,10 @@ public final class DepositLocator {
                     if (sourceChunkAlreadyDecorated(level, candidate, decoratedChunks)) {
                         continue;
                     }
+                    // Last, as it builds the worldgen plan: a sampled pass can still accept a lens that worldgen rejects.
+                    if (dataPlan == null && !OreDepositFeature.compactCandidateGenerates(level, locatedCandidate)) {
+                        continue;
+                    }
                     // Unexplored carvers cannot be reproduced by getBaseColumn. Validate the guaranteed
                     // underground fallback without loading the remote chunk; a real cave-wall placement
                     // replaces this prediction with its authoritative confirmed record after generation.

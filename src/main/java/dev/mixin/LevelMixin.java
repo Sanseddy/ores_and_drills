@@ -1,6 +1,7 @@
 package dev.mixin;
 
 import dev.registry.ModBlocks;
+import dev.world.level.levelgen.ForeignExplosionDetector;
 import dev.world.level.levelgen.OreDepositData;
 import dev.world.level.levelgen.OreDepositRemovalGuard;
 import net.minecraft.core.BlockPos;
@@ -38,6 +39,13 @@ public abstract class LevelMixin {
                 || OreDepositData.isPhysicalTransferSource(serverLevel, pos)) {
             return;
         }
+        // Another mod's explosion clearing its crater directly: the deposit becomes an exhausted one,
+        // which this setBlock then replaces as usual.
+        if (!OreDepositData.ignoresExplosions(serverLevel, pos)
+                && ForeignExplosionDetector.isExplosionInProgress()
+                && OreDepositData.wipeByExplosion(serverLevel, pos)) {
+            return;
+        }
 
         // There is no common NeoForge event for machine mining. Reject direct replacement so an
         // unsupported machine cannot erase the whole reserve by treating it as one ordinary block.
@@ -58,7 +66,16 @@ public abstract class LevelMixin {
         }
 
         BlockState state = serverLevel.getBlockState(pos);
-        if (state.is(ModBlocks.ORE_DEPOSIT.get()) && OreDepositData.mineByWorld(serverLevel, pos)) {
+        if (!state.is(ModBlocks.ORE_DEPOSIT.get())) {
+            return;
+        }
+        // Another mod's explosion: destroyBlock goes on to break the now exhausted deposit with its rock's loot.
+        if (!OreDepositData.ignoresExplosions(serverLevel, pos)
+                && ForeignExplosionDetector.isExplosionInProgress()
+                && OreDepositData.wipeByExplosion(serverLevel, pos)) {
+            return;
+        }
+        if (OreDepositData.mineByWorld(serverLevel, pos)) {
             callbackInfo.setReturnValue(true);
         }
     }

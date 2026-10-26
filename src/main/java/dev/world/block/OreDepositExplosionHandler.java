@@ -16,7 +16,8 @@ import java.util.Iterator;
 
 /**
  * Explosions deplete an ore deposit instead of destroying it: each deposit block loses as many ore units as
- * the blast is strong where it stands (see {@link #unitsFor}), and only breaks once its ore runs out.
+ * the blast is strong where it stands (see {@link #unitsFor}). A blast stronger than the ore left also breaks
+ * the exhausted deposit it leaves behind; otherwise the exhausted deposit stays.
  * Vanilla explosions destroy every affected block unconditionally, so affected ore_deposit positions are
  * pulled out of the explosion's own block list here and handled through
  * {@link OreDepositData#mineByExplosion} instead. Medium and large deposits are pulled out and left as they
@@ -42,10 +43,17 @@ public final class OreDepositExplosionHandler {
             BlockPos pos = iterator.next();
             BlockState state = serverLevel.getBlockState(pos);
             if (state.is(ModBlocks.ORE_DEPOSIT.get())) {
-                iterator.remove();
-                if (!OreDepositData.ignoresExplosions(serverLevel, pos)) {
-                    OreDepositData.mineByExplosion(serverLevel, pos, unitsFor(explosion, pos))
-                            .forEach(drop -> Block.popResource(serverLevel, pos, drop));
+                if (OreDepositData.ignoresExplosions(serverLevel, pos)) {
+                    iterator.remove();
+                    continue;
+                }
+                int units = unitsFor(explosion, pos);
+                int remaining = OreDepositData.remainingOreAt(serverLevel, pos);
+                OreDepositData.mineByExplosion(serverLevel, pos, units)
+                        .forEach(drop -> Block.popResource(serverLevel, pos, drop));
+                // Left in the list, the now exhausted deposit is destroyed by the explosion like any other block.
+                if (!blastOutlastsOre(serverLevel, pos, units, remaining)) {
+                    iterator.remove();
                 }
             } else if (!state.isAir() && DrillMiningRecipes.requiresFluidOutsideDrills(serverLevel, state)) {
                 iterator.remove();
@@ -66,6 +74,14 @@ public final class OreDepositExplosionHandler {
         }
         double distance = explosion.center().distanceTo(Vec3.atCenterOf(pos));
         return Math.max(1, (int) Math.round(radius * (1.0D - distance / (2.0D * radius))));
+    }
+
+    /**
+     * The blast was stronger than the ore left in the deposit and emptied it, so what remains of it breaks
+     * the exhausted deposit too.
+     */
+    static boolean blastOutlastsOre(ServerLevel level, BlockPos pos, int units, int remainingBefore) {
+        return units > remainingBefore && level.getBlockState(pos).is(ModBlocks.EXHAUSTED_ORE_DEPOSIT.get());
     }
 
     /** KEEP (mobGriefing off) leaves blocks alone and TRIGGER_BLOCK (wind charges) only presses buttons and the like. */

@@ -45,6 +45,13 @@ public abstract class AbstractDrillPartBlock extends Block implements EntityBloc
         return structure;
     }
 
+    /** A part is named after its drill (e.g. "burner_mining_drill_part" shows as the burner drill). */
+    @Override
+    public String getDescriptionId() {
+        String id = super.getDescriptionId();
+        return id.endsWith("_part") ? id.substring(0, id.length() - "_part".length()) : id;
+    }
+
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
         return new DrillPartBlockEntity(pos, state);

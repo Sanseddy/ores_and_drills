@@ -1,0 +1,9 @@
+{
+  "multipart": [
+    {
+      "apply": {
+        "model": "ores_and_drills:block/ore_deposit_dynamic"
+      }
+    }
+  ]
+}

@@ -3,7 +3,6 @@ package dev.world.level.levelgen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 
 import java.util.List;
@@ -52,9 +51,11 @@ abstract class AbstractTierDepositResolver implements TierDepositResolver {
         if (materialKey.isEmpty()) {
             return List.of();
         }
+        // Layout keys keep X in the high half, unlike ChunkPos keys: ChunkPos.getX/getZ would swap the axes
+        // and search the cell mirrored across x = z, which only looks right near the origin and the diagonal.
         long sourceChunk = sourceChunkKey(cellX, cellZ);
-        int chunkX = ChunkPos.getX(sourceChunk);
-        int chunkZ = ChunkPos.getZ(sourceChunk);
+        int chunkX = DepositLayouts.chunkX(sourceChunk);
+        int chunkZ = DepositLayouts.chunkZ(sourceChunk);
         List<OreGenerationWeights.SourceContext> contexts = OreGenerationWeights.sourceContexts(
                 level.dimension().location(), materialKey
         );
@@ -64,14 +65,10 @@ abstract class AbstractTierDepositResolver implements TierDepositResolver {
             )) {
                 return List.of();
             }
-            return List.of(createCandidateForSourceChunk(
-                    level,
-                    chunkX,
-                    chunkZ,
-                    requestedOre,
-                    materialKey,
-                    OreDepositFeature.liveSizeMultiplier(ore)
-            ));
+            DepositCandidate candidate = OreDepositFeature.fitCompactCandidate(level, tier.index(), null,
+                    createCandidateForSourceChunk(level, chunkX, chunkZ, requestedOre, materialKey,
+                            OreDepositFeature.liveSizeMultiplier(ore)));
+            return candidate == null ? List.of() : List.of(candidate);
         }
 
         List<DepositCandidate> candidates = new ArrayList<>();
@@ -95,6 +92,11 @@ abstract class AbstractTierDepositResolver implements TierDepositResolver {
             candidate = OreDepositFeature.relocatePredictedCandidateToSourceBiome(
                     level, candidate, context.biomeId(), context.targets()
             );
+            // Worldgen lifts a lens off the bedrock floor before planning; validating the unfitted center
+            // sampled below the world and rejected real deep LARGE deposits.
+            if (candidate != null) {
+                candidate = OreDepositFeature.fitCompactCandidate(level, tier.index(), context.biomeId(), candidate);
+            }
             if (candidate == null) {
                 continue;
             }

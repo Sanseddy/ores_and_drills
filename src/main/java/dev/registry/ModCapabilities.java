@@ -21,17 +21,15 @@ public final class ModCapabilities {
 
     public static void register(RegisterCapabilitiesEvent event) {
         event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, ModBlockEntities.BURNER_MINING_DRILL.get(), (be, side) -> be.getItemHandler());
-        event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, ModBlockEntities.ELECTRIC_MINING_DRILL.get(), (be, side) -> be.getItemHandler());
-        event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, ModBlockEntities.ADVANCED_MINING_DRILL.get(), (be, side) -> be.getItemHandler());
-        event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, ModBlockEntities.ULTIMATE_MINING_DRILL.get(), (be, side) -> be.getItemHandler());
+        event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, ModBlockEntities.ELECTRIC_MINING_DRILL.get(), ModCapabilities::findOutputItemHandler);
+        event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, ModBlockEntities.ADVANCED_MINING_DRILL.get(), ModCapabilities::findOutputItemHandler);
+        event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, ModBlockEntities.ULTIMATE_MINING_DRILL.get(), ModCapabilities::findOutputItemHandler);
 
+        // Electric drill parts have no item port: their only inventory access is the main block's output face.
         event.registerBlock(
                 Capabilities.ItemHandler.BLOCK,
                 ModCapabilities::findItemHandler,
-                ModBlocks.BURNER_MINING_DRILL_PART.get(),
-                ModBlocks.ELECTRIC_MINING_DRILL_PART.get(),
-                ModBlocks.ADVANCED_MINING_DRILL_PART.get(),
-                ModBlocks.ULTIMATE_MINING_DRILL_PART.get()
+                ModBlocks.BURNER_MINING_DRILL_PART.get()
         );
 
         event.registerBlock(
@@ -61,6 +59,16 @@ public final class ModCapabilities {
     private static IItemHandler findItemHandler(Level level, BlockPos pos, BlockState state, BlockEntity blockEntity, Direction side) {
         BlockEntity origin = originBlockEntity(level, pos, state);
         return origin instanceof AbstractDrillBlockEntity drillBlockEntity ? drillBlockEntity.getItemHandler() : null;
+    }
+
+    /**
+     * Electric drills accept no items from automation, so the only reason to connect an item pipe is to collect
+     * mined resources. That happens on the main block's output face, the one the drill itself pushes items through;
+     * every other face, the energy port included, offers no inventory and pipes do not attach there.
+     */
+    private static IItemHandler findOutputItemHandler(AbstractEnergyDrillBlockEntity drill, Direction side) {
+        Direction output = drill.getBlockState().getValue(AbstractDrillBlock.FACING).getOpposite();
+        return side == null || side == output ? drill.getItemHandler() : null;
     }
 
     private static IEnergyStorage findEnergyStorage(Level level, BlockPos pos, BlockState state, BlockEntity blockEntity, Direction side) {

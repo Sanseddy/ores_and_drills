@@ -9,6 +9,7 @@ import dev.world.block.AbstractDrillPartBlock;
 import dev.world.inventory.DrillMenuValidity;
 import dev.world.block.MiningDrillTier;
 import dev.world.block.entity.AbstractDrillBlockEntity;
+import dev.world.block.entity.drill.DrillBit;
 import dev.world.block.entity.drill.FuelBurner;
 import dev.world.item.AbstractDrillBlockItem;
 import dev.util.ProgressMath;
@@ -56,9 +57,11 @@ import dev.client.drill.DrillGeoRenderer;
 import software.bernie.geckolib.renderer.GeoItemRenderer;
 
 public final class BurnerMiningDrill {
-    public static final MiningDrillTier TIER = new MiningDrillTier(2, 80, 1, new ItemStack(Items.STONE_PICKAXE), 0);
+    public static final MiningDrillTier TIER = new MiningDrillTier(2, 160, 1, new ItemStack(Items.STONE_PICKAXE), 0);
+    /** The bit sits at the centre of the 2×2 body: half a block left of and in front of the main block. */
+    public static final DrillBit DRILL_BIT = new DrillBit(-0.5D, 0.5D, 0.3D, 1.6D);
 
-    private static final Component MENU_TITLE = Component.translatable("container.ores_and_drills.burner_mining_drill");
+    private static final Component MENU_TITLE = Component.translatable("block.ores_and_drills.burner_mining_drill");
 
     private BurnerMiningDrill() {
     }
@@ -136,6 +139,11 @@ public final class BurnerMiningDrill {
         }
 
         @Override
+        protected DrillBit drillBit() {
+            return DRILL_BIT;
+        }
+
+        @Override
         protected boolean canPlaceItem(int slot, ItemStack stack) {
             return slot == FUEL_SLOT && AbstractFurnaceBlockEntity.isFuel(stack);
         }
@@ -164,7 +172,11 @@ public final class BurnerMiningDrill {
         }
 
         public static void tick(Level level, BlockPos pos, BlockState state, BlockEntity blockEntity) {
-            if (level.isClientSide || !state.is(ModBlocks.BURNER_MINING_DRILL.get())) {
+            if (!state.is(ModBlocks.BURNER_MINING_DRILL.get())) {
+                return;
+            }
+            if (level.isClientSide) {
+                tickClientEffects(blockEntity);
                 return;
             }
 
@@ -581,6 +593,12 @@ public final class BurnerMiningDrill {
     }
 
     public static class Model extends GeoModel<BlockEntity> {
+        private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(
+                OresAndDrillsMod.MOD_ID, "textures/block/burner_mining_drill.png");
+        /** Shown while the drill burns fuel and mines, the same state that runs its animation. */
+        private static final ResourceLocation ACTIVE_TEXTURE = ResourceLocation.fromNamespaceAndPath(
+                OresAndDrillsMod.MOD_ID, "textures/block/burner_mining_drill_on.png");
+
         @Override
         public ResourceLocation getModelResource(BlockEntity animatable) {
             return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "geo/burner_mining_drill.geo.json");
@@ -588,7 +606,7 @@ public final class BurnerMiningDrill {
 
         @Override
         public ResourceLocation getTextureResource(BlockEntity animatable) {
-            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "textures/block/burner_mining_drill.png");
+            return animatable.isActive() ? ACTIVE_TEXTURE : TEXTURE;
         }
 
         @Override

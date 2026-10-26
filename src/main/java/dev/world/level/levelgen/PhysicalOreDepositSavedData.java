@@ -3,6 +3,7 @@ package dev.world.level.levelgen;
 import dev.OresAndDrillsMod;
 import dev.registry.ModAttachments;
 import dev.registry.ModBlocks;
+import dev.world.level.storage.FastSavedData;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -22,7 +23,7 @@ import net.minecraft.world.level.saveddata.SavedData;
  * arbitrary NeoForge chunk attachments. Normal deposits continue to use their chunk attachment;
  * only entries that pass through a physical assembly are mirrored here.</p>
  */
-public final class PhysicalOreDepositSavedData extends SavedData {
+public final class PhysicalOreDepositSavedData extends FastSavedData {
     private static final String FILE_ID = OresAndDrillsMod.MOD_ID + "_physical_ore_deposits";
     private static final String TAG_CHUNKS = "Chunks";
     private static final String TAG_CHUNK_X = "ChunkX";
@@ -176,8 +177,7 @@ public final class PhysicalOreDepositSavedData extends SavedData {
     public synchronized CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
         ListTag chunks = new ListTag();
         entriesByChunk.long2ObjectEntrySet().forEach(mapEntry -> {
-            OreDepositChunkData.Snapshot snapshot = mapEntry.getValue().snapshot();
-            if (snapshot.keys().length == 0) {
+            if (mapEntry.getValue().isEmpty()) {
                 return;
             }
             ChunkPos chunkPos = new ChunkPos(mapEntry.getLongKey());

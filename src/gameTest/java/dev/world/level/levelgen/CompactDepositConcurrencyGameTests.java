@@ -123,10 +123,15 @@ public final class CompactDepositConcurrencyGameTests {
         for(int x=0;x<4;x++)for(int y=0;y<2;y++)cells.add(new CompactDepositGeometry.Cell(x,y,0,1));
         var target=OreConfiguration.target(new TagMatchTest(ModBlockTags.STONES),Blocks.IRON_ORE.defaultBlockState());
         int[] amounts=new int[]{100,101,102,103,104,105,106,107};
+        var index=ConfirmedDepositIndex.get(helper.getLevel());
         for(var cell:cells) {
             BlockPos pos=center.offset(cell.x(),cell.y(),cell.z());
+            // Unfinished plans of an earlier failed run share these fixed chunks and would claim the cells first.
+            for(var stale:index.forcedPlansFor(new ChunkPos(pos)))index.removeForcedPlan(stale.candidate().depositId());
             helper.getLevel().getChunkAt(pos).getData(ModAttachments.ORE_DEPOSITS).remove(pos);
-            helper.getLevel().setBlock(pos,Blocks.STONE.defaultBlockState(),Block.UPDATE_NONE);
+            // A reloaded test world still holds the deposits of an earlier run at these fixed coordinates.
+            OreDepositRemovalGuard.runAuthorized(helper.getLevel(),pos,
+                    () -> helper.getLevel().setBlock(pos,Blocks.STONE.defaultBlockState(),Block.UPDATE_NONE));
         }
         return new OreDepositFeature.CompactPlan(candidate,cells,cells.stream().map(ignored -> target).toList(),amounts);
     }
