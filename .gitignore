@@ -17,6 +17,7 @@ out/
 .project
 *.launch
 CLAUDE.md
+AGENTS.md
 
 *.log
 hs_err_pid*
