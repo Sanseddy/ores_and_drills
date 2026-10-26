@@ -1,9 +1,11 @@
 package dev.world.level.levelgen;
 
-/** Small allocation-free permutation used to spread deterministic biome probes over a generation cell. */
+/**
+ * Small allocation-free permutation used to spread deterministic biome probes over a generation
+ * cell.
+ */
 final class DeterministicPermutation {
-    private DeterministicPermutation() {
-    }
+    private DeterministicPermutation() {}
 
     static int start(int size, long seed) {
         return size <= 1 ? 0 : Math.floorMod(seed, size);

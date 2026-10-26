@@ -1,14 +1,14 @@
 package dev;
 
-import dev.config.OreDepositConfig;
-import dev.config.OreWorldSettingsApplier;
 import dev.command.OreDepositLocateCommand;
 import dev.command.OreDepositLocateService;
+import dev.config.OreDepositConfig;
 import dev.config.OreSettingsPresetManager;
+import dev.config.OreWorldSettingsApplier;
 import dev.network.ModNetworking;
 import dev.network.OreDepositPaletteSync;
-import dev.registry.ModBlockEntities;
 import dev.registry.ModAttachments;
+import dev.registry.ModBlockEntities;
 import dev.registry.ModBlocks;
 import dev.registry.ModCapabilities;
 import dev.registry.ModCreativeTabs;
@@ -18,8 +18,8 @@ import dev.registry.ModWorldgen;
 import dev.world.block.OreDepositExplosionHandler;
 import dev.world.block.OreDepositMiningSpeed;
 import dev.world.level.levelgen.DepositTerrainValidator;
-import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.EventPriority;
+import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
@@ -55,15 +55,21 @@ public final class OresAndDrillsMod {
         NeoForge.EVENT_BUS.addListener(OreDepositLocateCommand::register);
         NeoForge.EVENT_BUS.addListener(OreDepositLocateService::onServerTick);
         NeoForge.EVENT_BUS.addListener(OreDepositLocateService::onServerStopped);
-        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerStoppingEvent event) ->
-                dev.world.level.levelgen.SmallDepositDiagnostics.logAll());
+        NeoForge.EVENT_BUS.addListener(
+                (net.neoforged.neoforge.event.server.ServerStoppingEvent event) ->
+                        dev.world.level.levelgen.SmallDepositDiagnostics.logAll());
         NeoForge.EVENT_BUS.addListener(OreSettingsPresetManager::addReloadListener);
         NeoForge.EVENT_BUS.addListener(OreDepositExplosionHandler::onDetonate);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, OreDepositMiningSpeed::onBreakSpeed);
         NeoForge.EVENT_BUS.addListener(OreDepositPaletteSync::onDatapackSync);
         NeoForge.EVENT_BUS.addListener(DepositTerrainValidator::onTagsUpdated);
         NeoForge.EVENT_BUS.addListener(dev.recipe.DrillMiningRecipes::onTagsUpdated);
-        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, dev.recipe.FluidLockedOreDrops::onBlockDrops);
-        NeoForge.EVENT_BUS.addListener(dev.world.level.levelgen.OreDepositFeature::onCompactChunkLoad);
+        NeoForge.EVENT_BUS.addListener(
+                EventPriority.LOWEST, dev.recipe.FluidLockedOreDrops::onBlockDrops);
+        NeoForge.EVENT_BUS.addListener(
+                dev.world.level.levelgen.OreDepositFeature::onCompactChunkLoad);
+        if (net.neoforged.fml.ModList.get().isLoaded("sable")) {
+            dev.compat.sable.SableOreDepositImpacts.register();
+        }
     }
 }

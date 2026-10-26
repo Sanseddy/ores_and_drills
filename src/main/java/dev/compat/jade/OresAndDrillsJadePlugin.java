@@ -10,9 +10,11 @@ import dev.world.block.entity.AbstractDrillBlockEntity;
 import dev.world.block.entity.AbstractEnergyDrillBlockEntity;
 import dev.world.block.entity.DrillStatusProvider;
 import dev.world.level.levelgen.OreDepositData;
+import java.util.ArrayList;
+import java.util.List;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -24,8 +26,8 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec2;
-import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.Accessor;
+import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IBlockComponentProvider;
 import snownee.jade.api.IServerDataProvider;
 import snownee.jade.api.ITooltip;
@@ -42,40 +44,36 @@ import snownee.jade.api.view.IServerExtensionProvider;
 import snownee.jade.api.view.ViewGroup;
 import snownee.jade.util.JadeForgeUtils;
 
-import java.util.ArrayList;
-import java.util.List;
-
 @WailaPlugin(OresAndDrillsMod.MOD_ID)
 public class OresAndDrillsJadePlugin implements IWailaPlugin {
-    private static final ResourceLocation UID = ResourceLocation.fromNamespaceAndPath(
-            OresAndDrillsMod.MOD_ID,
-            "mining_drill"
-    );
+    private static final ResourceLocation UID =
+            ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "mining_drill");
     private static final String ACTIVE_KEY = "Active";
     private static final String MINING_PROGRESS_KEY = "MiningProgress";
     private static final String MINING_DURATION_KEY = "MiningDuration";
     private static final String PRODUCTIVITY_PERCENT_KEY = "ProductivityPercent";
     private static final String PRODUCTIVITY_PROGRESS_KEY = "ProductivityProgress";
 
-    private static final ResourceLocation ORE_DEPOSIT_UID = ResourceLocation.fromNamespaceAndPath(
-            OresAndDrillsMod.MOD_ID,
-            "ore_deposit"
-    );
+    private static final ResourceLocation ORE_DEPOSIT_UID =
+            ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "ore_deposit");
     private static final String ORE_BLOCK_KEY = "OreBlock";
     private static final String ORE_REMAINING_KEY = "OreRemaining";
-    private static final ResourceLocation FLUID_LOCKED_ORE_UID = ResourceLocation.fromNamespaceAndPath(
-            OresAndDrillsMod.MOD_ID, "fluid_locked_ore");
+    private static final ResourceLocation FLUID_LOCKED_ORE_UID =
+            ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "fluid_locked_ore");
 
     private static final MiningDrillProvider PROVIDER = new MiningDrillProvider();
     private static final OreDepositProvider ORE_DEPOSIT_PROVIDER = new OreDepositProvider();
-    private static final DrillPartEnergyProvider DRILL_PART_ENERGY_PROVIDER = new DrillPartEnergyProvider();
-    private static final DrillPartFluidProvider DRILL_PART_FLUID_PROVIDER = new DrillPartFluidProvider();
+    private static final DrillPartEnergyProvider DRILL_PART_ENERGY_PROVIDER =
+            new DrillPartEnergyProvider();
+    private static final DrillPartFluidProvider DRILL_PART_FLUID_PROVIDER =
+            new DrillPartFluidProvider();
 
     @Override
     public void register(IWailaCommonRegistration registration) {
         registration.registerBlockDataProvider(PROVIDER, AbstractDrillBlock.class);
         registration.registerBlockDataProvider(PROVIDER, AbstractDrillPartBlock.class);
-        registration.registerEnergyStorage(DRILL_PART_ENERGY_PROVIDER, AbstractDrillPartBlock.class);
+        registration.registerEnergyStorage(
+                DRILL_PART_ENERGY_PROVIDER, AbstractDrillPartBlock.class);
         registration.registerFluidStorage(DRILL_PART_FLUID_PROVIDER, AbstractDrillPartBlock.class);
         registration.registerBlockDataProvider(ORE_DEPOSIT_PROVIDER, OreDepositBlock.class);
     }
@@ -91,9 +89,11 @@ public class OresAndDrillsJadePlugin implements IWailaPlugin {
         registration.usePickedResult(ModBlocks.EXHAUSTED_ORE_DEPOSIT.get());
     }
 
-    private static class MiningDrillProvider implements IBlockComponentProvider, IServerDataProvider<BlockAccessor> {
+    private static class MiningDrillProvider
+            implements IBlockComponentProvider, IServerDataProvider<BlockAccessor> {
         @Override
-        public IElement getIcon(BlockAccessor accessor, IPluginConfig config, IElement currentIcon) {
+        public IElement getIcon(
+                BlockAccessor accessor, IPluginConfig config, IElement currentIcon) {
             if (accessor.getBlock() instanceof AbstractDrillPartBlock drillPart) {
                 return IElementHelper.get().item(drillPart.structure().cloneItemStack());
             }
@@ -108,37 +108,40 @@ public class OresAndDrillsJadePlugin implements IWailaPlugin {
             }
 
             boolean active = data.getBoolean(ACTIVE_KEY);
-            tooltip.add(Component.translatable(
-                    "tooltip.ores_and_drills.mining_drill.state",
-                    Component.translatable(active
-                            ? "tooltip.ores_and_drills.mining_drill.active"
-                            : "tooltip.ores_and_drills.mining_drill.paused")
-            ));
+            tooltip.add(
+                    Component.translatable(
+                            "tooltip.ores_and_drills.mining_drill.state",
+                            Component.translatable(
+                                    active
+                                            ? "tooltip.ores_and_drills.mining_drill.active"
+                                            : "tooltip.ores_and_drills.mining_drill.paused")));
 
             int miningProgress = data.getInt(MINING_PROGRESS_KEY);
             int miningDuration = data.getInt(MINING_DURATION_KEY);
-            tooltip.add(Component.translatable(
-                    "tooltip.ores_and_drills.mining_drill.progress",
-                    miningDuration > 0 ? miningProgress * 100 / miningDuration : 0
-            ));
+            tooltip.add(
+                    Component.translatable(
+                            "tooltip.ores_and_drills.mining_drill.progress",
+                            miningDuration > 0 ? miningProgress * 100 / miningDuration : 0));
 
             int productivityPercent = data.getInt(PRODUCTIVITY_PERCENT_KEY);
             if (productivityPercent > 0) {
-                tooltip.add(Component.translatable(
-                        "tooltip.ores_and_drills.mining_drill.productivity_bar",
-                        data.getInt(PRODUCTIVITY_PROGRESS_KEY)
-                ));
-                tooltip.add(Component.translatable(
-                        "tooltip.ores_and_drills.mining_drill.productivity_bar.rate",
-                        productivityPercent
-                ).withStyle(ChatFormatting.GRAY));
+                tooltip.add(
+                        Component.translatable(
+                                "tooltip.ores_and_drills.mining_drill.productivity_bar",
+                                data.getInt(PRODUCTIVITY_PROGRESS_KEY)));
+                tooltip.add(
+                        Component.translatable(
+                                        "tooltip.ores_and_drills.mining_drill.productivity_bar.rate",
+                                        productivityPercent)
+                                .withStyle(ChatFormatting.GRAY));
             }
         }
 
         @Override
         public void appendServerData(CompoundTag tag, BlockAccessor accessor) {
             BlockEntity origin = resolveOrigin(accessor);
-            DrillStatusProvider status = origin instanceof DrillStatusProvider provider ? provider : null;
+            DrillStatusProvider status =
+                    origin instanceof DrillStatusProvider provider ? provider : null;
             if (status == null) {
                 return;
             }
@@ -159,12 +162,13 @@ public class OresAndDrillsJadePlugin implements IWailaPlugin {
         }
     }
 
-    private static class OreDepositProvider implements IBlockComponentProvider, IServerDataProvider<BlockAccessor> {
+    private static class OreDepositProvider
+            implements IBlockComponentProvider, IServerDataProvider<BlockAccessor> {
         @Override
         public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
-            // The real harvest requirement belongs to the ore stored in the chunk attachment, not to
-            // the shared ore_deposit block state. Remove Jade's generic (and therefore misleading)
-            // indicator before replacing it with the attachment-aware one below.
+            // The real harvest requirement belongs to the ore stored in the chunk attachment, not
+            // to the shared ore_deposit block state. Remove Jade's generic (and therefore
+            // misleading) indicator before replacing it with the attachment-aware one below.
             tooltip.remove(JadeIds.MC_HARVEST_TOOL);
 
             CompoundTag data = accessor.getServerData();
@@ -183,21 +187,20 @@ public class OresAndDrillsJadePlugin implements IWailaPlugin {
                 return;
             }
 
-            // registerClient() already asks Jade to use OreDepositBlock#getCloneItemStack, which
-            // supplies this same ore stack as the header. Appending its name here duplicated it.
+            // No name line: registerClient() already makes Jade use
+            // OreDepositBlock#getCloneItemStack, which shows this same ore stack as the header.
 
             // The lightweight remaining-ore payload keeps the client attachment current even while
-            // Jade is reusing server data for the same targeted block. Prefer that exact value so the
-            // amount line also remains visible when the deposit reaches its final unit.
-            int clientRemainingOre = OreDepositData.remainingOreAt(accessor.getLevel(), accessor.getPosition());
-            int remainingOre = clientRemainingOre > 0
-                    ? clientRemainingOre
-                    : data.getInt(ORE_REMAINING_KEY);
+            // Jade is reusing server data for the same targeted block. Prefer that exact value so
+            // the amount line also remains visible when the deposit reaches its final unit.
+            int clientRemainingOre =
+                    OreDepositData.remainingOreAt(accessor.getLevel(), accessor.getPosition());
+            int remainingOre =
+                    clientRemainingOre > 0 ? clientRemainingOre : data.getInt(ORE_REMAINING_KEY);
             if (remainingOre > 1) {
-                tooltip.add(Component.translatable(
-                        "tooltip.ores_and_drills.ore_deposit.amount",
-                        remainingOre
-                ));
+                tooltip.add(
+                        Component.translatable(
+                                "tooltip.ores_and_drills.ore_deposit.amount", remainingOre));
             }
 
             BlockState oreState = oreBlock.defaultBlockState();
@@ -212,9 +215,10 @@ public class OresAndDrillsJadePlugin implements IWailaPlugin {
         }
 
         /**
-         * The ore_deposit block itself has no per-position tool-tier metadata (that lives in the chunk
-         * attachment), so Jade's own generic harvestability indicator can't reflect the real requirement
-         * and always shows the loosest tier. This checks the actual stored ore's tags directly instead.
+         * The ore_deposit block itself has no per-position tool-tier metadata (that lives in the
+         * chunk attachment), so Jade's own generic harvestability indicator can't reflect the real
+         * requirement and always shows the loosest tier. This checks the actual stored ore's tags
+         * directly instead.
          */
         private static ItemStack minimumTool(BlockState oreState) {
             if (oreState.is(BlockTags.NEEDS_DIAMOND_TOOL)) {
@@ -233,30 +237,30 @@ public class OresAndDrillsJadePlugin implements IWailaPlugin {
                 ITooltip tooltip,
                 BlockAccessor accessor,
                 BlockState oreState,
-                ItemStack requiredTool
-        ) {
+                ItemStack requiredTool) {
             IElementHelper helper = IElementHelper.get();
             List<IElement> indicator = new ArrayList<>();
             int verticalOffset = -3;
 
-            indicator.add(helper.item(requiredTool, 0.75F)
-                    .translate(new Vec2(-1.0F, verticalOffset))
-                    .size(new Vec2(10.0F, 0.0F))
-                    .message(null));
+            indicator.add(
+                    helper.item(requiredTool, 0.75F)
+                            .translate(new Vec2(-1.0F, verticalOffset))
+                            .size(new Vec2(10.0F, 0.0F))
+                            .message(null));
 
-            boolean canHarvest = oreState.canHarvestBlock(
-                    accessor.getLevel(),
-                    accessor.getPosition(),
-                    accessor.getPlayer()
-            );
-            Component mark = Component.literal(canHarvest ? "\u2714" : "\u2715")
-                    .withStyle(canHarvest ? ChatFormatting.GREEN : ChatFormatting.RED);
-            indicator.add(helper.text(mark)
-                    .scale(0.75F)
-                    .zOffset(800)
-                    .size(Vec2.ZERO)
-                    .translate(new Vec2(-3.0F, 6.25F + verticalOffset))
-                    .message(null));
+            boolean canHarvest =
+                    oreState.canHarvestBlock(
+                            accessor.getLevel(), accessor.getPosition(), accessor.getPlayer());
+            Component mark =
+                    Component.literal(canHarvest ? "\u2714" : "\u2715")
+                            .withStyle(canHarvest ? ChatFormatting.GREEN : ChatFormatting.RED);
+            indicator.add(
+                    helper.text(mark)
+                            .scale(0.75F)
+                            .zOffset(800)
+                            .size(Vec2.ZERO)
+                            .translate(new Vec2(-3.0F, 6.25F + verticalOffset))
+                            .message(null));
 
             indicator.forEach(element -> element.align(IElement.Align.RIGHT));
             tooltip.append(0, indicator);
@@ -268,12 +272,14 @@ public class OresAndDrillsJadePlugin implements IWailaPlugin {
                 return;
             }
 
-            ResourceLocation oreBlockId = OreDepositData.oreBlockIdAt(serverLevel, accessor.getPosition());
+            ResourceLocation oreBlockId =
+                    OreDepositData.oreBlockIdAt(serverLevel, accessor.getPosition());
             if (oreBlockId != null) {
                 tag.putString(ORE_BLOCK_KEY, oreBlockId.toString());
             }
 
-            OreDepositData.DepositStats stats = OreDepositData.statsAt(serverLevel, accessor.getPosition());
+            OreDepositData.DepositStats stats =
+                    OreDepositData.statsAt(serverLevel, accessor.getPosition());
             if (!stats.isEmpty()) {
                 tag.putInt(ORE_REMAINING_KEY, stats.remainingOre());
             }
@@ -289,33 +295,43 @@ public class OresAndDrillsJadePlugin implements IWailaPlugin {
     private static class FluidLockedOreProvider implements IBlockComponentProvider {
         @Override
         public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
-            // The deposit provider resolves the stored ore and keeps the reserve line above the warning.
-            if (!(accessor.getBlock() instanceof OreDepositBlock) && requiresMiningFluid(accessor, accessor.getBlockState())) {
+            // The deposit provider resolves the stored ore and keeps the reserve line above the
+            // warning.
+            if (!(accessor.getBlock() instanceof OreDepositBlock)
+                    && requiresMiningFluid(accessor, accessor.getBlockState())) {
                 appendFluidLockedTooltip(tooltip);
             }
         }
 
         @Override
-        public ResourceLocation getUid() { return FLUID_LOCKED_ORE_UID; }
+        public ResourceLocation getUid() {
+            return FLUID_LOCKED_ORE_UID;
+        }
     }
 
     private static boolean requiresMiningFluid(BlockAccessor accessor, BlockState oreState) {
-        return DrillMiningRecipes.requiresFluidOutsideDrills(accessor.getLevel().getRecipeManager(), oreState);
+        return DrillMiningRecipes.requiresFluidOutsideDrills(
+                accessor.getLevel().getRecipeManager(), oreState);
     }
 
     private static void appendFluidLockedTooltip(ITooltip tooltip) {
-        // Jade's vanilla tool provider runs before these providers; its checkmark only tests tool tiers.
+        // Jade's vanilla tool provider runs before these providers; its checkmark only tests tool
+        // tiers.
         tooltip.remove(JadeIds.MC_HARVEST_TOOL);
-        tooltip.add(Component.translatable("tooltip.ores_and_drills.ore_deposit.manual_mining_unavailable")
-                .withStyle(ChatFormatting.RED));
-        tooltip.add(Component.translatable("tooltip.ores_and_drills.ore_deposit.requires_fluid_drill")
-                .withStyle(ChatFormatting.GRAY));
+        tooltip.add(
+                Component.translatable(
+                                "tooltip.ores_and_drills.ore_deposit.manual_mining_unavailable")
+                        .withStyle(ChatFormatting.RED));
+        tooltip.add(
+                Component.translatable("tooltip.ores_and_drills.ore_deposit.requires_fluid_drill")
+                        .withStyle(ChatFormatting.GRAY));
     }
 
     /**
-     * A drill part has no block entity of its own, while Jade's built-in providers inspect the block
-     * currently under the crosshair. Forward the controller's storage through the exact data format
-     * consumed by Jade's normal universal energy widget instead of maintaining a second FE tooltip.
+     * A drill part has no block entity of its own, while Jade's built-in providers inspect the
+     * block currently under the crosshair. Forward the controller's storage through the exact data
+     * format consumed by Jade's normal universal energy widget instead of maintaining a second FE
+     * tooltip.
      */
     private static class DrillPartEnergyProvider implements IServerExtensionProvider<CompoundTag> {
         @Override
@@ -325,10 +341,12 @@ public class OresAndDrillsJadePlugin implements IWailaPlugin {
                 return List.of();
             }
 
-            ViewGroup<CompoundTag> group = new ViewGroup<>(List.of(EnergyView.of(
-                    drill.getEnergyStorage().getEnergyStored(),
-                    drill.getEnergyStorage().getMaxEnergyStored()
-            )));
+            ViewGroup<CompoundTag> group =
+                    new ViewGroup<>(
+                            List.of(
+                                    EnergyView.of(
+                                            drill.getEnergyStorage().getEnergyStored(),
+                                            drill.getEnergyStorage().getMaxEnergyStored())));
             group.getExtraData().putString("Unit", "FE");
             return List.of(group);
         }
@@ -345,8 +363,8 @@ public class OresAndDrillsJadePlugin implements IWailaPlugin {
     }
 
     /**
-     * Uses Jade's own fluid serializer, so all standard Jade settings and rendering stay intact while
-     * the data source is the controller rather than the part that was targeted.
+     * Uses Jade's own fluid serializer, so all standard Jade settings and rendering stay intact
+     * while the data source is the controller rather than the part that was targeted.
      */
     private static class DrillPartFluidProvider implements IServerExtensionProvider<CompoundTag> {
         @Override
@@ -371,7 +389,8 @@ public class OresAndDrillsJadePlugin implements IWailaPlugin {
 
     private static AbstractEnergyDrillBlockEntity resolveEnergyDrill(Accessor<?> accessor) {
         return accessor instanceof BlockAccessor blockAccessor
-                && resolveOrigin(blockAccessor) instanceof AbstractEnergyDrillBlockEntity drill
+                        && resolveOrigin(blockAccessor)
+                                instanceof AbstractEnergyDrillBlockEntity drill
                 ? drill
                 : null;
     }

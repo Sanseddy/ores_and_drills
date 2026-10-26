@@ -8,29 +8,33 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.OresAndDrillsMod;
 import dev.network.DiscoveredOreDepositPayload;
-import net.minecraft.client.Minecraft;
-import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.UUID;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 
 /** Client-local, per-world discovery store shared by every supported map renderer. */
 public final class OreMapMarkers {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    /** Live amounts change every tick while something mines; the file only needs to survive a restart. */
+
+    /**
+     * Live amounts change every tick while something mines; the file only needs to survive a
+     * restart.
+     */
     private static final int SAVE_DELAY_TICKS = 200;
+
     private static final Map<Long, OreMapPatch> PATCHES = new LinkedHashMap<>();
     private static final OreMapLiveRefresh LIVE = new OreMapLiveRefresh();
     private static String loadedWorld = "";
@@ -41,8 +45,7 @@ public final class OreMapMarkers {
     private static Object loadedConnection;
     private static UUID serverWorldId;
 
-    private OreMapMarkers() {
-    }
+    private OreMapMarkers() {}
 
     /** Selects storage only after the server has supplied the persistent ID of this exact world. */
     public static void setWorldId(UUID worldId) {
@@ -54,13 +57,25 @@ public final class OreMapMarkers {
 
     public static void discover(DiscoveredOreDepositPayload payload) {
         ensureWorld();
-        DiscoveredOreDeposit marker = new DiscoveredOreDeposit(
-                payload.depositId(), payload.dimension(), payload.center(), payload.oreId(),
-                payload.tier(), payload.color(), payload.remainingOre(), payload.initialOre(),
-                payload.cells().stream().map(cell -> new DiscoveredOreDeposit.OreMapCell(
-                        cell.offsetX(), cell.offsetZ(), cell.remainingOre(), cell.initialOre()
-                )).toList()
-        );
+        DiscoveredOreDeposit marker =
+                new DiscoveredOreDeposit(
+                        payload.depositId(),
+                        payload.dimension(),
+                        payload.center(),
+                        payload.oreId(),
+                        payload.tier(),
+                        payload.color(),
+                        payload.remainingOre(),
+                        payload.initialOre(),
+                        payload.cells().stream()
+                                .map(
+                                        cell ->
+                                                new DiscoveredOreDeposit.OreMapCell(
+                                                        cell.offsetX(),
+                                                        cell.offsetZ(),
+                                                        cell.remainingOre(),
+                                                        cell.initialOre()))
+                                .toList());
         OreMapPatch patch = new OreMapPatch(marker);
         OreMapPatch previous = PATCHES.put(marker.id(), patch);
         LIVE.discovered(patch);
@@ -70,12 +85,16 @@ public final class OreMapMarkers {
         }
     }
 
-    /** A synced block amount changed; the map re-sums that column from client data on the next tick. */
+    /**
+     * A synced block amount changed; the map re-sums that column from client data on the next tick.
+     */
     public static void markColumnDirty(ResourceLocation dimension, BlockPos pos) {
         LIVE.markColumn(dimension, pos.getX(), pos.getZ());
     }
 
-    /** Refreshes the patches from client-side chunk data once per tick and coalesces disk writes. */
+    /**
+     * Refreshes the patches from client-side chunk data once per tick and coalesces disk writes.
+     */
     public static void tick() {
         ensureWorld();
         if (LIVE.tick(PATCHES)) {
@@ -109,7 +128,10 @@ public final class OreMapMarkers {
         return result;
     }
 
-    /** Every stored patch regardless of the toggle, for integrations that manage their own overlay objects. */
+    /**
+     * Every stored patch regardless of the toggle, for integrations that manage their own overlay
+     * objects.
+     */
     public static Collection<OreMapPatch> all() {
         ensureWorld();
         return List.copyOf(PATCHES.values());
@@ -127,7 +149,8 @@ public final class OreMapMarkers {
         for (OreMapPatch patch : inDimension(dimension)) {
             int dx = blockX - patch.center().getX();
             int dz = blockZ - patch.center().getZ();
-            if (Math.abs(dx) <= patch.extent() && Math.abs(dz) <= patch.extent()
+            if (Math.abs(dx) <= patch.extent()
+                    && Math.abs(dz) <= patch.extent()
                     && patch.cellAt(blockX, blockZ) != null) {
                 return patch;
             }
@@ -135,11 +158,15 @@ public final class OreMapMarkers {
         return null;
     }
 
-    /** True when this column already belongs to a stored patch, hidden or not; those are kept live client-side. */
+    /**
+     * True when this column already belongs to a stored patch, hidden or not; those are kept live
+     * client-side.
+     */
     static boolean isCharted(ResourceLocation dimension, BlockPos pos) {
         ensureWorld();
         for (OreMapPatch patch : PATCHES.values()) {
-            if (patch.dimension().equals(dimension) && patch.cellAt(pos.getX(), pos.getZ()) != null) {
+            if (patch.dimension().equals(dimension)
+                    && patch.cellAt(pos.getX(), pos.getZ()) != null) {
                 return true;
             }
         }
@@ -151,7 +178,10 @@ public final class OreMapMarkers {
         return enabled;
     }
 
-    /** Increments whenever the stored patches or the toggle change; map layers rebuild when it moves. */
+    /**
+     * Increments whenever the stored patches or the toggle change; map layers rebuild when it
+     * moves.
+     */
     public static int revision() {
         ensureWorld();
         return revision;
@@ -171,9 +201,12 @@ public final class OreMapMarkers {
         save();
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player != null) {
-            minecraft.player.displayClientMessage(Component.translatable(
-                    enabled ? "message.ores_and_drills.ore_map.enabled" : "message.ores_and_drills.ore_map.disabled"
-            ), true);
+            minecraft.player.displayClientMessage(
+                    Component.translatable(
+                            enabled
+                                    ? "message.ores_and_drills.ore_map.enabled"
+                                    : "message.ores_and_drills.ore_map.disabled"),
+                    true);
         }
     }
 
@@ -184,7 +217,10 @@ public final class OreMapMarkers {
             loadedConnection = connection;
             serverWorldId = null;
         }
-        String world = connection == null ? "menu" : serverWorldId == null ? "pending" : "world:" + serverWorldId;
+        String world =
+                connection == null
+                        ? "menu"
+                        : serverWorldId == null ? "pending" : "world:" + serverWorldId;
         switchWorld(world);
     }
 
@@ -205,17 +241,22 @@ public final class OreMapMarkers {
         if ("menu".equals(world) || "pending".equals(world)) {
             loadedFile = null;
         } else {
-            loadedFile = Minecraft.getInstance().gameDirectory.toPath()
-                    .resolve("config")
-                    .resolve(OresAndDrillsMod.MOD_ID)
-                    .resolve("ore-map-" + digest(world) + ".json");
+            loadedFile =
+                    Minecraft.getInstance()
+                            .gameDirectory
+                            .toPath()
+                            .resolve("config")
+                            .resolve(OresAndDrillsMod.MOD_ID)
+                            .resolve("ore-map-" + digest(world) + ".json");
             load();
         }
     }
 
     private static String digest(String value) {
         try {
-            byte[] bytes = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+            byte[] bytes =
+                    MessageDigest.getInstance("SHA-256")
+                            .digest(value.getBytes(StandardCharsets.UTF_8));
             StringBuilder result = new StringBuilder(16);
             for (int index = 0; index < 8; index++) {
                 result.append(String.format("%02x", bytes[index]));
@@ -231,7 +272,8 @@ public final class OreMapMarkers {
             return;
         }
         try {
-            JsonObject root = JsonParser.parseString(Files.readString(loadedFile)).getAsJsonObject();
+            JsonObject root =
+                    JsonParser.parseString(Files.readString(loadedFile)).getAsJsonObject();
             enabled = !root.has("enabled") || root.get("enabled").getAsBoolean();
             JsonArray markers = root.getAsJsonArray("markers");
             if (markers == null) {
@@ -239,24 +281,32 @@ public final class OreMapMarkers {
             }
             for (JsonElement element : markers) {
                 JsonObject value = element.getAsJsonObject();
-                ResourceLocation dimension = ResourceLocation.tryParse(value.get("dimension").getAsString());
+                ResourceLocation dimension =
+                        ResourceLocation.tryParse(value.get("dimension").getAsString());
                 ResourceLocation ore = ResourceLocation.tryParse(value.get("ore").getAsString());
                 if (dimension == null || ore == null) {
                     continue;
                 }
-                DiscoveredOreDeposit marker = new DiscoveredOreDeposit(
-                        value.get("id").getAsLong(), dimension,
-                        new BlockPos(value.get("x").getAsInt(), value.get("y").getAsInt(), value.get("z").getAsInt()),
-                        ore, value.get("tier").getAsInt(), value.get("color").getAsInt(),
-                        value.has("remaining") ? value.get("remaining").getAsLong() : 0L,
-                        value.has("initial") ? value.get("initial").getAsLong() : 0L,
-                        readCells(value)
-                );
+                DiscoveredOreDeposit marker =
+                        new DiscoveredOreDeposit(
+                                value.get("id").getAsLong(),
+                                dimension,
+                                new BlockPos(
+                                        value.get("x").getAsInt(),
+                                        value.get("y").getAsInt(),
+                                        value.get("z").getAsInt()),
+                                ore,
+                                value.get("tier").getAsInt(),
+                                value.get("color").getAsInt(),
+                                value.has("remaining") ? value.get("remaining").getAsLong() : 0L,
+                                value.has("initial") ? value.get("initial").getAsLong() : 0L,
+                                readCells(value));
                 // Stale amounts are re-summed from client chunk data as soon as their chunks load.
                 PATCHES.put(marker.id(), new OreMapPatch(marker));
             }
         } catch (RuntimeException | IOException exception) {
-            OresAndDrillsMod.LOGGER.warn("Could not load discovered ore map markers from {}", loadedFile, exception);
+            OresAndDrillsMod.LOGGER.warn(
+                    "Could not load discovered ore map markers from {}", loadedFile, exception);
         }
     }
 
@@ -299,7 +349,8 @@ public final class OreMapMarkers {
             Files.createDirectories(loadedFile.getParent());
             Files.writeString(loadedFile, GSON.toJson(root), StandardCharsets.UTF_8);
         } catch (IOException exception) {
-            OresAndDrillsMod.LOGGER.warn("Could not save discovered ore map markers to {}", loadedFile, exception);
+            OresAndDrillsMod.LOGGER.warn(
+                    "Could not save discovered ore map markers to {}", loadedFile, exception);
         }
     }
 
@@ -311,10 +362,10 @@ public final class OreMapMarkers {
         ArrayList<DiscoveredOreDeposit.OreMapCell> result = new ArrayList<>(cells.size());
         for (JsonElement element : cells) {
             JsonObject cell = element.getAsJsonObject();
-            result.add(new DiscoveredOreDeposit.OreMapCell(
-                    cell.get("x").getAsInt(), cell.get("z").getAsInt(),
-                    cell.get("remaining").getAsInt(), cell.get("initial").getAsInt()
-            ));
+            result.add(
+                    new DiscoveredOreDeposit.OreMapCell(
+                            cell.get("x").getAsInt(), cell.get("z").getAsInt(),
+                            cell.get("remaining").getAsInt(), cell.get("initial").getAsInt()));
         }
         return List.copyOf(result);
     }

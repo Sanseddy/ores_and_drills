@@ -1,9 +1,9 @@
 package dev.world.level.levelgen;
 
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.junit.jupiter.api.Test;
 
 class DepositSpacingMathTest {
     private static final double EPSILON = 1.0E-9D;
@@ -44,10 +44,10 @@ class DepositSpacingMathTest {
         assertTierPairBounds(3, 3, 1_050.0D, 1_500.0D); // LARGE-LARGE
     }
 
-    private static void assertTierPairBounds(int firstTier, int secondTier, double expectedMinimum, double expectedMaximum) {
-        DepositSpacingMath.SpacingBounds bounds = DepositSpacingMath.tierPairBounds(
-                firstTier, secondTier, 2, 3, 600.0D, 1_500.0D
-        );
+    private static void assertTierPairBounds(
+            int firstTier, int secondTier, double expectedMinimum, double expectedMaximum) {
+        DepositSpacingMath.SpacingBounds bounds =
+                DepositSpacingMath.tierPairBounds(firstTier, secondTier, 2, 3, 600.0D, 1_500.0D);
         assertEquals(expectedMinimum, bounds.minimum(), EPSILON);
         assertEquals(expectedMaximum, bounds.maximum(), EPSILON);
         assertEquals(expectedMinimum, pairDistance(bounds, 0.0D, 0.0D, -1.0D), EPSILON);
@@ -58,22 +58,21 @@ class DepositSpacingMathTest {
             DepositSpacingMath.SpacingBounds bounds,
             double firstScale,
             double secondScale,
-            double randomUnit
-    ) {
+            double randomUnit) {
         return DepositSpacingMath.requiredDistance(
-                firstScale, secondScale, bounds.minimum(), bounds.maximum(), 0.75D, 0.03D, randomUnit
-        ).requiredDistance();
+                        firstScale,
+                        secondScale,
+                        bounds.minimum(),
+                        bounds.maximum(),
+                        0.75D,
+                        0.03D,
+                        randomUnit)
+                .requiredDistance();
     }
 
     private static double distance(double newScale, double existingScale, double randomUnit) {
         return DepositSpacingMath.requiredDistance(
-                newScale,
-                existingScale,
-                600.0D,
-                1_500.0D,
-                0.75D,
-                0.03D,
-                randomUnit
-        ).requiredDistance();
+                        newScale, existingScale, 600.0D, 1_500.0D, 0.75D, 0.03D, randomUnit)
+                .requiredDistance();
     }
 }

@@ -2,6 +2,12 @@ package dev.world.level.levelgen;
 
 import dev.OresAndDrillsMod;
 import dev.world.level.storage.FastSavedData;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -11,13 +17,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.saveddata.SavedData;
-
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.HashMap;
-import java.util.Set;
 
 /** Keeps block-state palette indices stable for the lifetime of a world. */
 public final class OreDepositPaletteData extends FastSavedData {
@@ -33,12 +32,12 @@ public final class OreDepositPaletteData extends FastSavedData {
     private final Map<ResourceLocation, Integer> oreIndices = new HashMap<>();
     private boolean initialized;
 
-    private OreDepositPaletteData() {
-    }
+    private OreDepositPaletteData() {}
 
     public static OreDepositPaletteData get(ServerLevel level) {
         ServerLevel storageLevel = level.getServer().overworld();
-        OreDepositPaletteData data = storageLevel.getDataStorage().computeIfAbsent(FACTORY, FILE_ID);
+        OreDepositPaletteData data =
+                storageLevel.getDataStorage().computeIfAbsent(FACTORY, FILE_ID);
         data.ensureCurrent();
         return data;
     }
@@ -64,17 +63,28 @@ public final class OreDepositPaletteData extends FastSavedData {
     }
 
     public synchronized void refreshFromRegistries() {
-        boolean changed = appendMissing(bases, OreDepositStonePalette.availableIds(), OreDepositStonePalette.MAX_BASES, "base");
-        changed |= appendMissing(ores, OreDepositOrePalette.availableIds(), OreDepositOrePalette.MAX_ORES, "ore");
+        boolean changed =
+                appendMissing(
+                        bases,
+                        OreDepositStonePalette.availableIds(),
+                        OreDepositStonePalette.MAX_BASES,
+                        "base");
+        changed |=
+                appendMissing(
+                        ores,
+                        OreDepositOrePalette.availableIds(),
+                        OreDepositOrePalette.MAX_ORES,
+                        "ore");
         initialized = true;
         if (changed) {
             rebuildIndices();
             setDirty();
             OresAndDrillsMod.LOGGER.debug(
                     "Ore deposit palette: {} fixed bases and {} fixed ores",
-                    bases.size(), ores.size()
-            );
-        } else if (baseIndices.isEmpty() && !bases.isEmpty() || oreIndices.isEmpty() && !ores.isEmpty()) {
+                    bases.size(),
+                    ores.size());
+        } else if (baseIndices.isEmpty() && !bases.isEmpty()
+                || oreIndices.isEmpty() && !ores.isEmpty()) {
             rebuildIndices();
         }
     }
@@ -89,8 +99,7 @@ public final class OreDepositPaletteData extends FastSavedData {
             List<ResourceLocation> palette,
             List<ResourceLocation> available,
             int maximum,
-            String kind
-    ) {
+            String kind) {
         boolean changed = false;
         Set<ResourceLocation> present = new HashSet<>(palette);
         for (ResourceLocation id : available) {
@@ -99,9 +108,11 @@ public final class OreDepositPaletteData extends FastSavedData {
             }
             if (palette.size() >= maximum) {
                 OresAndDrillsMod.LOGGER.debug(
-                        "Ore deposit palette: cannot append {} {} because the {}-entry limit is full",
-                        kind, id, maximum
-                );
+                        "Ore deposit palette: cannot append {} {} because the {}-entry limit is"
+                                + " full",
+                        kind,
+                        id,
+                        maximum);
                 continue;
             }
 
@@ -114,7 +125,10 @@ public final class OreDepositPaletteData extends FastSavedData {
 
     private static OreDepositPaletteData load(CompoundTag tag, HolderLookup.Provider registries) {
         OreDepositPaletteData data = new OreDepositPaletteData();
-        readIds(tag.getList(TAG_BASES, Tag.TAG_STRING), data.bases, OreDepositStonePalette.MAX_BASES);
+        readIds(
+                tag.getList(TAG_BASES, Tag.TAG_STRING),
+                data.bases,
+                OreDepositStonePalette.MAX_BASES);
         readIds(tag.getList(TAG_ORES, Tag.TAG_STRING), data.ores, OreDepositOrePalette.MAX_ORES);
         data.rebuildIndices();
         return data;
@@ -151,7 +165,8 @@ public final class OreDepositPaletteData extends FastSavedData {
         indexInto(ores, oreIndices);
     }
 
-    private static void indexInto(List<ResourceLocation> ids, Map<ResourceLocation, Integer> target) {
+    private static void indexInto(
+            List<ResourceLocation> ids, Map<ResourceLocation, Integer> target) {
         for (int index = 0; index < ids.size(); index++) {
             target.put(ids.get(index), index);
         }

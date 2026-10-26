@@ -1,6 +1,12 @@
 package dev.drill;
 
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.math.Axis;
+import com.mojang.serialization.MapCodec;
 import dev.OresAndDrillsMod;
+import dev.client.AbstractEnergyDrillScreen;
+import dev.client.drill.DrillGeoRenderer;
 import dev.registry.ModBlockEntities;
 import dev.registry.ModBlocks;
 import dev.registry.ModMenuTypes;
@@ -13,26 +19,21 @@ import dev.world.block.entity.AbstractEnergyDrillBlockEntity;
 import dev.world.block.entity.drill.DrillBit;
 import dev.world.inventory.AbstractEnergyDrillMenu;
 import dev.world.item.AbstractDrillBlockItem;
-import dev.client.AbstractEnergyDrillScreen;
 import java.util.function.Consumer;
-import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.VertexConsumer;
-import com.mojang.math.Axis;
-import com.mojang.serialization.MapCodec;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.ContainerLevelAccess;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.entity.BlockEntityTicker;
@@ -40,43 +41,49 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
-import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.animatable.client.GeoRenderProvider;
+import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.model.GeoModel;
-import dev.client.drill.DrillGeoRenderer;
 import software.bernie.geckolib.renderer.GeoItemRenderer;
 
 public final class ElectricMiningDrill {
     /** 0.325 ore/s: thirteen cycles every 800 ticks (one cycle would need 61.54 ticks). */
-    public static final MiningDrillTier TIER = new MiningDrillTier(3, 800, 1, new ItemStack(Items.IRON_PICKAXE), 1)
-            .withProgressPerTick(13);
+    public static final MiningDrillTier TIER =
+            new MiningDrillTier(3, 800, 1, new ItemStack(Items.IRON_PICKAXE), 1)
+                    .withProgressPerTick(13);
+
     public static final EnergyProfile ENERGY = new EnergyProfile(32_000, 80);
-    /** The bit sits under the model centre, one block in front of the main block, as placed by {@link Renderer}. */
+
+    /**
+     * The bit sits under the model centre, one block in front of the main block, as placed by
+     * {@link Renderer}.
+     */
     public static final DrillBit DRILL_BIT = new DrillBit(0.0D, 1.0D, 0.3D, 1.6D);
 
-    private static final Component MENU_TITLE = Component.translatable("block.ores_and_drills.electric_mining_drill");
+    private static final Component MENU_TITLE =
+            Component.translatable("block.ores_and_drills.electric_mining_drill");
 
-    private ElectricMiningDrill() {
-    }
+    private ElectricMiningDrill() {}
 
     private static InteractionResult openMenu(Level level, BlockPos origin, Player player) {
         if (!level.isClientSide) {
-            net.minecraft.world.level.block.entity.BlockEntity blockEntity = level.getBlockEntity(origin);
+            net.minecraft.world.level.block.entity.BlockEntity blockEntity =
+                    level.getBlockEntity(origin);
             if (!(blockEntity instanceof BlockEntity drillBlockEntity)) {
                 return InteractionResult.CONSUME;
             }
 
-            player.openMenu(new SimpleMenuProvider(
-                    (containerId, playerInventory, menuPlayer) -> new Menu(
-                            containerId,
-                            playerInventory,
-                            ContainerLevelAccess.create(level, origin),
-                            drillBlockEntity.getInventory(),
-                            drillBlockEntity.getPreviewContainer(),
-                            drillBlockEntity
-                    ),
-                    MENU_TITLE
-            ));
+            player.openMenu(
+                    new SimpleMenuProvider(
+                            (containerId, playerInventory, menuPlayer) ->
+                                    new Menu(
+                                            containerId,
+                                            playerInventory,
+                                            ContainerLevelAccess.create(level, origin),
+                                            drillBlockEntity.getInventory(),
+                                            drillBlockEntity.getPreviewContainer(),
+                                            drillBlockEntity),
+                            MENU_TITLE));
         }
 
         return InteractionResult.sidedSuccess(level.isClientSide);
@@ -95,35 +102,51 @@ public final class ElectricMiningDrill {
         }
 
         @Override
-        public net.minecraft.world.level.block.entity.BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
+        public net.minecraft.world.level.block.entity.BlockEntity newBlockEntity(
+                BlockPos pos, BlockState state) {
             return new BlockEntity(pos, state);
         }
 
         @Override
-        public <T extends net.minecraft.world.level.block.entity.BlockEntity> BlockEntityTicker<T> getTicker(
-                Level level, BlockState state, BlockEntityType<T> blockEntityType) {
-            return createTickerHelper(blockEntityType, ModBlockEntities.ELECTRIC_MINING_DRILL.get(), BlockEntity::tick);
+        public <T extends net.minecraft.world.level.block.entity.BlockEntity>
+                BlockEntityTicker<T> getTicker(
+                        Level level, BlockState state, BlockEntityType<T> blockEntityType) {
+            return createTickerHelper(
+                    blockEntityType,
+                    ModBlockEntities.ELECTRIC_MINING_DRILL.get(),
+                    BlockEntity::tick);
         }
     }
 
     public static class PartBlock extends AbstractDrillPartBlock {
-        public static final IntegerProperty OFFSET_X = IntegerProperty.create("offset_x", 0, TIER.size() - 1);
-        public static final IntegerProperty OFFSET_Y = IntegerProperty.create("offset_y", 0, TIER.size() - 1);
-        public static final IntegerProperty OFFSET_Z = IntegerProperty.create("offset_z", 0, TIER.size() - 1);
+        public static final IntegerProperty OFFSET_X =
+                IntegerProperty.create("offset_x", 0, TIER.size() - 1);
+        public static final IntegerProperty OFFSET_Y =
+                IntegerProperty.create("offset_y", 0, TIER.size() - 1);
+        public static final IntegerProperty OFFSET_Z =
+                IntegerProperty.create("offset_z", 0, TIER.size() - 1);
 
         public PartBlock(Properties properties) {
             super(properties, ModBlocks.ELECTRIC_STRUCTURE, ElectricMiningDrill::openMenu);
         }
 
         @Override
-        protected void createBlockStateDefinition(StateDefinition.Builder<net.minecraft.world.level.block.Block, BlockState> builder) {
+        protected void createBlockStateDefinition(
+                StateDefinition.Builder<net.minecraft.world.level.block.Block, BlockState>
+                        builder) {
             builder.add(AbstractDrillBlock.FACING, OFFSET_X, OFFSET_Y, OFFSET_Z);
         }
     }
 
     public static class BlockEntity extends AbstractEnergyDrillBlockEntity {
         public BlockEntity(BlockPos pos, BlockState state) {
-            super(ModBlockEntities.ELECTRIC_MINING_DRILL.get(), pos, state, TIER, ENERGY, ModBlocks.ELECTRIC_STRUCTURE);
+            super(
+                    ModBlockEntities.ELECTRIC_MINING_DRILL.get(),
+                    pos,
+                    state,
+                    TIER,
+                    ENERGY,
+                    ModBlocks.ELECTRIC_STRUCTURE);
         }
 
         @Override
@@ -131,22 +154,62 @@ public final class ElectricMiningDrill {
             return DRILL_BIT;
         }
 
-        public static void tick(Level level, BlockPos pos, BlockState state, BlockEntity blockEntity) {
+        public static void tick(
+                Level level, BlockPos pos, BlockState state, BlockEntity blockEntity) {
             tickEnergy(level, pos, state, blockEntity, ModBlocks.ELECTRIC_MINING_DRILL.get());
         }
     }
 
     public static class Menu extends AbstractEnergyDrillMenu {
         public Menu(int containerId, Inventory playerInventory) {
-            super(ModMenuTypes.ELECTRIC_MINING_DRILL.get(), containerId, playerInventory,
-                    TIER.size(), 2, 3, 134, 74, 134, 18, 18, 18, false, 8, 74, 106, 164);
+            super(
+                    ModMenuTypes.ELECTRIC_MINING_DRILL.get(),
+                    containerId,
+                    playerInventory,
+                    TIER.size(),
+                    2,
+                    3,
+                    134,
+                    74,
+                    134,
+                    18,
+                    18,
+                    18,
+                    false,
+                    8,
+                    74,
+                    106,
+                    164);
         }
 
-        public Menu(int containerId, Inventory playerInventory, ContainerLevelAccess access,
-                    Container outputContainer, Container previewContainer, AbstractEnergyDrillBlockEntity blockEntity) {
-            super(ModMenuTypes.ELECTRIC_MINING_DRILL.get(), containerId, playerInventory, access,
-                    outputContainer, previewContainer, blockEntity,
-                    2, 3, 134, 74, 134, 18, 18, 18, false, 8, 74, 106, 164);
+        public Menu(
+                int containerId,
+                Inventory playerInventory,
+                ContainerLevelAccess access,
+                Container outputContainer,
+                Container previewContainer,
+                AbstractEnergyDrillBlockEntity blockEntity) {
+            super(
+                    ModMenuTypes.ELECTRIC_MINING_DRILL.get(),
+                    containerId,
+                    playerInventory,
+                    access,
+                    outputContainer,
+                    previewContainer,
+                    blockEntity,
+                    2,
+                    3,
+                    134,
+                    74,
+                    134,
+                    18,
+                    18,
+                    18,
+                    false,
+                    8,
+                    74,
+                    106,
+                    164);
         }
 
         @Override
@@ -161,59 +224,84 @@ public final class ElectricMiningDrill {
     }
 
     public static class Item extends AbstractDrillBlockItem {
-        public Item(net.minecraft.world.level.block.Block block, net.minecraft.world.item.Item.Properties properties) {
+        public Item(
+                net.minecraft.world.level.block.Block block,
+                net.minecraft.world.item.Item.Properties properties) {
             super(block, properties, TIER, ENERGY, 0);
         }
 
         @Override
         public void createGeoRenderer(Consumer<GeoRenderProvider> consumer) {
-            consumer.accept(new GeoRenderProvider() {
-                private ItemRenderer renderer;
+            consumer.accept(
+                    new GeoRenderProvider() {
+                        private ItemRenderer renderer;
 
-                @Override
-                public ItemRenderer getGeoItemRenderer() {
-                    if (renderer == null) {
-                        renderer = new ItemRenderer();
-                    }
+                        @Override
+                        public ItemRenderer getGeoItemRenderer() {
+                            if (renderer == null) {
+                                renderer = new ItemRenderer();
+                            }
 
-                    return renderer;
-                }
-            });
+                            return renderer;
+                        }
+                    });
         }
     }
 
     public static class Screen extends AbstractEnergyDrillScreen {
-        private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(
-                OresAndDrillsMod.MOD_ID, "textures/gui/electric_drill_gui_1.png");
-        private static final ResourceLocation ENERGY_PROGRESS_TEXTURE = ResourceLocation.fromNamespaceAndPath(
-                OresAndDrillsMod.MOD_ID, "textures/gui/energy_bar_1.png");
-        private static final ResourceLocation MINING_PROGRESS_TEXTURE = ResourceLocation.fromNamespaceAndPath(
-                OresAndDrillsMod.MOD_ID, "textures/gui/progress_1.png");
+        private static final ResourceLocation TEXTURE =
+                ResourceLocation.fromNamespaceAndPath(
+                        OresAndDrillsMod.MOD_ID, "textures/gui/electric_drill_gui_1.png");
+        private static final ResourceLocation ENERGY_PROGRESS_TEXTURE =
+                ResourceLocation.fromNamespaceAndPath(
+                        OresAndDrillsMod.MOD_ID, "textures/gui/energy_bar_1.png");
+        private static final ResourceLocation MINING_PROGRESS_TEXTURE =
+                ResourceLocation.fromNamespaceAndPath(
+                        OresAndDrillsMod.MOD_ID, "textures/gui/progress_1.png");
 
         public Screen(AbstractEnergyDrillMenu menu, Inventory playerInventory, Component title) {
-            super(menu, playerInventory, title,
-                    TEXTURE, 176, 188,
-                    ENERGY_PROGRESS_TEXTURE, 10, 18, 12, 52,
-                    MINING_PROGRESS_TEXTURE, 124, 18, 3, 72,
-                    256, 256, 95,
-                    65, 21);
+            super(
+                    menu,
+                    playerInventory,
+                    title,
+                    TEXTURE,
+                    176,
+                    188,
+                    ENERGY_PROGRESS_TEXTURE,
+                    10,
+                    18,
+                    12,
+                    52,
+                    MINING_PROGRESS_TEXTURE,
+                    124,
+                    18,
+                    3,
+                    72,
+                    256,
+                    256,
+                    95,
+                    65,
+                    21);
         }
     }
 
     public static class Model extends GeoModel<BlockEntity> {
         @Override
         public ResourceLocation getModelResource(BlockEntity animatable) {
-            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "geo/electric_mining_drill.geo.json");
+            return ResourceLocation.fromNamespaceAndPath(
+                    OresAndDrillsMod.MOD_ID, "geo/electric_mining_drill.geo.json");
         }
 
         @Override
         public ResourceLocation getTextureResource(BlockEntity animatable) {
-            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "textures/block/electric_mining_drill.png");
+            return ResourceLocation.fromNamespaceAndPath(
+                    OresAndDrillsMod.MOD_ID, "textures/block/electric_mining_drill.png");
         }
 
         @Override
         public ResourceLocation getAnimationResource(BlockEntity animatable) {
-            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "animations/electric_mining_drill.animation.json");
+            return ResourceLocation.fromNamespaceAndPath(
+                    OresAndDrillsMod.MOD_ID, "animations/electric_mining_drill.animation.json");
         }
     }
 
@@ -227,29 +315,62 @@ public final class ElectricMiningDrill {
         }
 
         @Override
-        public RenderType getRenderType(BlockEntity animatable, ResourceLocation texture, MultiBufferSource bufferSource, float partialTick) {
+        public RenderType getRenderType(
+                BlockEntity animatable,
+                ResourceLocation texture,
+                MultiBufferSource bufferSource,
+                float partialTick) {
             return RenderType.entityTranslucent(texture);
         }
 
         @Override
-        public void render(BlockEntity animatable, float partialTick, PoseStack poseStack, MultiBufferSource bufferSource,
-                           int packedLight, int packedOverlay) {
+        public void render(
+                BlockEntity animatable,
+                float partialTick,
+                PoseStack poseStack,
+                MultiBufferSource bufferSource,
+                int packedLight,
+                int packedOverlay) {
             Direction facing = animatable.getBlockState().getValue(AbstractDrillBlock.FACING);
             Direction right = facing.getClockWise();
 
-            double offsetX = facing.getStepX() * CENTER_FORWARD_OFFSET - right.getStepX() * CENTER_LEFT_OFFSET;
-            double offsetZ = facing.getStepZ() * CENTER_FORWARD_OFFSET - right.getStepZ() * CENTER_LEFT_OFFSET;
+            double offsetX =
+                    facing.getStepX() * CENTER_FORWARD_OFFSET
+                            - right.getStepX() * CENTER_LEFT_OFFSET;
+            double offsetZ =
+                    facing.getStepZ() * CENTER_FORWARD_OFFSET
+                            - right.getStepZ() * CENTER_LEFT_OFFSET;
 
             poseStack.pushPose();
             poseStack.translate(offsetX, 0.0D, offsetZ);
-            super.render(animatable, partialTick, poseStack, bufferSource, packedLight, packedOverlay);
+            super.render(
+                    animatable, partialTick, poseStack, bufferSource, packedLight, packedOverlay);
             poseStack.popPose();
         }
 
         @Override
-        public void preRender(PoseStack poseStack, BlockEntity animatable, BakedGeoModel model, MultiBufferSource bufferSource,
-                              VertexConsumer buffer, boolean isReRender, float partialTick, int packedLight, int packedOverlay, int colour) {
-            super.preRender(poseStack, animatable, model, bufferSource, buffer, isReRender, partialTick, packedLight, packedOverlay, colour);
+        public void preRender(
+                PoseStack poseStack,
+                BlockEntity animatable,
+                BakedGeoModel model,
+                MultiBufferSource bufferSource,
+                VertexConsumer buffer,
+                boolean isReRender,
+                float partialTick,
+                int packedLight,
+                int packedOverlay,
+                int colour) {
+            super.preRender(
+                    poseStack,
+                    animatable,
+                    model,
+                    bufferSource,
+                    buffer,
+                    isReRender,
+                    partialTick,
+                    packedLight,
+                    packedOverlay,
+                    colour);
             poseStack.mulPose(Axis.YP.rotationDegrees(MODEL_YAW_DEGREES));
         }
     }
@@ -257,17 +378,20 @@ public final class ElectricMiningDrill {
     public static class ItemModel extends GeoModel<Item> {
         @Override
         public ResourceLocation getModelResource(Item animatable) {
-            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "geo/electric_mining_drill.geo.json");
+            return ResourceLocation.fromNamespaceAndPath(
+                    OresAndDrillsMod.MOD_ID, "geo/electric_mining_drill.geo.json");
         }
 
         @Override
         public ResourceLocation getTextureResource(Item animatable) {
-            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "textures/block/electric_mining_drill.png");
+            return ResourceLocation.fromNamespaceAndPath(
+                    OresAndDrillsMod.MOD_ID, "textures/block/electric_mining_drill.png");
         }
 
         @Override
         public ResourceLocation getAnimationResource(Item animatable) {
-            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "animations/electric_mining_drill.animation.json");
+            return ResourceLocation.fromNamespaceAndPath(
+                    OresAndDrillsMod.MOD_ID, "animations/electric_mining_drill.animation.json");
         }
     }
 
@@ -279,9 +403,28 @@ public final class ElectricMiningDrill {
         }
 
         @Override
-        public void preRender(PoseStack poseStack, Item animatable, BakedGeoModel model, MultiBufferSource bufferSource,
-                              VertexConsumer buffer, boolean isReRender, float partialTick, int packedLight, int packedOverlay, int colour) {
-            super.preRender(poseStack, animatable, model, bufferSource, buffer, isReRender, partialTick, packedLight, packedOverlay, colour);
+        public void preRender(
+                PoseStack poseStack,
+                Item animatable,
+                BakedGeoModel model,
+                MultiBufferSource bufferSource,
+                VertexConsumer buffer,
+                boolean isReRender,
+                float partialTick,
+                int packedLight,
+                int packedOverlay,
+                int colour) {
+            super.preRender(
+                    poseStack,
+                    animatable,
+                    model,
+                    bufferSource,
+                    buffer,
+                    isReRender,
+                    partialTick,
+                    packedLight,
+                    packedOverlay,
+                    colour);
             poseStack.mulPose(Axis.YP.rotationDegrees(MODEL_YAW_DEGREES));
         }
     }

@@ -1,15 +1,14 @@
 package dev.client.ore.speck;
 
-import org.junit.jupiter.api.Test;
-
-import java.util.List;
-import java.util.Map;
-
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
 
 class OreSpeckAnalysisTest {
     @Test
@@ -34,15 +33,20 @@ class OreSpeckAnalysisTest {
         assertEquals(8, largest.originY());
         assertEquals(4, largest.width());
         assertEquals(3, largest.height());
-        assertArrayEquals(new boolean[] {
-                true, true, true, true,
-                true, true, true, true,
-                false, true, true, false
-        }, largest.shapeMask());
+        assertArrayEquals(
+                new boolean[] {
+                    true, true, true, true,
+                    true, true, true, true,
+                    false, true, true, false
+                },
+                largest.shapeMask());
         for (int pixel = 0; pixel < largest.size(); pixel++) {
             int x = largest.originX() + largest.pixelX(pixel);
             int y = largest.originY() + largest.pixelY(pixel);
-            int expected = 0xFF000000 | SpeckTestTextures.IRON_PALETTE[(x + y) % SpeckTestTextures.IRON_PALETTE.length];
+            int expected =
+                    0xFF000000
+                            | SpeckTestTextures.IRON_PALETTE[
+                                    (x + y) % SpeckTestTextures.IRON_PALETTE.length];
             assertEquals(expected, largest.pixelColor(pixel));
         }
     }
@@ -54,9 +58,11 @@ class OreSpeckAnalysisTest {
         map[3] = "...x............";
         map[4] = "....x...........";
         map[5] = ".....x..........";
-        OreSpeckAnalysis analysis = OreSpeckAnalysis.analyze(
-                SpeckTestTextures.ore(host, map, SpeckTestTextures.IRON_PALETTE), host, SpeckTestTextures.IRON_PALETTE
-        );
+        OreSpeckAnalysis analysis =
+                OreSpeckAnalysis.analyze(
+                        SpeckTestTextures.ore(host, map, SpeckTestTextures.IRON_PALETTE),
+                        host,
+                        SpeckTestTextures.IRON_PALETTE);
 
         assertEquals(1, analysis.total());
         assertEquals(OreSpeckType.TYPE_2, analysis.specks().get(0).type());
@@ -66,9 +72,11 @@ class OreSpeckAnalysisTest {
     void greyOreIsNotConfusedWithGreyHostRock() {
         int[] silver = {0x9A9A9A, 0xC8C8C8, 0x5E5E5E};
         ArgbImage host = SpeckTestTextures.host();
-        OreSpeckAnalysis analysis = OreSpeckAnalysis.analyze(
-                SpeckTestTextures.ore(host, SpeckTestTextures.EXAMPLE_MAP, silver), host, silver
-        );
+        OreSpeckAnalysis analysis =
+                OreSpeckAnalysis.analyze(
+                        SpeckTestTextures.ore(host, SpeckTestTextures.EXAMPLE_MAP, silver),
+                        host,
+                        silver);
 
         assertEquals(11, analysis.total());
     }
@@ -76,7 +84,9 @@ class OreSpeckAnalysisTest {
     @Test
     void detectsDistinctlyColoredOreWithoutKnownHost() {
         int[] diamond = {0x4AEDD9, 0xA1FBE8, 0x1AAAA7};
-        ArgbImage ore = SpeckTestTextures.ore(SpeckTestTextures.host(), SpeckTestTextures.EXAMPLE_MAP, diamond);
+        ArgbImage ore =
+                SpeckTestTextures.ore(
+                        SpeckTestTextures.host(), SpeckTestTextures.EXAMPLE_MAP, diamond);
         OreSpeckAnalysis analysis = OreSpeckAnalysis.analyze(ore, null, diamond);
 
         assertEquals(11, analysis.total());
@@ -89,7 +99,9 @@ class OreSpeckAnalysisTest {
         int[] otherPixels = new int[256];
         java.util.Arrays.fill(otherPixels, 0xFF3A2020);
         ArgbImage netherrack = new ArgbImage(16, 16, otherPixels);
-        ArgbImage ore = SpeckTestTextures.ore(stone, SpeckTestTextures.EXAMPLE_MAP, SpeckTestTextures.IRON_PALETTE);
+        ArgbImage ore =
+                SpeckTestTextures.ore(
+                        stone, SpeckTestTextures.EXAMPLE_MAP, SpeckTestTextures.IRON_PALETTE);
 
         assertSame(stone, OreSpeckAnalysis.pickHost(ore, List.of(netherrack, stone)));
         assertNull(OreSpeckAnalysis.pickHost(ore, List.of(netherrack)));
@@ -98,8 +110,12 @@ class OreSpeckAnalysisTest {
     @Test
     void higherResolutionTexturesAreReadOnTheSixteenPixelGrid() {
         ArgbImage host = SpeckTestTextures.host();
-        ArgbImage ore = SpeckTestTextures.ore(host, SpeckTestTextures.EXAMPLE_MAP, SpeckTestTextures.IRON_PALETTE);
-        OreSpeckAnalysis analysis = OreSpeckAnalysis.analyze(upscale(ore), upscale(host), SpeckTestTextures.IRON_PALETTE);
+        ArgbImage ore =
+                SpeckTestTextures.ore(
+                        host, SpeckTestTextures.EXAMPLE_MAP, SpeckTestTextures.IRON_PALETTE);
+        OreSpeckAnalysis analysis =
+                OreSpeckAnalysis.analyze(
+                        upscale(ore), upscale(host), SpeckTestTextures.IRON_PALETTE);
 
         assertEquals(11, analysis.total());
     }

@@ -1,33 +1,32 @@
 package dev.client.ore.speck;
 
-/** Builds small ore textures from ASCII maps: '.' is host rock, any other character is an ore pixel. */
+/**
+ * Builds small ore textures from ASCII maps: '.' is host rock, any other character is an ore pixel.
+ */
 final class SpeckTestTextures {
     static final int[] IRON_PALETTE = {0xD8AF93, 0xAF8E77, 0x7A5A44};
 
-    /**
-     * Spec example: 5 specks of type 1, 3 of type 2, 2 of type 3 and 1 of type 4 (11 in total).
-     */
+    /** Spec example: 5 specks of type 1, 3 of type 2, 2 of type 3 and 1 of type 4 (11 in total). */
     static final String[] EXAMPLE_MAP = {
-            "a.....bb......a.",
-            "................",
-            "..ccc......d....",
-            "...........dd...",
-            ".eee............",
-            ".ee.......ffff..",
-            "..........ffff..",
-            "................",
-            "....gggg........",
-            "....gggg.....h..",
-            ".....gg.........",
-            "................",
-            "..ii.......a....",
-            "..ii............",
-            "................",
-            "................"
+        "a.....bb......a.",
+        "................",
+        "..ccc......d....",
+        "...........dd...",
+        ".eee............",
+        ".ee.......ffff..",
+        "..........ffff..",
+        "................",
+        "....gggg........",
+        "....gggg.....h..",
+        ".....gg.........",
+        "................",
+        "..ii.......a....",
+        "..ii............",
+        "................",
+        "................"
     };
 
-    private SpeckTestTextures() {
-    }
+    private SpeckTestTextures() {}
 
     /** Grey rock with a little per-pixel variation, like a stone texture. */
     static ArgbImage host() {

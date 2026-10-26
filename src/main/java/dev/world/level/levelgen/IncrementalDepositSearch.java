@@ -1,6 +1,15 @@
 package dev.world.level.levelgen;
 
 import dev.OresAndDrillsMod;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.BiPredicate;
+import java.util.function.Predicate;
 import net.minecraft.Util;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -15,19 +24,9 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.BiPredicate;
-import java.util.function.Predicate;
-
 /**
- * Resumable form of {@link DepositLocator}. All world and generator access remains on the server thread;
- * only the chunk-status metadata read uses Minecraft's existing asynchronous chunk scanner.
+ * Resumable form of {@link DepositLocator}. All world and generator access remains on the server
+ * thread; only the chunk-status metadata read uses Minecraft's existing asynchronous chunk scanner.
  */
 public final class IncrementalDepositSearch {
     private final DepositTerrainValidator terrainValidator;
@@ -41,7 +40,8 @@ public final class IncrementalDepositSearch {
     private final Map<Long, CompletableFuture<Boolean>> decoratedChunks =
             new LinkedHashMap<>(64, 0.75F, true) {
                 @Override
-                protected boolean removeEldestEntry(Map.Entry<Long, CompletableFuture<Boolean>> eldest) {
+                protected boolean removeEldestEntry(
+                        Map.Entry<Long, CompletableFuture<Boolean>> eldest) {
                     return size() > 2_048 && eldest.getValue().isDone();
                 }
             };
@@ -50,8 +50,13 @@ public final class IncrementalDepositSearch {
     private boolean done;
     private ResourceLocation effectiveOre;
     private boolean dataDriven;
-    /** Automatic TINY/SMALL: confirmed from loaded chunk data, otherwise predicted from the attempt stream. */
+
+    /**
+     * Automatic TINY/SMALL: confirmed from loaded chunk data, otherwise predicted from the attempt
+     * stream.
+     */
     private boolean sourceAttempts;
+
     private double[] predictedCoverage = new double[0];
     private TierDepositResolver resolver;
     private DepositTierLayout layout;
@@ -65,8 +70,10 @@ public final class IncrementalDepositSearch {
     private int cursor;
     private List<DataDrivenOreDepositBiomeModifier.PlannedDeposit> dataPlans = List.of();
     private List<DepositCandidate> candidates = List.of();
+
     /** Candidates of the active cell while they are still being resolved off the server thread. */
     private CompletableFuture<List<DepositCandidate>> cellCandidates;
+
     private int candidateIndex;
     private boolean cellActive;
     private CandidateWork candidateWork;
@@ -81,8 +88,7 @@ public final class IncrementalDepositSearch {
             BlockPos origin,
             ResourceLocation requestedOre,
             OreDepositTier requestedTier,
-            int searchRadius
-    ) {
+            int searchRadius) {
         this.terrainValidator = terrainValidator;
         this.level = level;
         this.origin = origin.immutable();
@@ -171,25 +177,36 @@ public final class IncrementalDepositSearch {
     private void initialize() {
         initialized = true;
         Block requestedBlock = BuiltInRegistries.BLOCK.get(requestedOre);
-        Block unifiedBlock = requestedBlock == null
-                ? null
-                : OreUnifier.canonicalMaterialBlockFor(requestedBlock).orElse(requestedBlock);
-        effectiveOre = unifiedBlock == null ? requestedOre : BuiltInRegistries.BLOCK.getKey(unifiedBlock);
-        for (ConfirmedDeposit deposit : ConfirmedDepositIndex.get(level).recordsWithin(
-                origin, searchRadius, effectiveOre, requestedTier
-        )) {
+        Block unifiedBlock =
+                requestedBlock == null
+                        ? null
+                        : OreUnifier.canonicalMaterialBlockFor(requestedBlock)
+                                .orElse(requestedBlock);
+        effectiveOre =
+                unifiedBlock == null ? requestedOre : BuiltInRegistries.BLOCK.getKey(unifiedBlock);
+        for (ConfirmedDeposit deposit :
+                ConfirmedDepositIndex.get(level)
+                        .recordsWithin(origin, searchRadius, effectiveOre, requestedTier)) {
             confirmedIds.add(deposit.depositId());
-            long distanceSquared = DepositLocator.horizontalDistanceSquared(origin, deposit.center());
+            long distanceSquared =
+                    DepositLocator.horizontalDistanceSquared(origin, deposit.center());
             if (distanceSquared <= searchRadiusSquared) {
-                best = DepositLocator.nearer(origin, best, new LocatedDeposit(
-                        DepositLocator.confirmedCandidate(deposit), DepositLocateStatus.CONFIRMED,
-                        DepositLocator.floorDistance(distanceSquared), 1.0D
-                ));
+                best =
+                        DepositLocator.nearer(
+                                origin,
+                                best,
+                                new LocatedDeposit(
+                                        DepositLocator.confirmedCandidate(deposit),
+                                        DepositLocateStatus.CONFIRMED,
+                                        DepositLocator.floorDistance(distanceSquared),
+                                        1.0D));
             }
         }
 
-        dataDriven = requestedBlock != null
-                && DataDrivenOreDepositBiomeModifier.explicitlyConfigured(level, requestedBlock);
+        dataDriven =
+                requestedBlock != null
+                        && DataDrivenOreDepositBiomeModifier.explicitlyConfigured(
+                                level, requestedBlock);
         sourceAttempts = SmallDepositLocate.usesSourceAttempts(requestedTier, dataDriven);
 
         resolver = DepositResolvers.forTier(requestedTier);
@@ -198,14 +215,13 @@ public final class IncrementalDepositSearch {
         searchCenterCellX = Math.floorDiv(origin.getX(), cellSizeBlocks);
         searchCenterCellZ = Math.floorDiv(origin.getZ(), cellSizeBlocks);
         if (dataDriven) {
-            biomeSearch = DataDrivenOreDepositBiomeModifier.beginClosestAllowedBiomeSearch(
-                    level, origin, requestedBlock, requestedTier, searchRadius
-            );
+            biomeSearch =
+                    DataDrivenOreDepositBiomeModifier.beginClosestAllowedBiomeSearch(
+                            level, origin, requestedBlock, requestedTier, searchRadius);
             return;
         }
-        cellSearchRadius = Mth.ceil(
-                (searchRadius + layout.maximumRadius()) / (double) cellSizeBlocks
-        );
+        cellSearchRadius =
+                Mth.ceil((searchRadius + layout.maximumRadius()) / (double) cellSizeBlocks);
     }
 
     private void finishDataDrivenInitialization(BlockPos nearestAllowedBiome) {
@@ -232,9 +248,14 @@ public final class IncrementalDepositSearch {
         if (cursor >= perimeter) {
             ring++;
             cursor = 0;
-            if (ring > cellSearchRadius || best != null && DepositLocator.nextRingCannotBeat(
-                    ring, cellSizeBlocks, layout.maximumRadius(), origin, best.candidate().center()
-            )) {
+            if (ring > cellSearchRadius
+                    || best != null
+                            && DepositLocator.nextRingCannotBeat(
+                                    ring,
+                                    cellSizeBlocks,
+                                    layout.maximumRadius(),
+                                    origin,
+                                    best.candidate().center())) {
                 done = true;
                 return;
             }
@@ -248,22 +269,35 @@ public final class IncrementalDepositSearch {
             dataPlans = List.of();
             candidates = List.of();
         } else if (dataDriven) {
-            dataPlans = DataDrivenOreDepositBiomeModifier.plansForCell(
-                    level, cellX, cellZ, requestedOre, requestedTier
-            );
-            candidates = dataPlans.stream().map(DataDrivenOreDepositBiomeModifier.PlannedDeposit::candidate).toList();
+            dataPlans =
+                    DataDrivenOreDepositBiomeModifier.plansForCell(
+                            level, cellX, cellZ, requestedOre, requestedTier);
+            candidates =
+                    dataPlans.stream()
+                            .map(DataDrivenOreDepositBiomeModifier.PlannedDeposit::candidate)
+                            .toList();
         } else {
-            // Automatic MEDIUM/LARGE: moving a predicted lens into its source biome reads base columns and can take
-            // half a second, so it is resolved beside worldgen (which runs the same code) instead of in the tick.
+            // Automatic MEDIUM/LARGE: moving a predicted lens into its source biome reads base
+            // columns and can take half a second, so it is resolved beside worldgen (which runs the
+            // same code) instead of in the tick.
             dataPlans = List.of();
             candidates = List.of();
-            cellCandidates = CompletableFuture.supplyAsync(
-                    () -> resolver.getCandidatesForCell(level, cellX, cellZ, effectiveOre), Util.backgroundExecutor()
-            ).exceptionally(failure -> {
-                OresAndDrillsMod.LOGGER.debug("Could not resolve ore-deposit cell [{}, {}] in {}",
-                        cellX, cellZ, level.dimension().location(), failure);
-                return List.of();
-            });
+            cellCandidates =
+                    CompletableFuture.supplyAsync(
+                                    () ->
+                                            resolver.getCandidatesForCell(
+                                                    level, cellX, cellZ, effectiveOre),
+                                    Util.backgroundExecutor())
+                            .exceptionally(
+                                    failure -> {
+                                        OresAndDrillsMod.LOGGER.debug(
+                                                "Could not resolve ore-deposit cell [{}, {}] in {}",
+                                                cellX,
+                                                cellZ,
+                                                level.dimension().location(),
+                                                failure);
+                                        return List.of();
+                                    });
         }
         candidateIndex = 0;
         cellActive = true;
@@ -279,15 +313,19 @@ public final class IncrementalDepositSearch {
                 int chunkX = cellX * size + dx;
                 int chunkZ = cellZ * size + dz;
                 if (SmallDepositLocate.isLoaded(level, chunkX, chunkZ)) {
-                    LocatedDeposit confirmed = SmallDepositLocate.confirmedInLoadedChunk(
-                            level, chunkX, chunkZ, effectiveOre, requestedTier, origin);
-                    if (confirmed != null && DepositLocator.horizontalDistanceSquared(
-                            origin, confirmed.candidate().center()) <= searchRadiusSquared) {
+                    LocatedDeposit confirmed =
+                            SmallDepositLocate.confirmedInLoadedChunk(
+                                    level, chunkX, chunkZ, effectiveOre, requestedTier, origin);
+                    if (confirmed != null
+                            && DepositLocator.horizontalDistanceSquared(
+                                            origin, confirmed.candidate().center())
+                                    <= searchRadiusSquared) {
                         best = DepositLocator.nearer(origin, best, confirmed);
                     }
                 } else {
-                    for (SmallDepositAttemptPlanner.Prediction prediction : SmallDepositLocate.predictions(
-                            level, chunkX, chunkZ, effectiveOre, requestedTier)) {
+                    for (SmallDepositAttemptPlanner.Prediction prediction :
+                            SmallDepositLocate.predictions(
+                                    level, chunkX, chunkZ, effectiveOre, requestedTier)) {
                         predicted.add(prediction.candidate());
                         coverage.add(prediction.hostCoverage());
                     }
@@ -302,11 +340,18 @@ public final class IncrementalDepositSearch {
     private void processSourceAttemptPrediction(int index) {
         DepositCandidate candidate = candidates.get(index);
         long distanceSquared = DepositLocator.horizontalDistanceSquared(origin, candidate.center());
-        if (distanceSquared > searchRadiusSquared || best != null && distanceSquared
-                >= DepositLocator.horizontalDistanceSquared(origin, best.candidate().center())) {
+        if (distanceSquared > searchRadiusSquared
+                || best != null
+                        && distanceSquared
+                                >= DepositLocator.horizontalDistanceSquared(
+                                        origin, best.candidate().center())) {
             return;
         }
-        startPending(candidate, candidate, distanceSquared, SmallDepositLocate.predictedValidation(predictedCoverage[index]));
+        startPending(
+                candidate,
+                candidate,
+                distanceSquared,
+                SmallDepositLocate.predictedValidation(predictedCoverage[index]));
     }
 
     private void finishCell() {
@@ -322,25 +367,40 @@ public final class IncrementalDepositSearch {
             return;
         }
         DepositCandidate candidate = candidates.get(index);
-        DataDrivenOreDepositBiomeModifier.PlannedDeposit dataPlan = dataDriven ? dataPlans.get(index) : null;
+        DataDrivenOreDepositBiomeModifier.PlannedDeposit dataPlan =
+                dataDriven ? dataPlans.get(index) : null;
         if (confirmedIds.contains(candidate.depositId())
                 || !candidate.oreId().equals(effectiveOre)
                 || candidate.tier() != requestedTier
-                || level.getChunkSource().getChunkNow(candidate.sourceChunkX(), candidate.sourceChunkZ()) != null
-                || dataPlan != null && dataPlan.placement() == OreDepositFeature.PlacementMode.CAVE_WALL) {
+                || level.getChunkSource()
+                                .getChunkNow(candidate.sourceChunkX(), candidate.sourceChunkZ())
+                        != null
+                || dataPlan != null
+                        && dataPlan.placement() == OreDepositFeature.PlacementMode.CAVE_WALL) {
             return;
         }
 
-        Predicate<BlockPos> dataWriteBounds = dataPlan == null
-                ? ignored -> true : DepositLocator.dataDrivenWriteBounds(candidate);
-        BiPredicate<BlockPos, net.minecraft.world.level.block.state.BlockState> predictedReplacement =
-                dataPlan == null ? (ignoredPos, ignoredState) -> false : dataPlan.predictedReplacement(level);
-        DepositTerrainValidator.RelocationSearch relocation = dataPlan != null
-                ? terrainValidator.beginRelocation(level, candidate, predictedReplacement, dataWriteBounds)
-                : terrainValidator.beginUndergroundFallback(level, candidate);
-        candidateWork = new CandidateWork(
-                candidate, relocation, predictedReplacement, dataWriteBounds, dataPlan != null
-        );
+        Predicate<BlockPos> dataWriteBounds =
+                dataPlan == null
+                        ? ignored -> true
+                        : DepositLocator.dataDrivenWriteBounds(candidate);
+        BiPredicate<BlockPos, net.minecraft.world.level.block.state.BlockState>
+                predictedReplacement =
+                        dataPlan == null
+                                ? (ignoredPos, ignoredState) -> false
+                                : dataPlan.predictedReplacement(level);
+        DepositTerrainValidator.RelocationSearch relocation =
+                dataPlan != null
+                        ? terrainValidator.beginRelocation(
+                                level, candidate, predictedReplacement, dataWriteBounds)
+                        : terrainValidator.beginUndergroundFallback(level, candidate);
+        candidateWork =
+                new CandidateWork(
+                        candidate,
+                        relocation,
+                        predictedReplacement,
+                        dataWriteBounds,
+                        dataPlan != null);
     }
 
     private void advanceCandidateWork(long deadlineNanos, int maximumOperations) {
@@ -355,24 +415,33 @@ public final class IncrementalDepositSearch {
                 candidateWork = null;
                 return;
             }
-            work.distanceSquared = DepositLocator.horizontalDistanceSquared(
-                    origin, work.locatedCandidate.center()
-            );
-            if (work.distanceSquared > searchRadiusSquared || best != null && work.distanceSquared >=
-                    DepositLocator.horizontalDistanceSquared(origin, best.candidate().center())) {
+            work.distanceSquared =
+                    DepositLocator.horizontalDistanceSquared(
+                            origin, work.locatedCandidate.center());
+            if (work.distanceSquared > searchRadiusSquared
+                    || best != null
+                            && work.distanceSquared
+                                    >= DepositLocator.horizontalDistanceSquared(
+                                            origin, best.candidate().center())) {
                 candidateWork = null;
                 return;
             }
             if (!work.dataDriven) {
-                // Automatic MEDIUM/LARGE: selecting the lens body for sampling and building the worldgen plan each
-                // take hundreds of milliseconds for a LARGE lens, so both run beside worldgen, off the server thread.
+                // Automatic MEDIUM/LARGE: selecting the lens body for sampling and building the
+                // worldgen plan each take hundreds of milliseconds for a LARGE lens, so both run
+                // beside worldgen, off the server thread.
                 candidateWork = null;
-                startPending(work.sourceCandidate, work.locatedCandidate, work.distanceSquared, null);
+                startPending(
+                        work.sourceCandidate, work.locatedCandidate, work.distanceSquared, null);
                 return;
             }
-            work.validation = terrainValidator.beginValidationMatching(
-                    level, work.locatedCandidate, layout, work.predictedReplacement, work.writeBounds
-            );
+            work.validation =
+                    terrainValidator.beginValidationMatching(
+                            level,
+                            work.locatedCandidate,
+                            layout,
+                            work.predictedReplacement,
+                            work.writeBounds);
         }
         work.validation.advance(deadlineNanos, maximumOperations);
         if (!work.validation.isDone()) return;
@@ -384,47 +453,73 @@ public final class IncrementalDepositSearch {
     }
 
     /**
-     * Waits for the saved chunk status and, without a {@code knownValidation}, for the automatic MEDIUM/LARGE check:
-     * sampled host rock first, then the worldgen plan itself, which a sampled pass alone could wrongly accept.
+     * Waits for the saved chunk status and, without a {@code knownValidation}, for the automatic
+     * MEDIUM/LARGE check: sampled host rock first, then the worldgen plan itself, which a sampled
+     * pass alone could wrongly accept.
      */
-    private void startPending(DepositCandidate sourceCandidate, DepositCandidate located, long distanceSquared,
+    private void startPending(
+            DepositCandidate sourceCandidate,
+            DepositCandidate located,
+            long distanceSquared,
             ValidationResult knownValidation) {
-        long chunkKey = ChunkPos.asLong(sourceCandidate.sourceChunkX(), sourceCandidate.sourceChunkZ());
-        CompletableFuture<Boolean> decorated = decoratedChunks.computeIfAbsent(
-                chunkKey, ignored -> inspectDecoratedChunk(sourceCandidate)
-        );
-        CompletableFuture<ValidationResult> validation = knownValidation != null
-                ? CompletableFuture.completedFuture(knownValidation)
-                : decorated.thenApplyAsync(alreadyDecorated -> {
-                    if (alreadyDecorated) return null;
-                    ValidationResult sampled = terrainValidator.validate(level, located, layout);
-                    return sampled.viable() && OreDepositFeature.compactCandidateGenerates(level, located) ? sampled : null;
-                }, Util.backgroundExecutor()).exceptionally(failure -> {
-                    OresAndDrillsMod.LOGGER.debug("Could not plan ore-deposit candidate {} in {}",
-                            located.depositId(), level.dimension().location(), failure);
-                    return null;
-                });
+        long chunkKey =
+                ChunkPos.asLong(sourceCandidate.sourceChunkX(), sourceCandidate.sourceChunkZ());
+        CompletableFuture<Boolean> decorated =
+                decoratedChunks.computeIfAbsent(
+                        chunkKey, ignored -> inspectDecoratedChunk(sourceCandidate));
+        CompletableFuture<ValidationResult> validation =
+                knownValidation != null
+                        ? CompletableFuture.completedFuture(knownValidation)
+                        : decorated
+                                .thenApplyAsync(
+                                        alreadyDecorated -> {
+                                            if (alreadyDecorated) return null;
+                                            ValidationResult sampled =
+                                                    terrainValidator.validate(
+                                                            level, located, layout);
+                                            return sampled.viable()
+                                                            && OreDepositFeature
+                                                                    .compactCandidateGenerates(
+                                                                            level, located)
+                                                    ? sampled
+                                                    : null;
+                                        },
+                                        Util.backgroundExecutor())
+                                .exceptionally(
+                                        failure -> {
+                                            OresAndDrillsMod.LOGGER.debug(
+                                                    "Could not plan ore-deposit candidate {} in {}",
+                                                    located.depositId(),
+                                                    level.dimension().location(),
+                                                    failure);
+                                            return null;
+                                        });
         pending = new PendingCandidate(located, distanceSquared, decorated, validation);
         if (decorated.isDone() && validation.isDone()) finishPending();
     }
 
     private CompletableFuture<Boolean> inspectDecoratedChunk(DepositCandidate candidate) {
         CollectFields visitor = new CollectFields(new FieldSelector(StringTag.TYPE, "Status"));
-        return level.getChunkSource().chunkScanner()
-                .scanChunk(new ChunkPos(candidate.sourceChunkX(), candidate.sourceChunkZ()), visitor)
-                .handle((ignored, failure) -> {
-                    if (failure != null) {
-                        OresAndDrillsMod.LOGGER.debug(
-                                "Could not inspect saved status of ore-deposit source chunk [{}, {}] in {}",
-                                candidate.sourceChunkX(), candidate.sourceChunkZ(),
-                                level.dimension().location(), failure
-                        );
-                        return false;
-                    }
-                    if (!(visitor.getResult() instanceof CompoundTag root)) return false;
-                    ChunkStatus status = ChunkStatus.byName(root.getString("Status"));
-                    return status != null && status.isOrAfter(ChunkStatus.FEATURES);
-                });
+        return level.getChunkSource()
+                .chunkScanner()
+                .scanChunk(
+                        new ChunkPos(candidate.sourceChunkX(), candidate.sourceChunkZ()), visitor)
+                .handle(
+                        (ignored, failure) -> {
+                            if (failure != null) {
+                                OresAndDrillsMod.LOGGER.debug(
+                                        "Could not inspect saved status of ore-deposit source chunk"
+                                                + " [{}, {}] in {}",
+                                        candidate.sourceChunkX(),
+                                        candidate.sourceChunkZ(),
+                                        level.dimension().location(),
+                                        failure);
+                                return false;
+                            }
+                            if (!(visitor.getResult() instanceof CompoundTag root)) return false;
+                            ChunkStatus status = ChunkStatus.byName(root.getString("Status"));
+                            return status != null && status.isOrAfter(ChunkStatus.FEATURES);
+                        });
     }
 
     private void finishPending() {
@@ -432,11 +527,12 @@ public final class IncrementalDepositSearch {
         pending = null;
         ValidationResult validation = completed.validation().join();
         if (completed.decorated().join() || validation == null || !validation.viable()) return;
-        LocatedDeposit located = new LocatedDeposit(
-                completed.candidate(), DepositLocateStatus.SEED_PREDICTED,
-                DepositLocator.floorDistance(completed.distanceSquared()),
-                validation.stoneCoverage()
-        );
+        LocatedDeposit located =
+                new LocatedDeposit(
+                        completed.candidate(),
+                        DepositLocateStatus.SEED_PREDICTED,
+                        DepositLocator.floorDistance(completed.distanceSquared()),
+                        validation.stoneCoverage());
         best = DepositLocator.nearer(origin, best, located);
     }
 
@@ -445,14 +541,13 @@ public final class IncrementalDepositSearch {
             long distanceSquared,
             CompletableFuture<Boolean> decorated,
             /** Completes with {@code null} when the candidate is rejected. */
-            CompletableFuture<ValidationResult> validation
-    ) {
-    }
+            CompletableFuture<ValidationResult> validation) {}
 
     private static final class CandidateWork {
         private final DepositCandidate sourceCandidate;
         private final DepositTerrainValidator.RelocationSearch relocation;
-        private final BiPredicate<BlockPos, net.minecraft.world.level.block.state.BlockState> predictedReplacement;
+        private final BiPredicate<BlockPos, net.minecraft.world.level.block.state.BlockState>
+                predictedReplacement;
         private final Predicate<BlockPos> writeBounds;
         private final boolean dataDriven;
         private DepositCandidate locatedCandidate;
@@ -462,10 +557,10 @@ public final class IncrementalDepositSearch {
         private CandidateWork(
                 DepositCandidate sourceCandidate,
                 DepositTerrainValidator.RelocationSearch relocation,
-                BiPredicate<BlockPos, net.minecraft.world.level.block.state.BlockState> predictedReplacement,
+                BiPredicate<BlockPos, net.minecraft.world.level.block.state.BlockState>
+                        predictedReplacement,
                 Predicate<BlockPos> writeBounds,
-                boolean dataDriven
-        ) {
+                boolean dataDriven) {
             this.sourceCandidate = sourceCandidate;
             this.relocation = relocation;
             this.predictedReplacement = predictedReplacement;

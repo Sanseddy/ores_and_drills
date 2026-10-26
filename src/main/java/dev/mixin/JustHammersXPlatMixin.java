@@ -13,9 +13,9 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Makes Just Hammers mine one unit from each ore deposit in its area instead of replacing the
- * whole deposit block with air. The posted BreakEvent is left untouched; only Just Hammers'
- * internal "may continue with vanilla destruction" result is changed after the virtual mining.
+ * Makes Just Hammers mine one unit from each ore deposit in its area instead of replacing the whole
+ * deposit block with air. The posted BreakEvent is left untouched; only Just Hammers' internal "may
+ * continue with vanilla destruction" result is changed after the virtual mining.
  */
 @Pseudo
 @Mixin(targets = "pro.mikey.justhammers.neoforge.XPlatNeoForge", remap = false)
@@ -25,15 +25,13 @@ public abstract class JustHammersXPlatMixin {
             at = @At("RETURN"),
             cancellable = true,
             require = 0,
-            remap = false
-    )
+            remap = false)
     private void oresAndDrills$mineOreDepositInArea(
             ServerLevel level,
             BlockPos pos,
             BlockState state,
             Player player,
-            CallbackInfoReturnable<Boolean> callbackInfo
-    ) {
+            CallbackInfoReturnable<Boolean> callbackInfo) {
         if (!callbackInfo.getReturnValueZ() || !state.is(ModBlocks.ORE_DEPOSIT.get())) {
             return;
         }

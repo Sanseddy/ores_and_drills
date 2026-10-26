@@ -1,16 +1,15 @@
 package dev.config;
 
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.tags.TagKey;
-import net.minecraft.world.level.block.Block;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.level.block.Block;
 
 /** Resolves per-world frequency/size/richness multipliers persisted in {@code level.dat}. */
 public final class OreOverrides {
@@ -18,22 +17,32 @@ public final class OreOverrides {
     private static volatile List<String> worldSource = List.of();
     private static volatile List<String> cachedSource = List.of();
     private static volatile List<Entry> cachedEntries = List.of();
-    /** Per-block memoization of {@link #lookupConfigured}, reset whenever the raw config list changes.
-     * Selection weighting re-resolves every ore's override on every deposit-attempt slot, so without this
-     * it re-scans the whole override list (tag matching included) per ore per attempt. */
-    private static volatile ConcurrentMap<Block, Optional<OreOverride>> blockCache = new ConcurrentHashMap<>();
+
+    /**
+     * Per-block memoization of {@link #lookupConfigured}, reset whenever the raw config list
+     * changes. Selection weighting re-resolves every ore's override on every deposit-attempt slot,
+     * so without this it re-scans the whole override list (tag matching included) per ore per
+     * attempt.
+     */
+    private static volatile ConcurrentMap<Block, Optional<OreOverride>> blockCache =
+            new ConcurrentHashMap<>();
+
     private static volatile int generation;
 
-    private OreOverrides() {
-    }
+    private OreOverrides() {}
 
-    /** Bumped whenever the raw override config list actually changes; lets other caches key off it. */
+    /**
+     * Bumped whenever the raw override config list actually changes; lets other caches key off it.
+     */
     public static int generation() {
         parsedEntries();
         return generation;
     }
 
-    /** Replaces the active world's raw entries; called while a world is created or its level.dat is read. */
+    /**
+     * Replaces the active world's raw entries; called while a world is created or its level.dat is
+     * read.
+     */
     public static void setWorldOverrides(List<String> entries) {
         List<String> sanitized = entries == null ? List.of() : List.copyOf(entries);
         if (sanitized.equals(worldSource)) {
@@ -76,7 +85,9 @@ public final class OreOverrides {
         OreOverride byTag = null;
         for (Entry entry : parsedEntries()) {
             if (entry.isTag()) {
-                if (byTag == null && block.defaultBlockState().is(TagKey.create(Registries.BLOCK, entry.tagOrBlockId()))) {
+                if (byTag == null
+                        && block.defaultBlockState()
+                                .is(TagKey.create(Registries.BLOCK, entry.tagOrBlockId()))) {
                     byTag = entry.override();
                 }
             } else if (entry.tagOrBlockId().toString().equals(idString)) {
@@ -143,13 +154,11 @@ public final class OreOverrides {
         }
     }
 
-    private record Entry(ResourceLocation tagOrBlockId, boolean isTag, OreOverride override) {
-    }
+    private record Entry(ResourceLocation tagOrBlockId, boolean isTag, OreOverride override) {}
 
     private static float clampMultiplier(float value) {
         return Float.isFinite(value) ? Math.max(0.1F, Math.min(6.0F, value)) : 1.0F;
     }
 
-    public record OreOverride(float frequency, float size, float richness) {
-    }
+    public record OreOverride(float frequency, float size, float richness) {}
 }

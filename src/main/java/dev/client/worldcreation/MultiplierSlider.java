@@ -1,29 +1,42 @@
 package dev.client.worldcreation;
 
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Tooltip;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 
 /**
- * A discrete multiplier slider. The vanilla [0,1] slider range is snapped onto fixed percentage steps,
- * with 100% placed at the visual center of the bar.
- * Pass a {@code null} label to show just the value (e.g. for a table row under an already-labeled column header).
+ * A discrete multiplier slider. The vanilla [0,1] slider range is snapped onto fixed percentage
+ * steps, with 100% placed at the visual center of the bar. Pass a {@code null} label to show just
+ * the value (e.g. for a table row under an already-labeled column header).
  */
 public final class MultiplierSlider extends AbstractSliderButton {
     private static final double[] MULTIPLIERS = {
-            0.17D, 0.25D, 0.33D, 0.50D, 0.75D, 1.00D,
-            1.33D, 1.50D, 2.00D, 3.00D, 4.00D, 6.00D
+        0.17D, 0.25D, 0.33D, 0.50D, 0.75D, 1.00D,
+        1.33D, 1.50D, 2.00D, 3.00D, 4.00D, 6.00D
     };
     private static final int CENTER_INDEX = 5;
 
-    @Nullable
-    private final Component label;
+    @Nullable private final Component label;
 
-    public MultiplierSlider(int x, int y, int width, int height, @Nullable Component label, double min, double max, double initial) {
-        super(x, y, width, height, Component.empty(), positionForIndex(closestMultiplierIndex(initial)));
+    public MultiplierSlider(
+            int x,
+            int y,
+            int width,
+            int height,
+            @Nullable Component label,
+            double min,
+            double max,
+            double initial) {
+        super(
+                x,
+                y,
+                width,
+                height,
+                Component.empty(),
+                positionForIndex(closestMultiplierIndex(initial)));
         this.label = label;
         updateMessage();
     }
@@ -70,17 +83,17 @@ public final class MultiplierSlider extends AbstractSliderButton {
 
     private static double positionForIndex(int index) {
         if (index <= CENTER_INDEX) {
-            return index / (double)(CENTER_INDEX * 2);
+            return index / (double) (CENTER_INDEX * 2);
         }
         return 0.5D + (index - CENTER_INDEX) * (0.5D / (MULTIPLIERS.length - CENTER_INDEX - 1));
     }
 
     private static String percentText(double multiplier) {
-        return Integer.toString((int)Math.round(multiplier * 100.0D)) + "%";
+        return Integer.toString((int) Math.round(multiplier * 100.0D)) + "%";
     }
 
     private void setValueFromMouse(double mouseX) {
-        double position = (mouseX - getX()) / (double)Math.max(1, width);
+        double position = (mouseX - getX()) / (double) Math.max(1, width);
         int index = closestPositionIndex(Math.max(0.0D, Math.min(1.0D, position)));
         this.value = positionForIndex(index);
         updateMessage();
@@ -101,7 +114,7 @@ public final class MultiplierSlider extends AbstractSliderButton {
         int centerY = y + height / 2;
         int knobWidth = 6;
         int knobHeight = 13;
-        int knobCenterX = x + Math.round((float)(value * width));
+        int knobCenterX = x + Math.round((float) (value * width));
         int knobX = Math.max(x, Math.min(x + width - knobWidth, knobCenterX - knobWidth / 2));
         int knobY = centerY - knobHeight / 2;
         int trackColor = isHoveredOrFocused() ? 0xFFE0E0E0 : 0xFFB0B0B0;
@@ -130,7 +143,8 @@ public final class MultiplierSlider extends AbstractSliderButton {
     }
 
     private void moveByStep(int delta) {
-        int index = Math.max(0, Math.min(MULTIPLIERS.length - 1, closestPositionIndex(value) + delta));
+        int index =
+                Math.max(0, Math.min(MULTIPLIERS.length - 1, closestPositionIndex(value) + delta));
         this.value = positionForIndex(index);
         updateMessage();
         applyValue();

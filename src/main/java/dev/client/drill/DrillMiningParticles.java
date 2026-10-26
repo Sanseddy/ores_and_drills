@@ -14,24 +14,30 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Debris of the mined ore thrown out in a ring around the bit of a working drill. The bit meets the ground under
- * the machine's body, so the chunks are launched outward and upward hard enough to fly out from under it.
+ * Debris of the mined ore thrown out in a ring around the bit of a working drill. The bit meets the
+ * ground under the machine's body, so the chunks are launched outward and upward hard enough to fly
+ * out from under it.
  *
- * <p>Particles are created through the particle engine directly: {@code Level.addParticle} randomises the
- * velocity of block particles so heavily that they only hop in place, hidden under the drill.
+ * <p>Particles are created through the particle engine directly: {@code Level.addParticle}
+ * randomises the velocity of block particles so heavily that they only hop in place, hidden under
+ * the drill.
  */
 public final class DrillMiningParticles {
     private static final double MAX_DISTANCE_SQR = 32.0D * 32.0D;
     private static final double MIN_OUTWARD_SPEED = 0.08D;
     private static final double MAX_OUTWARD_SPEED = 0.2D;
-    /** Low hops: with block-particle gravity the debris rises about 0.1–0.35 blocks before falling back. */
+
+    /**
+     * Low hops: with block-particle gravity the debris rises about 0.1–0.35 blocks before falling
+     * back.
+     */
     private static final double MIN_UPWARD_SPEED = 0.08D;
+
     private static final double MAX_UPWARD_SPEED = 0.17D;
     private static final int MIN_LIFETIME = 18;
     private static final int MAX_LIFETIME = 30;
 
-    private DrillMiningParticles() {
-    }
+    private DrillMiningParticles() {}
 
     public static void tick(AbstractDrillBlockEntity drill) {
         Block ore = drill.miningParticleBlock();
@@ -46,7 +52,8 @@ public final class DrillMiningParticles {
 
         Minecraft minecraft = Minecraft.getInstance();
         Vec3 center = drill.bitGroundCenter();
-        if (minecraft.gameRenderer.getMainCamera().getPosition().distanceToSqr(center) > MAX_DISTANCE_SQR) {
+        if (minecraft.gameRenderer.getMainCamera().getPosition().distanceToSqr(center)
+                > MAX_DISTANCE_SQR) {
             return;
         }
 
@@ -61,8 +68,8 @@ public final class DrillMiningParticles {
     }
 
     /**
-     * Like the debris of a block being broken, which vanilla shows at every particle setting, the drill's debris
-     * is only thinned out by lower settings instead of disappearing on "Minimal".
+     * Like the debris of a block being broken, which vanilla shows at every particle setting, the
+     * drill's debris is only thinned out by lower settings instead of disappearing on "Minimal".
      */
     private static double particleShare(Minecraft minecraft) {
         ParticleStatus status = minecraft.options.particles().get();
@@ -73,18 +80,25 @@ public final class DrillMiningParticles {
         };
     }
 
-    private static void spawn(Minecraft minecraft, BlockParticleOption option, Vec3 center, double radius, RandomSource random) {
+    private static void spawn(
+            Minecraft minecraft,
+            BlockParticleOption option,
+            Vec3 center,
+            double radius,
+            RandomSource random) {
         float angle = random.nextFloat() * Mth.TWO_PI;
         double dirX = Mth.cos(angle);
         double dirZ = Mth.sin(angle);
         double distance = radius * (0.9D + random.nextDouble() * 0.2D);
-        Particle particle = minecraft.particleEngine.createParticle(
-                option,
-                center.x + dirX * distance,
-                center.y + 0.02D + random.nextDouble() * 0.08D,
-                center.z + dirZ * distance,
-                0.0D, 0.0D, 0.0D
-        );
+        Particle particle =
+                minecraft.particleEngine.createParticle(
+                        option,
+                        center.x + dirX * distance,
+                        center.y + 0.02D + random.nextDouble() * 0.08D,
+                        center.z + dirZ * distance,
+                        0.0D,
+                        0.0D,
+                        0.0D);
         if (particle == null) {
             return;
         }
@@ -93,8 +107,7 @@ public final class DrillMiningParticles {
         particle.setParticleSpeed(
                 dirX * outward,
                 Mth.lerp(random.nextDouble(), MIN_UPWARD_SPEED, MAX_UPWARD_SPEED),
-                dirZ * outward
-        );
+                dirZ * outward);
         particle.setLifetime(Mth.nextInt(random, MIN_LIFETIME, MAX_LIFETIME));
         particle.scale(1.3F);
     }

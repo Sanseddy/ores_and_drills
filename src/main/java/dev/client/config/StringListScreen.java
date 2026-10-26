@@ -1,5 +1,9 @@
 package dev.client.config;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -10,12 +14,10 @@ import net.minecraft.client.gui.narration.NarratableEntry;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Consumer;
-import java.util.function.Predicate;
-
-/** Edits a list of strings, one text field per entry; "Done" stays disabled while an entry is invalid. */
+/**
+ * Edits a list of strings, one text field per entry; "Done" stays disabled while an entry is
+ * invalid.
+ */
 final class StringListScreen extends Screen {
     private static final int MARGIN = 20;
     private static final int ROW_HEIGHT = 24;
@@ -32,8 +34,13 @@ final class StringListScreen extends Screen {
     private int pendingRemoval = -1;
     private boolean pendingAdd;
 
-    StringListScreen(Screen parent, Component title, Component hint, List<String> values,
-                     Predicate<String> valid, Consumer<List<String>> onDone) {
+    StringListScreen(
+            Screen parent,
+            Component title,
+            Component hint,
+            List<String> values,
+            Predicate<String> valid,
+            Consumer<List<String>> onDone) {
         super(title);
         this.parent = parent;
         this.hint = hint;
@@ -45,21 +52,47 @@ final class StringListScreen extends Screen {
     @Override
     protected void init() {
         int listY = MARGIN + 32;
-        list = addRenderableWidget(new EntryList(this.minecraft, this.width, Math.max(48, this.height - listY - 36), listY));
+        list =
+                addRenderableWidget(
+                        new EntryList(
+                                this.minecraft,
+                                this.width,
+                                Math.max(48, this.height - listY - 36),
+                                listY));
         int buttonY = this.height - 28;
-        addRenderableWidget(Button.builder(Component.translatable("gui.ores_and_drills.settings.list.add"),
-                button -> pendingAdd = true).bounds(this.width / 2 - 155, buttonY, 100, 20).build());
-        done = addRenderableWidget(Button.builder(Component.translatable("gui.ores_and_drills.ore_settings.done"), button -> {
-            onDone.accept(values.stream().map(String::trim).filter(value -> !value.isEmpty()).toList());
-            this.minecraft.setScreen(parent);
-        }).bounds(this.width / 2 - 50, buttonY, 100, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("gui.ores_and_drills.ore_settings.cancel"),
-                button -> onClose()).bounds(this.width / 2 + 55, buttonY, 100, 20).build());
+        addRenderableWidget(
+                Button.builder(
+                                Component.translatable("gui.ores_and_drills.settings.list.add"),
+                                button -> pendingAdd = true)
+                        .bounds(this.width / 2 - 155, buttonY, 100, 20)
+                        .build());
+        done =
+                addRenderableWidget(
+                        Button.builder(
+                                        Component.translatable(
+                                                "gui.ores_and_drills.ore_settings.done"),
+                                        button -> {
+                                            onDone.accept(
+                                                    values.stream()
+                                                            .map(String::trim)
+                                                            .filter(value -> !value.isEmpty())
+                                                            .toList());
+                                            this.minecraft.setScreen(parent);
+                                        })
+                                .bounds(this.width / 2 - 50, buttonY, 100, 20)
+                                .build());
+        addRenderableWidget(
+                Button.builder(
+                                Component.translatable("gui.ores_and_drills.ore_settings.cancel"),
+                                button -> onClose())
+                        .bounds(this.width / 2 + 55, buttonY, 100, 20)
+                        .build());
     }
 
     @Override
     public void tick() {
-        // Rows change on the next tick: the click that asked for it is still being dispatched to a row.
+        // Rows change on the next tick: the click that asked for it is still being dispatched to a
+        // row.
         if (pendingRemoval >= 0 && pendingRemoval < values.size()) {
             values.remove(pendingRemoval);
             list.refresh();
@@ -71,7 +104,10 @@ final class StringListScreen extends Screen {
             list.refresh();
             list.setScrollAmount(list.getMaxScroll());
         }
-        done.active = values.stream().map(String::trim).allMatch(value -> value.isEmpty() || valid.test(value));
+        done.active =
+                values.stream()
+                        .map(String::trim)
+                        .allMatch(value -> value.isEmpty() || valid.test(value));
     }
 
     @Override
@@ -109,20 +145,44 @@ final class StringListScreen extends Screen {
             private final Button remove;
 
             Row(int index) {
-                field = new EditBox(Minecraft.getInstance().font, 0, 0, getRowWidth() - 24, 20, Component.empty());
+                field =
+                        new EditBox(
+                                Minecraft.getInstance().font,
+                                0,
+                                0,
+                                getRowWidth() - 24,
+                                20,
+                                Component.empty());
                 field.setMaxLength(256);
                 field.setValue(values.get(index));
-                field.setResponder(text -> {
-                    values.set(index, text);
-                    field.setTextColor(text.isBlank() || valid.test(text.trim()) ? VALID_COLOR : INVALID_COLOR);
-                });
-                field.setTextColor(valid.test(values.get(index).trim()) ? VALID_COLOR : INVALID_COLOR);
-                remove = Button.builder(Component.literal("✕"), button -> pendingRemoval = index).size(20, 20).build();
+                field.setResponder(
+                        text -> {
+                            values.set(index, text);
+                            field.setTextColor(
+                                    text.isBlank() || valid.test(text.trim())
+                                            ? VALID_COLOR
+                                            : INVALID_COLOR);
+                        });
+                field.setTextColor(
+                        valid.test(values.get(index).trim()) ? VALID_COLOR : INVALID_COLOR);
+                remove =
+                        Button.builder(Component.literal("✕"), button -> pendingRemoval = index)
+                                .size(20, 20)
+                                .build();
             }
 
             @Override
-            public void render(GuiGraphics guiGraphics, int rowIndex, int top, int left, int width, int height,
-                               int mouseX, int mouseY, boolean hovering, float partialTick) {
+            public void render(
+                    GuiGraphics guiGraphics,
+                    int rowIndex,
+                    int top,
+                    int left,
+                    int width,
+                    int height,
+                    int mouseX,
+                    int mouseY,
+                    boolean hovering,
+                    float partialTick) {
                 field.setPosition(left, top + 1);
                 remove.setPosition(left + width - 20, top + 1);
                 field.render(guiGraphics, mouseX, mouseY, partialTick);

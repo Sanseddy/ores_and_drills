@@ -6,13 +6,6 @@ import dev.world.level.levelgen.DepositTerrainValidator;
 import dev.world.level.levelgen.IncrementalDepositSearch;
 import dev.world.level.levelgen.LocatedDeposit;
 import dev.world.level.levelgen.OreDepositTier;
-import net.minecraft.core.BlockPos;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerLevel;
-import net.neoforged.neoforge.event.server.ServerStoppedEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
-
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
@@ -20,6 +13,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 /** Tick-budgeted scheduler for ore-deposit locate requests. */
 public final class OreDepositLocateService {
@@ -31,8 +30,7 @@ public final class OreDepositLocateService {
     private static final Map<MinecraftServer, ServerState> SERVERS = new IdentityHashMap<>();
     private static long configurationEpoch;
 
-    private OreDepositLocateService() {
-    }
+    private OreDepositLocateService() {}
 
     public static synchronized SubmitResult submit(
             ServerLevel level,
@@ -40,14 +38,20 @@ public final class OreDepositLocateService {
             ResourceLocation requestedOre,
             List<OreDepositTier> tiers,
             int searchRadius,
-            Completion completion
-    ) {
-        ServerState state = SERVERS.computeIfAbsent(level.getServer(), ignored -> new ServerState());
-        QueryKey key = new QueryKey(
-                level.dimension().location(), level.getSeed(), origin.getX(), origin.getZ(), requestedOre,
-                List.copyOf(tiers), searchRadius, configurationEpoch,
-                ConfirmedDepositIndex.get(level).revision()
-        );
+            Completion completion) {
+        ServerState state =
+                SERVERS.computeIfAbsent(level.getServer(), ignored -> new ServerState());
+        QueryKey key =
+                new QueryKey(
+                        level.dimension().location(),
+                        level.getSeed(),
+                        origin.getX(),
+                        origin.getZ(),
+                        requestedOre,
+                        List.copyOf(tiers),
+                        searchRadius,
+                        configurationEpoch,
+                        ConfirmedDepositIndex.get(level).revision());
         LocatedDeposit cached = state.completed.get(key);
         if (cached != null) {
             completion.complete(Optional.of(cached), null, new Metrics(0, 0, 0));
@@ -61,7 +65,8 @@ public final class OreDepositLocateService {
         }
         if (state.active.size() >= MAX_ACTIVE_SEARCHES) return SubmitResult.BUSY;
 
-        LocateJob job = new LocateJob(key, level, origin, requestedOre, tiers, searchRadius, completion);
+        LocateJob job =
+                new LocateJob(key, level, origin, requestedOre, tiers, searchRadius, completion);
         state.active.put(key, job);
         state.queue.addLast(job);
         return SubmitResult.STARTED;
@@ -113,23 +118,26 @@ public final class OreDepositLocateService {
         void complete(Optional<LocatedDeposit> result, Throwable failure, Metrics metrics);
     }
 
-    public record Metrics(long elapsedMillis, long cellsChecked, long candidatesChecked) {
-    }
+    public record Metrics(long elapsedMillis, long cellsChecked, long candidatesChecked) {}
 
     private static final class ServerState {
         private final Map<QueryKey, LocateJob> active = new LinkedHashMap<>();
         private final ArrayDeque<LocateJob> queue = new ArrayDeque<>();
-        private final Map<QueryKey, LocatedDeposit> completed = new LinkedHashMap<>(32, 0.75F, true) {
-            @Override
-            protected boolean removeEldestEntry(Map.Entry<QueryKey, LocatedDeposit> eldest) {
-                return size() > MAX_CACHED_CONFIRMED_RESULTS;
-            }
-        };
+        private final Map<QueryKey, LocatedDeposit> completed =
+                new LinkedHashMap<>(32, 0.75F, true) {
+                    @Override
+                    protected boolean removeEldestEntry(
+                            Map.Entry<QueryKey, LocatedDeposit> eldest) {
+                        return size() > MAX_CACHED_CONFIRMED_RESULTS;
+                    }
+                };
 
         private void cancel(boolean notifyCompletions) {
-            IllegalStateException cancellation = notifyCompletions
-                    ? new IllegalStateException("Locate search cancelled after configuration reload")
-                    : null;
+            IllegalStateException cancellation =
+                    notifyCompletions
+                            ? new IllegalStateException(
+                                    "Locate search cancelled after configuration reload")
+                            : null;
             for (LocateJob job : queue) {
                 job.done = true;
                 if (notifyCompletions) {
@@ -163,13 +171,21 @@ public final class OreDepositLocateService {
                 ResourceLocation requestedOre,
                 List<OreDepositTier> tiers,
                 int searchRadius,
-                Completion completion
-        ) {
+                Completion completion) {
             this.key = key;
             DepositTerrainValidator validator = new DepositTerrainValidator();
-            this.searches = tiers.stream().map(tier -> new IncrementalDepositSearch(
-                    validator, level, origin, requestedOre, tier, searchRadius
-            )).toList();
+            this.searches =
+                    tiers.stream()
+                            .map(
+                                    tier ->
+                                            new IncrementalDepositSearch(
+                                                    validator,
+                                                    level,
+                                                    origin,
+                                                    requestedOre,
+                                                    tier,
+                                                    searchRadius))
+                            .toList();
             this.unfinishedSearches = searches.size();
             completions.add(completion);
         }
@@ -205,16 +221,17 @@ public final class OreDepositLocateService {
 
         private void notifyCompletions() {
             long cells = searches.stream().mapToLong(IncrementalDepositSearch::cellsChecked).sum();
-            long candidates = searches.stream().mapToLong(IncrementalDepositSearch::candidatesChecked).sum();
-            Metrics metrics = new Metrics(
-                    (System.nanoTime() - startedNanos) / 1_000_000L, cells, candidates
-            );
+            long candidates =
+                    searches.stream().mapToLong(IncrementalDepositSearch::candidatesChecked).sum();
+            Metrics metrics =
+                    new Metrics((System.nanoTime() - startedNanos) / 1_000_000L, cells, candidates);
             Optional<LocatedDeposit> result = Optional.ofNullable(best);
             for (Completion completion : List.copyOf(completions)) {
                 try {
                     completion.complete(result, failure, metrics);
                 } catch (RuntimeException callbackFailure) {
-                    OresAndDrillsMod.LOGGER.debug("Could not deliver ore-deposit locate result", callbackFailure);
+                    OresAndDrillsMod.LOGGER.debug(
+                            "Could not deliver ore-deposit locate result", callbackFailure);
                 }
             }
             completions.clear();
@@ -230,7 +247,5 @@ public final class OreDepositLocateService {
             List<OreDepositTier> tiers,
             int radius,
             long configEpoch,
-            long depositRevision
-    ) {
-    }
+            long depositRevision) {}
 }

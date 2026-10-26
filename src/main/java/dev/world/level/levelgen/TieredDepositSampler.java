@@ -1,13 +1,12 @@
 package dev.world.level.levelgen;
 
-import net.minecraft.core.BlockPos;
-import net.minecraft.util.Mth;
-import net.minecraft.util.RandomSource;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import net.minecraft.core.BlockPos;
+import net.minecraft.util.Mth;
+import net.minecraft.util.RandomSource;
 
 /** Volume sampler whose probe distribution and cost are selected before any terrain lookup. */
 public final class TieredDepositSampler implements DepositSampler {
@@ -15,21 +14,34 @@ public final class TieredDepositSampler implements DepositSampler {
 
     @Override
     public List<SamplePoint> createSamples(DepositCandidate candidate, DepositTierLayout layout) {
-        int sampleCount = Mth.clamp(
-                layout.minimumSamples() + (int) Math.ceil(Math.cbrt(candidate.expectedBlocks()) * 2.0D),
-                layout.minimumSamples(),
-                layout.maximumSamples()
-        );
+        int sampleCount =
+                Mth.clamp(
+                        layout.minimumSamples()
+                                + (int) Math.ceil(Math.cbrt(candidate.expectedBlocks()) * 2.0D),
+                        layout.minimumSamples(),
+                        layout.maximumSamples());
         Map<BlockPos, Integer> points = new LinkedHashMap<>(sampleCount * 2);
         BlockPos center = candidate.center();
         if (candidate.tier().index() >= OreDepositFeature.TIER_MEDIUM) {
-            CompactDepositGeometry geometry = new CompactDepositGeometry(candidate.shapeSeed(),
-                    candidate.tier() == OreDepositTier.LARGE, candidate.geometrySize());
-            List<CompactDepositGeometry.Cell> body = CompactDepositGeometry.selectOreCells(geometry.cells(),
-                    CompactDepositGeometry.oreBlockBudget(CompactDepositGeometry.totalOre(candidate.shapeSeed(),
-                            candidate.tier() == OreDepositTier.LARGE, 0, 1)),center.getX(),center.getZ());
-            // LARGE validation requires stone at the exact center. The strided body walk starts at a grid corner
-            // and reaches the center only by chance, which rejected nearly every LARGE candidate in /locate.
+            CompactDepositGeometry geometry =
+                    new CompactDepositGeometry(
+                            candidate.shapeSeed(),
+                            candidate.tier() == OreDepositTier.LARGE,
+                            candidate.geometrySize());
+            List<CompactDepositGeometry.Cell> body =
+                    CompactDepositGeometry.selectOreCells(
+                            geometry.cells(),
+                            CompactDepositGeometry.oreBlockBudget(
+                                    CompactDepositGeometry.totalOre(
+                                            candidate.shapeSeed(),
+                                            candidate.tier() == OreDepositTier.LARGE,
+                                            0,
+                                            1)),
+                            center.getX(),
+                            center.getZ());
+            // LARGE validation requires stone at the exact center. The strided body walk starts at
+            // a grid corner and reaches the center only by chance, which would reject nearly every
+            // LARGE candidate in /locate.
             add(points, candidate, center);
             int stride = Math.max(1, body.size() / sampleCount);
             for (int i = 0; i < body.size() && points.size() < sampleCount; i += stride) {
@@ -42,12 +54,13 @@ public final class TieredDepositSampler implements DepositSampler {
         }
         add(points, candidate, center);
 
-        double[] shells = switch (candidate.tier()) {
-            case TINY -> new double[]{0.45D, 0.80D};
-            case SMALL -> new double[]{0.25D, 0.55D, 0.85D};
-            case MEDIUM -> new double[]{0.20D, 0.45D, 0.70D, 0.90D};
-            case LARGE -> new double[]{0.15D, 0.35D, 0.55D, 0.75D, 0.92D};
-        };
+        double[] shells =
+                switch (candidate.tier()) {
+                    case TINY -> new double[] {0.45D, 0.80D};
+                    case SMALL -> new double[] {0.25D, 0.55D, 0.85D};
+                    case MEDIUM -> new double[] {0.20D, 0.45D, 0.70D, 0.90D};
+                    case LARGE -> new double[] {0.15D, 0.35D, 0.55D, 0.75D, 0.92D};
+                };
         for (double shell : shells) {
             int dx = Math.max(1, (int) Math.floor(candidate.radiusX() * shell));
             int dz = Math.max(1, (int) Math.floor(candidate.radiusZ() * shell));
@@ -61,9 +74,12 @@ public final class TieredDepositSampler implements DepositSampler {
             add(points, candidate, center.offset(0, -dy, 0));
         }
 
-        RandomSource random = RandomSource.create(
-                candidate.shapeSeed() ^ candidate.depositId() ^ DepositLayouts.tierSalt(candidate.tier()) ^ SAMPLE_SALT
-        );
+        RandomSource random =
+                RandomSource.create(
+                        candidate.shapeSeed()
+                                ^ candidate.depositId()
+                                ^ DepositLayouts.tierSalt(candidate.tier())
+                                ^ SAMPLE_SALT);
         int attempts = 0;
         int maximumAttempts = sampleCount * 48;
         while (points.size() < sampleCount && attempts++ < maximumAttempts) {
@@ -77,8 +93,9 @@ public final class TieredDepositSampler implements DepositSampler {
             int dy = (int) Math.round(y * candidate.verticalRadius());
             int dz = (int) Math.round(z * candidate.radiusZ());
             if (square((double) dx / candidate.radiusX())
-                    + square((double) dy / candidate.verticalRadius())
-                    + square((double) dz / candidate.radiusZ()) > 1.0D) {
+                            + square((double) dy / candidate.verticalRadius())
+                            + square((double) dz / candidate.radiusZ())
+                    > 1.0D) {
                 continue;
             }
             add(points, candidate, center.offset(dx, dy, dz));
@@ -90,12 +107,13 @@ public final class TieredDepositSampler implements DepositSampler {
     }
 
     public static int minimumPlacedBlocks(DepositCandidate candidate) {
-        double minimumRatio = switch (candidate.tier()) {
-            case TINY -> 0.30D;
-            case SMALL -> 0.34D;
-            case MEDIUM -> 0.38D;
-            case LARGE -> 0.42D;
-        };
+        double minimumRatio =
+                switch (candidate.tier()) {
+                    case TINY -> 0.30D;
+                    case SMALL -> 0.34D;
+                    case MEDIUM -> 0.38D;
+                    case LARGE -> 0.42D;
+                };
         return Math.max(1, (int) Math.ceil(candidate.expectedBlocks() * minimumRatio));
     }
 
@@ -116,7 +134,8 @@ public final class TieredDepositSampler implements DepositSampler {
         };
     }
 
-    private static void add(Map<BlockPos, Integer> points, DepositCandidate candidate, BlockPos pos) {
+    private static void add(
+            Map<BlockPos, Integer> points, DepositCandidate candidate, BlockPos pos) {
         points.putIfAbsent(pos.immutable(), section(candidate, pos));
     }
 
@@ -131,7 +150,8 @@ public final class TieredDepositSampler implements DepositSampler {
         } else {
             side = z >= 0.0D ? 1 : 3;
         }
-        double depth = (double) (candidate.center().getY() - pos.getY()) / candidate.verticalRadius();
+        double depth =
+                (double) (candidate.center().getY() - pos.getY()) / candidate.verticalRadius();
         int vertical = depth < 0.34D ? 0 : depth < 0.68D ? 1 : 2;
         return vertical * 16 + shell * 4 + side;
     }

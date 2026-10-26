@@ -16,8 +16,9 @@ public abstract class CanyonWorldCarverMixin {
     private void oresAndDrills$slightlyReduceCanyonCarverChance(
             CanyonCarverConfiguration config,
             RandomSource random,
-            CallbackInfoReturnable<Boolean> callbackInfo
-    ) {
-        callbackInfo.setReturnValue(random.nextFloat() <= config.probability * FACTORY_EXPANSION_CARVER_CHANCE_MULTIPLIER);
+            CallbackInfoReturnable<Boolean> callbackInfo) {
+        callbackInfo.setReturnValue(
+                random.nextFloat()
+                        <= config.probability * FACTORY_EXPANSION_CARVER_CHANCE_MULTIPLIER);
     }
 }

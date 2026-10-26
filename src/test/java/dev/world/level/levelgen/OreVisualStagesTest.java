@@ -1,9 +1,9 @@
 package dev.world.level.levelgen;
 
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.junit.jupiter.api.Test;
 
 class OreVisualStagesTest {
     @Test
@@ -36,7 +36,9 @@ class OreVisualStagesTest {
     void stageFollowsTheAbsoluteRemainingAmount() {
         assertEquals(0, OreVisualStages.stageFor(0));
         assertEquals(0, OreVisualStages.stageFor(1));
-        assertEquals(OreVisualStages.COUNT - 1, OreVisualStages.stageFor(OreDepositData.MAXIMUM_ORE_AMOUNT));
+        assertEquals(
+                OreVisualStages.COUNT - 1,
+                OreVisualStages.stageFor(OreDepositData.MAXIMUM_ORE_AMOUNT));
         assertEquals(OreVisualStages.COUNT - 1, OreVisualStages.stageFor(Integer.MAX_VALUE));
         int previous = 0;
         for (int ore = 1; ore <= OreDepositData.MAXIMUM_ORE_AMOUNT; ore++) {

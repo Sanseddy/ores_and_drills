@@ -1,6 +1,9 @@
 package dev.compat;
 
 import dev.registry.ModRecipes;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.BlockItem;
@@ -11,26 +14,28 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.common.Tags;
 
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.Set;
-
 /**
- * Ores as recipe viewers see them: the c:ores tags plus every block a drill recipe mines. JEI/EMI tag
- * pages for these blocks list dozens of generic tags and bury the drill recipe, so both integrations
- * hide tag recipes built from this set.
+ * Ores as recipe viewers see them: the c:ores tags plus every block a drill recipe mines. JEI/EMI
+ * tag pages for these blocks list dozens of generic tags and bury the drill recipe, so both
+ * integrations hide tag recipes built from this set.
  */
 public final class RecipeViewerOres {
     private RecipeViewerOres() {}
 
     public static Set<Block> blocks(RecipeManager recipes) {
         Set<Block> ores = new LinkedHashSet<>();
-        BuiltInRegistries.BLOCK.getTagOrEmpty(Tags.Blocks.ORES).forEach(holder -> ores.add(holder.value()));
-        BuiltInRegistries.ITEM.getTagOrEmpty(Tags.Items.ORES).forEach(holder -> {
-            if (holder.value() instanceof BlockItem item) ores.add(item.getBlock());
-        });
-        recipes.getAllRecipesFor(ModRecipes.DRILL_MINING.get()).forEach(holder ->
-                holder.value().input().forEach(block -> ores.add(block.value())));
+        BuiltInRegistries.BLOCK
+                .getTagOrEmpty(Tags.Blocks.ORES)
+                .forEach(holder -> ores.add(holder.value()));
+        BuiltInRegistries.ITEM
+                .getTagOrEmpty(Tags.Items.ORES)
+                .forEach(
+                        holder -> {
+                            if (holder.value() instanceof BlockItem item) ores.add(item.getBlock());
+                        });
+        recipes.getAllRecipesFor(ModRecipes.DRILL_MINING.get())
+                .forEach(
+                        holder -> holder.value().input().forEach(block -> ores.add(block.value())));
         ores.remove(Blocks.AIR);
         return ores;
     }

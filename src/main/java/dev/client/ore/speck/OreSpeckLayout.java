@@ -8,22 +8,25 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * Re-places the specks detected on an original ore texture onto a fresh 16x16 grid and derives every fill
- * state from that one plan, so states are nested: a poorer state is always a subset of a richer one. That
- * lets a faint trace of the initial state sit under the current state without contradicting it. Several
- * plans with different seeds give different arrangements of the same specks.
- * <p>
- * A layout uses the resolution of its analysis; all areas, gaps and noise cells below are given for 16x16 and
- * scale with it, so a 32x32 resource pack gets a 28x28 inner area, two-pixel gaps and so on.
+ * Re-places the specks detected on an original ore texture onto a fresh 16x16 grid and derives
+ * every fill state from that one plan, so states are nested: a poorer state is always a subset of a
+ * richer one. That lets a faint trace of the initial state sit under the current state without
+ * contradicting it. Several plans with different seeds give different arrangements of the same
+ * specks.
+ *
+ * <p>A layout uses the resolution of its analysis; all areas, gaps and noise cells below are given
+ * for 16x16 and scale with it, so a 32x32 resource pack gets a 28x28 inner area, two-pixel gaps and
+ * so on.
+ *
  * <ul>
- *     <li>Normal ({@code fill == 1}): every original speck exactly once, real shapes and colors, placed at
- *     random inside the inner 14x14 area, largest type first.</li>
- *     <li>Depleted ({@code fill < 1}): whole specks disappear in a fixed random order, type 1 specks first, so
- *     the last ones left are always at least type 2. When that would be
- *     too coarse (too few specks, or one speck holding most of the ore) a smooth noise mask instead clips
- *     the specks pixel by pixel, so fragments inside the noise area get cut partially or completely.</li>
- *     <li>Overfilled ({@code fill > 1}): extra specks, mostly of types 1-2, type 3 under stronger overfill
- *     and type 4 only rarely, may use the whole 16x16 area.</li>
+ *   <li>Normal ({@code fill == 1}): every original speck exactly once, real shapes and colors,
+ *       placed at random inside the inner 14x14 area, largest type first.
+ *   <li>Depleted ({@code fill < 1}): whole specks disappear in a fixed random order, type 1 specks
+ *       first, so the last ones left are always at least type 2. When that would be too coarse (too
+ *       few specks, or one speck holding most of the ore) a smooth noise mask instead clips the
+ *       specks pixel by pixel, so fragments inside the noise area get cut partially or completely.
+ *   <li>Overfilled ({@code fill > 1}): extra specks, mostly of types 1-2, type 3 under stronger
+ *       overfill and type 4 only rarely, may use the whole 16x16 area.
  * </ul>
  */
 public final class OreSpeckLayout {
@@ -31,19 +34,26 @@ public final class OreSpeckLayout {
     static final int NOISE_MODE_MAXIMUM_SPECKS = 3;
     static final double NOISE_MODE_DOMINANT_SHARE = 0.45D;
     private static final int BEST_CANDIDATE_SAMPLES = 3;
+
     /** Noise cell side on the 16x16 grid. */
     private static final int NOISE_CELL = 4;
+
     private static final OreSpeckType[] PLACEMENT_ORDER = {
-            OreSpeckType.TYPE_4, OreSpeckType.TYPE_3, OreSpeckType.TYPE_2, OreSpeckType.TYPE_1
+        OreSpeckType.TYPE_4, OreSpeckType.TYPE_3, OreSpeckType.TYPE_2, OreSpeckType.TYPE_1
     };
 
     private final int size;
     private final int baseCount;
     private final List<Placement> normal;
-    /** {@code keepRank[i]} is how many specks must remain before {@code normal[i]} becomes visible. */
+
+    /**
+     * {@code keepRank[i]} is how many specks must remain before {@code normal[i]} becomes visible.
+     */
     private final int[] keepRank;
+
     private final List<Placement> extras;
     private final boolean noiseMode;
+
     /** Pixel indices of the normal state, most noise-resistant first (noise mode only). */
     private final int[] noiseOrder;
 
@@ -54,8 +64,7 @@ public final class OreSpeckLayout {
             int[] keepRank,
             List<Placement> extras,
             boolean noiseMode,
-            int[] noiseOrder
-    ) {
+            int[] noiseOrder) {
         this.size = size;
         this.baseCount = baseCount;
         this.normal = List.copyOf(normal);
@@ -66,7 +75,8 @@ public final class OreSpeckLayout {
     }
 
     /**
-     * @param maximumFill the richest fill factor that will be requested; bounds how many extras are planned
+     * @param maximumFill the richest fill factor that will be requested; bounds how many extras are
+     *     planned
      */
     public static OreSpeckLayout plan(OreSpeckAnalysis analysis, long seed, double maximumFill) {
         Random random = new Random(seed);
@@ -86,8 +96,8 @@ public final class OreSpeckLayout {
             }
         }
 
-        // Visible specks (type 2 and larger) stay longest; 1-2 pixel specks are only an addition on top of them,
-        // so a nearly empty block never shows a couple of lone pixels.
+        // Visible specks (type 2 and larger) stay longest; 1-2 pixel specks are only an addition on
+        // top of them, so a nearly empty block never shows a couple of lone pixels.
         List<Integer> visible = new ArrayList<>();
         List<Integer> tiny = new ArrayList<>();
         for (int index = 0; index < normal.size(); index++) {
@@ -120,7 +130,10 @@ public final class OreSpeckLayout {
         return new OreSpeckLayout(size, baseCount, normal, keepRank, extras, noiseMode, noiseOrder);
     }
 
-    /** Whole-speck removal is too coarse with very few specks, or when one speck holds most of the ore. */
+    /**
+     * Whole-speck removal is too coarse with very few specks, or when one speck holds most of the
+     * ore.
+     */
     static boolean useNoiseMode(List<Placement> normal) {
         if (normal.isEmpty()) {
             return false;
@@ -156,17 +169,18 @@ public final class OreSpeckLayout {
     }
 
     /**
-     * Extras appear in sequence as the fill grows, so the type of the {@code index}-th extra is decided by
-     * the fill at which it first appears: early extras are small, later ones may be type 3, very late ones
-     * occasionally type 4.
+     * Extras appear in sequence as the fill grows, so the type of the {@code index}-th extra is
+     * decided by the fill at which it first appears: early extras are small, later ones may be type
+     * 3, very late ones occasionally type 4.
      */
-    private static OreSpeck extraTemplate(OreSpeckAnalysis analysis, int index, int baseCount, Random random) {
+    private static OreSpeck extraTemplate(
+            OreSpeckAnalysis analysis, int index, int baseCount, Random random) {
         double appearsAt = 1.0D + (index + 1.0D) / baseCount;
         double[] weights = {
-                0.55D,
-                0.45D,
-                appearsAt > 1.5D ? Math.min(0.35D, 0.7D * (appearsAt - 1.5D)) : 0.0D,
-                appearsAt >= 1.9D ? 0.05D : 0.0D
+            0.55D,
+            0.45D,
+            appearsAt > 1.5D ? Math.min(0.35D, 0.7D * (appearsAt - 1.5D)) : 0.0D,
+            appearsAt >= 1.9D ? 0.05D : 0.0D
         };
         double roll = random.nextDouble() * Arrays.stream(weights).sum();
         OreSpeckType type = OreSpeckType.TYPE_1;
@@ -180,7 +194,10 @@ public final class OreSpeckLayout {
         return templateOfType(analysis, type, random);
     }
 
-    /** An original speck of that type; otherwise a connected piece of a larger one; otherwise the next smaller type. */
+    /**
+     * An original speck of that type; otherwise a connected piece of a larger one; otherwise the
+     * next smaller type.
+     */
     static OreSpeck templateOfType(OreSpeckAnalysis analysis, OreSpeckType type, Random random) {
         int resolution = analysis.resolution();
         for (int ordinal = type.ordinal(); ordinal >= 0; ordinal--) {
@@ -190,9 +207,10 @@ public final class OreSpeckLayout {
                 return originals.get(random.nextInt(originals.size()));
             }
 
-            List<OreSpeck> larger = analysis.specks().stream()
-                    .filter(speck -> speck.size() > candidateType.maximumPixels(resolution))
-                    .toList();
+            List<OreSpeck> larger =
+                    analysis.specks().stream()
+                            .filter(speck -> speck.size() > candidateType.maximumPixels(resolution))
+                            .toList();
             if (!larger.isEmpty() && candidateType != OreSpeckType.TYPE_4) {
                 OreSpeck source = larger.get(random.nextInt(larger.size()));
                 int minimum = candidateType.minimumPixels(resolution);
@@ -220,7 +238,9 @@ public final class OreSpeckLayout {
                 pixels.add(new int[] {y * size + x, (int) Math.round(value * 1_000_000)});
             }
         }
-        pixels.sort(Comparator.<int[]>comparingInt(entry -> -entry[1]).thenComparingInt(entry -> entry[0]));
+        pixels.sort(
+                Comparator.<int[]>comparingInt(entry -> -entry[1])
+                        .thenComparingInt(entry -> entry[0]));
         return pixels.stream().mapToInt(entry -> entry[0]).toArray();
     }
 
@@ -229,8 +249,16 @@ public final class OreSpeckLayout {
         int cellY = Math.min(lattice - 2, (int) Math.floor(y));
         double fractionX = smoothstep(x - cellX);
         double fractionY = smoothstep(y - cellY);
-        double top = lerp(values[cellY * lattice + cellX], values[cellY * lattice + cellX + 1], fractionX);
-        double bottom = lerp(values[(cellY + 1) * lattice + cellX], values[(cellY + 1) * lattice + cellX + 1], fractionX);
+        double top =
+                lerp(
+                        values[cellY * lattice + cellX],
+                        values[cellY * lattice + cellX + 1],
+                        fractionX);
+        double bottom =
+                lerp(
+                        values[(cellY + 1) * lattice + cellX],
+                        values[(cellY + 1) * lattice + cellX + 1],
+                        fractionX);
         return lerp(top, bottom, fractionY);
     }
 
@@ -243,8 +271,9 @@ public final class OreSpeckLayout {
     }
 
     /**
-     * Fewest whole specks that together reach a type 2 speck's size. Normally that is the single first speck,
-     * which is type 2 or larger; it only grows for textures made of 1-2 pixel specks alone.
+     * Fewest whole specks that together reach a type 2 speck's size. Normally that is the single
+     * first speck, which is type 2 or larger; it only grows for textures made of 1-2 pixel specks
+     * alone.
      */
     private int minimumVisibleCount() {
         OreSpeck[] byRank = new OreSpeck[normal.size()];
@@ -268,7 +297,10 @@ public final class OreSpeckLayout {
         }
 
         List<Placement> result = new ArrayList<>(normal.size() + extras.size());
-        int kept = noiseMode ? normal.size() : Math.max(keptFor(fill, normal.size()), minimumVisibleCount());
+        int kept =
+                noiseMode
+                        ? normal.size()
+                        : Math.max(keptFor(fill, normal.size()), minimumVisibleCount());
         for (int index = 0; index < normal.size(); index++) {
             if (keepRank[index] < kept) {
                 result.add(normal.get(index));
@@ -278,7 +310,10 @@ public final class OreSpeckLayout {
         return result;
     }
 
-    /** The ore overlay for this fill factor: original speck colors on a transparent grid of {@link #size()}. */
+    /**
+     * The ore overlay for this fill factor: original speck colors on a transparent grid of {@link
+     * #size()}.
+     */
     public ArgbImage renderOre(double fill) {
         int[] pixels = new int[size * size];
         for (Placement placement : placementsFor(fill)) {
@@ -301,15 +336,20 @@ public final class OreSpeckLayout {
     }
 
     /**
-     * The trace of this fill factor: exactly the pixels of {@link #renderOre}, with saturation removed so the
-     * mined-out imprint carries no ore color, only its brightness.
+     * The trace of this fill factor: exactly the pixels of {@link #renderOre}, with saturation
+     * removed so the mined-out imprint carries no ore color, only its brightness.
      */
     public ArgbImage renderTrace(double fill) {
         int[] pixels = renderOre(fill).pixels();
         for (int index = 0; index < pixels.length; index++) {
             int color = pixels[index];
             if (ArgbImage.alpha(color) != 0) {
-                int luminance = (54 * ArgbImage.red(color) + 183 * ArgbImage.green(color) + 19 * ArgbImage.blue(color) + 128) >> 8;
+                int luminance =
+                        (54 * ArgbImage.red(color)
+                                        + 183 * ArgbImage.green(color)
+                                        + 19 * ArgbImage.blue(color)
+                                        + 128)
+                                >> 8;
                 pixels[index] = color & 0xFF000000 | luminance << 16 | luminance << 8 | luminance;
             }
         }
@@ -317,15 +357,18 @@ public final class OreSpeckLayout {
     }
 
     /**
-     * Which of {@code variants} arrangements a block face shows. With 8 variants the lattice {@code x + 3y + 2z}
-     * gives any two blocks that touch by a side or an edge within one wall plane different arrangements (every
-     * such step changes the sum by 1, 2, 3, 4, 5 or 6 mod 8), and a random shift per 8x8x8 region breaks the
-     * lattice's repetition; only blocks across a region border may occasionally coincide.
+     * Which of {@code variants} arrangements a block face shows. With 8 variants the lattice {@code
+     * x + 3y + 2z} gives any two blocks that touch by a side or an edge within one wall plane
+     * different arrangements (every such step changes the sum by 1, 2, 3, 4, 5 or 6 mod 8), and a
+     * random shift per 8x8x8 region breaks the lattice's repetition; only blocks across a region
+     * border may occasionally coincide.
      */
     public static int variantFor(int x, int y, int z, int face, int variants) {
-        long region = mix((long) Math.floorDiv(x, 8) * 0x9E3779B97F4A7C15L
-                ^ (long) Math.floorDiv(y, 8) * 0xC2B2AE3D27D4EB4FL
-                ^ (long) Math.floorDiv(z, 8) * 0x165667B19E3779F9L);
+        long region =
+                mix(
+                        (long) Math.floorDiv(x, 8) * 0x9E3779B97F4A7C15L
+                                ^ (long) Math.floorDiv(y, 8) * 0xC2B2AE3D27D4EB4FL
+                                ^ (long) Math.floorDiv(z, 8) * 0x165667B19E3779F9L);
         long faceShift = mix(face * 0xD6E8FEB86659FD93L + 1L);
         return (int) Math.floorMod(x + 3L * y + 2L * z + region + faceShift, (long) variants);
     }
@@ -373,8 +416,7 @@ public final class OreSpeckLayout {
     }
 
     /** One speck at its final top-left position on the generated texture. */
-    public record Placement(OreSpeck speck, int x, int y, boolean extra) {
-    }
+    public record Placement(OreSpeck speck, int x, int y, boolean extra) {}
 
     /** Occupancy of the generated texture while specks are being placed. */
     private static final class Grid {
@@ -390,13 +432,20 @@ public final class OreSpeckLayout {
         }
 
         /**
-         * Normal specks prefer the inner 14x14 area with a one-pixel gap to other specks; extras use the full
-         * 16x16. Each falls back step by step (full area, then touching allowed) rather than being dropped.
+         * Normal specks prefer the inner 14x14 area with a one-pixel gap to other specks; extras
+         * use the full 16x16. Each falls back step by step (full area, then touching allowed)
+         * rather than being dropped.
          */
         Placement place(OreSpeck speck, boolean extra, Random random) {
-            int[][] attempts = extra
-                    ? new int[][] {{0, size, 1}, {0, size, 0}}
-                    : new int[][] {{scale, size - scale, 1}, {0, size, 1}, {scale, size - scale, 0}, {0, size, 0}};
+            int[][] attempts =
+                    extra
+                            ? new int[][] {{0, size, 1}, {0, size, 0}}
+                            : new int[][] {
+                                {scale, size - scale, 1},
+                                {0, size, 1},
+                                {scale, size - scale, 0},
+                                {0, size, 0}
+                            };
             for (int[] attempt : attempts) {
                 List<int[]> candidates = candidates(speck, attempt[0], attempt[1], attempt[2] == 1);
                 if (!candidates.isEmpty()) {
@@ -429,7 +478,11 @@ public final class OreSpeckLayout {
                     for (int dx = -reach; dx <= reach; dx++) {
                         int nx = px + dx;
                         int ny = py + dy;
-                        if (nx >= 0 && ny >= 0 && nx < size && ny < size && occupied[ny * size + nx]) {
+                        if (nx >= 0
+                                && ny >= 0
+                                && nx < size
+                                && ny < size
+                                && occupied[ny * size + nx]) {
                             return false;
                         }
                     }
@@ -438,7 +491,10 @@ public final class OreSpeckLayout {
             return true;
         }
 
-        /** Best of a few random candidates by distance to already placed specks: random, but evenly spread. */
+        /**
+         * Best of a few random candidates by distance to already placed specks: random, but evenly
+         * spread.
+         */
         private int[] bestCandidate(OreSpeck speck, List<int[]> candidates, Random random) {
             int[] best = null;
             double bestDistance = -1.0D;

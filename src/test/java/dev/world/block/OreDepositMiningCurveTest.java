@@ -1,9 +1,9 @@
 package dev.world.block;
 
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.junit.jupiter.api.Test;
 
 class OreDepositMiningCurveTest {
     private static final double K = 0.04D;
@@ -34,8 +34,14 @@ class OreDepositMiningCurveTest {
 
     @Test
     void exponentialFactorIsCappedWithoutRemovingLinearGrowth() {
-        assertEquals(400.0D, OreDepositMiningCurve.durationMultiplier(100, K, MAX_MULTIPLIER), 0.000001D);
-        assertEquals(800.0D, OreDepositMiningCurve.durationMultiplier(200, K, MAX_MULTIPLIER), 0.000001D);
+        assertEquals(
+                400.0D,
+                OreDepositMiningCurve.durationMultiplier(100, K, MAX_MULTIPLIER),
+                0.000001D);
+        assertEquals(
+                800.0D,
+                OreDepositMiningCurve.durationMultiplier(200, K, MAX_MULTIPLIER),
+                0.000001D);
     }
 
     @Test

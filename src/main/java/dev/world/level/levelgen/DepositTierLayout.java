@@ -7,14 +7,14 @@ public record DepositTierLayout(
         int candidatesPerCell,
         int minimumSamples,
         int maximumSamples,
-        double requiredStoneCoverage
-) {
+        double requiredStoneCoverage) {
     public DepositTierLayout {
         if (cellSizeBlocks < 16 || cellSizeBlocks % 16 != 0) {
             throw new IllegalArgumentException("Deposit cells must be positive whole chunks");
         }
         if (maximumRadius < 1 || candidatesPerCell < 1) {
-            throw new IllegalArgumentException("Deposit radius and candidate count must be positive");
+            throw new IllegalArgumentException(
+                    "Deposit radius and candidate count must be positive");
         }
         if (minimumSamples < 1 || maximumSamples < minimumSamples) {
             throw new IllegalArgumentException("Invalid deposit sample range");

@@ -1,0 +1,17 @@
+{
+  "neoforge:conditions": [
+    {"type": "neoforge:mod_loaded", "modid": "ores_and_drills"}
+  ],
+  "type": "ores_and_drills:drill_mining",
+  "input": ["minecraft:redstone_ore", "minecraft:deepslate_redstone_ore"],
+  "fluid": {"tag": "minecraft:water", "amount": 250},
+  "minimum_drill_tier": 4,
+  "priority": 20,
+  "conditions": [
+    {"type": "ores_and_drills:dimension", "dimension": "minecraft:overworld"},
+    {"type": "ores_and_drills:height", "min": -64, "max": 16},
+    {"type": "ores_and_drills:biome", "tag": "c:is_overworld"},
+    {"type": "ores_and_drills:redstone", "powered": true}
+  ],
+  "result": {"id": "minecraft:redstone", "count": 8}
+}

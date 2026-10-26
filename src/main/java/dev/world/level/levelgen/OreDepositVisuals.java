@@ -7,10 +7,15 @@ import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.state.BlockState;
 
 public final class OreDepositVisuals {
-    private OreDepositVisuals() {
-    }
+    private OreDepositVisuals() {}
 
-    public static Visual forOre(ResourceLocation oreBlockId, BlockState oreState, ServerLevel serverLevel, BlockGetter level, BlockPos pos, BlockState localStoneState) {
+    public static Visual forOre(
+            ResourceLocation oreBlockId,
+            BlockState oreState,
+            ServerLevel serverLevel,
+            BlockGetter level,
+            BlockPos pos,
+            BlockState localStoneState) {
         int mapColor = oreState.getMapColor(level, pos).col;
         int base = baseFor(serverLevel, localStoneState, mapColor);
         int oreIndex = OreDepositOrePalette.indexOf(serverLevel, oreState.getBlock());
@@ -26,6 +31,5 @@ public final class OreDepositVisuals {
         return OreDepositStonePalette.nearestByMapColor(level, fallbackColor);
     }
 
-    public record Visual(int base, int oreIndex) {
-    }
+    public record Visual(int base, int oreIndex) {}
 }

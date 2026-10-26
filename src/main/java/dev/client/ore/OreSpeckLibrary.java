@@ -10,14 +10,6 @@ import dev.client.ore.speck.OreSpeckAnalysis;
 import dev.client.ore.speck.OreSpeckLayout;
 import dev.world.level.levelgen.OreUnifier;
 import dev.world.level.levelgen.OreVisualStages;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.packs.resources.Resource;
-import net.minecraft.server.packs.resources.ResourceManager;
-import net.minecraft.world.item.Items;
-import net.minecraft.world.level.block.Block;
-import org.jetbrains.annotations.Nullable;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
@@ -31,41 +23,54 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.packs.resources.Resource;
+import net.minecraft.server.packs.resources.ResourceManager;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Block;
+import org.jetbrains.annotations.Nullable;
 
 /**
- * Turns an ore block into its speck layout: reads the ore's own block texture, identifies the host rock it
- * was painted on, detects the specks with the drop palette and plans every fill state from them.
- * Cached per (ore, drop, resolution) and cleared on every resource reload, so resource pack changes apply.
+ * Turns an ore block into its speck layout: reads the ore's own block texture, identifies the host
+ * rock it was painted on, detects the specks with the drop palette and plans every fill state from
+ * them. Cached per (ore, drop, resolution) and cleared on every resource reload, so resource pack
+ * changes apply.
  */
 final class OreSpeckLibrary {
-    /** Rocks ore textures are commonly painted on; their pixels are excluded from speck detection. */
-    private static final List<ResourceLocation> HOST_TEXTURES = List.of(
-            ResourceLocation.withDefaultNamespace("block/stone"),
-            ResourceLocation.withDefaultNamespace("block/deepslate"),
-            ResourceLocation.withDefaultNamespace("block/netherrack"),
-            ResourceLocation.withDefaultNamespace("block/end_stone"),
-            ResourceLocation.withDefaultNamespace("block/tuff"),
-            ResourceLocation.withDefaultNamespace("block/granite"),
-            ResourceLocation.withDefaultNamespace("block/diorite"),
-            ResourceLocation.withDefaultNamespace("block/andesite"),
-            ResourceLocation.withDefaultNamespace("block/calcite"),
-            ResourceLocation.withDefaultNamespace("block/blackstone"),
-            ResourceLocation.withDefaultNamespace("block/basalt_side"),
-            ResourceLocation.withDefaultNamespace("block/smooth_basalt"),
-            ResourceLocation.withDefaultNamespace("block/sandstone"),
-            ResourceLocation.withDefaultNamespace("block/gravel")
-    );
-    private static final List<String> BLOCK_TEXTURE_KEYS = List.of("all", "side", "particle", "texture", "north", "end", "top");
     /**
-     * Highest generated sprite resolution. Every pre-stitched slot has this size, so the atlas grows with its
-     * square: 32 already takes four times the memory of 16.
+     * Rocks ore textures are commonly painted on; their pixels are excluded from speck detection.
+     */
+    private static final List<ResourceLocation> HOST_TEXTURES =
+            List.of(
+                    ResourceLocation.withDefaultNamespace("block/stone"),
+                    ResourceLocation.withDefaultNamespace("block/deepslate"),
+                    ResourceLocation.withDefaultNamespace("block/netherrack"),
+                    ResourceLocation.withDefaultNamespace("block/end_stone"),
+                    ResourceLocation.withDefaultNamespace("block/tuff"),
+                    ResourceLocation.withDefaultNamespace("block/granite"),
+                    ResourceLocation.withDefaultNamespace("block/diorite"),
+                    ResourceLocation.withDefaultNamespace("block/andesite"),
+                    ResourceLocation.withDefaultNamespace("block/calcite"),
+                    ResourceLocation.withDefaultNamespace("block/blackstone"),
+                    ResourceLocation.withDefaultNamespace("block/basalt_side"),
+                    ResourceLocation.withDefaultNamespace("block/smooth_basalt"),
+                    ResourceLocation.withDefaultNamespace("block/sandstone"),
+                    ResourceLocation.withDefaultNamespace("block/gravel"));
+
+    private static final List<String> BLOCK_TEXTURE_KEYS =
+            List.of("all", "side", "particle", "texture", "north", "end", "top");
+
+    /**
+     * Highest generated sprite resolution. Every pre-stitched slot has this size, so the atlas
+     * grows with its square: 32 already takes four times the memory of 16.
      */
     static final int MAXIMUM_RESOLUTION = 32;
+
     private static final Map<Key, List<OreSpeckLayout>> CACHE = new ConcurrentHashMap<>();
     private static volatile List<ArgbImage> hostImages;
 
-    private OreSpeckLibrary() {
-    }
+    private OreSpeckLibrary() {}
 
     static void clearCache() {
         CACHE.clear();
@@ -73,9 +78,9 @@ final class OreSpeckLibrary {
     }
 
     /**
-     * The resolution of the active resource packs, read from their stone texture: 16 for vanilla-sized packs,
-     * 32 for 32x packs, capped at {@link #MAXIMUM_RESOLUTION}. Specks are generated on this grid so they line up
-     * with the pixels of the rock they are drawn on.
+     * The resolution of the active resource packs, read from their stone texture: 16 for
+     * vanilla-sized packs, 32 for 32x packs, capped at {@link #MAXIMUM_RESOLUTION}. Specks are
+     * generated on this grid so they line up with the pixels of the rock they are drawn on.
      */
     static int resolutionFor(ResourceManager resourceManager) {
         ArgbImage stone = readImage(resourceManager, HOST_TEXTURES.get(0));
@@ -88,49 +93,56 @@ final class OreSpeckLibrary {
     }
 
     /**
-     * {@code variants} different arrangements of the same detected specks; the ore is analyzed only once.
+     * {@code variants} different arrangements of the same detected specks; the ore is analyzed only
+     * once.
      *
-     * @param dropId the server-resolved loot drop, or {@code null} before a world palette is known (the drop
-     *               is then guessed from the client-visible data)
+     * @param dropId the server-resolved loot drop, or {@code null} before a world palette is known
+     *     (the drop is then guessed from the client-visible data)
      */
     static List<OreSpeckLayout> layoutsFor(
             ResourceManager resourceManager,
             @Nullable ResourceLocation oreId,
             @Nullable ResourceLocation dropId,
             int variants,
-            int resolution
-    ) {
+            int resolution) {
         if (oreId == null) {
-            return Collections.nCopies(variants, OreSpeckLayout.plan(OreSpeckAnalysis.empty(resolution), 0L, 1.0D));
+            return Collections.nCopies(
+                    variants, OreSpeckLayout.plan(OreSpeckAnalysis.empty(resolution), 0L, 1.0D));
         }
         ResourceLocation airId = BuiltInRegistries.ITEM.getKey(Items.AIR);
         ResourceLocation effectiveDrop = dropId == null || dropId.equals(airId) ? null : dropId;
         return CACHE.computeIfAbsent(
                 new Key(oreId, effectiveDrop, variants, resolution),
-                key -> buildLayouts(resourceManager, key)
-        );
+                key -> buildLayouts(resourceManager, key));
     }
 
     private static List<OreSpeckLayout> buildLayouts(ResourceManager resourceManager, Key key) {
-        // A deepslate ore is drawn with its stone ore's specks; the block in the world stays the deepslate one.
+        // A deepslate ore is drawn with its stone ore's specks; the block in the world stays the
+        // deepslate one.
         ResourceLocation textureOreId = textureOreFor(key.oreId());
-        int[] palette = key.dropId() != null
-                ? OreDepositOreColors.paletteForDrop(resourceManager, key.dropId())
-                : OreDepositOreColors.paletteForOre(resourceManager, textureOreId);
+        int[] palette =
+                key.dropId() != null
+                        ? OreDepositOreColors.paletteForDrop(resourceManager, key.dropId())
+                        : OreDepositOreColors.paletteForOre(resourceManager, textureOreId);
 
-        // A model can reference several textures: a resource pack may draw the ore as a stone layer plus a
-        // transparent overlay, or give the ore different faces. The overlay wins; otherwise the texture with
-        // the most ore pixels. Known rock textures are never the ore itself. Tinted layers are read in the
-        // color the game draws them with, and stacked ore layers (a pattern plus a secondary layer, as
-        // material-based mods draw ores) are also tried together, as they appear in the world.
-        Block textureOre = BuiltInRegistries.BLOCK.containsKey(textureOreId) ? BuiltInRegistries.BLOCK.get(textureOreId) : null;
+        // A model can reference several textures: a resource pack may draw the ore as a stone layer
+        // plus a transparent overlay, or give the ore different faces. The overlay wins; otherwise
+        // the texture with the most ore pixels. Known rock textures are never the ore itself.
+        // Tinted layers are read in the color the game draws them with, and stacked ore layers (a
+        // pattern plus a secondary layer, as material-based mods draw ores) are also tried
+        // together, as they appear in the world.
+        Block textureOre =
+                BuiltInRegistries.BLOCK.containsKey(textureOreId)
+                        ? BuiltInRegistries.BLOCK.get(textureOreId)
+                        : null;
         List<OreModelLayers.Layer> modelLayers = new ArrayList<>();
         for (ResourceLocation modelId : blockStateModels(resourceManager, textureOreId)) {
             modelLayers.addAll(OreModelLayers.layers(resourceManager, modelId));
         }
         Map<ResourceLocation, Integer> tintIndices = OreModelLayers.tintIndices(modelLayers);
         List<ResourceLocation> layerTextures = OreModelLayers.textures(modelLayers);
-        Set<ResourceLocation> candidates = new LinkedHashSet<>(blockTextures(resourceManager, textureOreId));
+        Set<ResourceLocation> candidates =
+                new LinkedHashSet<>(blockTextures(resourceManager, textureOreId));
         candidates.addAll(layerTextures);
 
         OreSpeckAnalysis analysis = OreSpeckAnalysis.empty(key.resolution());
@@ -151,7 +163,8 @@ final class OreSpeckLibrary {
             if (layerTextures.contains(candidate)) {
                 oreLayers.put(candidate, image);
             }
-            OreSpeckAnalysis candidateAnalysis = analyze(resourceManager, image, palette, key.resolution());
+            OreSpeckAnalysis candidateAnalysis =
+                    analyze(resourceManager, image, palette, key.resolution());
             if (isBetter(candidateAnalysis, analysis)) {
                 analysis = candidateAnalysis;
                 oreTexture = candidate.toString();
@@ -162,7 +175,8 @@ final class OreSpeckLibrary {
             for (ArgbImage layer : oreLayers.values()) {
                 stacked = stacked == null ? layer : stacked.over(layer);
             }
-            OreSpeckAnalysis stackedAnalysis = analyze(resourceManager, stacked, palette, key.resolution());
+            OreSpeckAnalysis stackedAnalysis =
+                    analyze(resourceManager, stacked, palette, key.resolution());
             if (isBetter(stackedAnalysis, analysis)) {
                 analysis = stackedAnalysis;
                 oreTexture = "stacked " + oreLayers.keySet();
@@ -174,16 +188,24 @@ final class OreSpeckLibrary {
 
         OresAndDrillsMod.LOGGER.debug(
                 "Ore deposit: {} (texture {} of {}, drop {}) -> {}",
-                key.oreId(), oreTexture, textureOreId, key.dropId(), analysis.summary()
-        );
+                key.oreId(),
+                oreTexture,
+                textureOreId,
+                key.dropId(),
+                analysis.summary());
         List<OreSpeckLayout> layouts = new ArrayList<>(key.variants());
         for (int variant = 0; variant < key.variants(); variant++) {
-            layouts.add(OreSpeckLayout.plan(analysis, seedFor(key.oreId(), variant), OreVisualStages.maximumFillFactor()));
+            layouts.add(
+                    OreSpeckLayout.plan(
+                            analysis,
+                            seedFor(key.oreId(), variant),
+                            OreVisualStages.maximumFillFactor()));
         }
         return List.copyOf(layouts);
     }
 
-    private static OreSpeckAnalysis analyze(ResourceManager resourceManager, ArgbImage image, int[] palette, int resolution) {
+    private static OreSpeckAnalysis analyze(
+            ResourceManager resourceManager, ArgbImage image, int[] palette, int resolution) {
         ArgbImage host = OreSpeckAnalysis.pickHost(image, hostImages(resourceManager), resolution);
         return OreSpeckAnalysis.analyze(image, host, palette, resolution);
     }
@@ -213,8 +235,8 @@ final class OreSpeckLibrary {
     }
 
     /**
-     * Stable across sessions and worlds, so a given variant of an ore always gets the same arrangement, while
-     * the variants of one ore differ from each other.
+     * Stable across sessions and worlds, so a given variant of an ore always gets the same
+     * arrangement, while the variants of one ore differ from each other.
      */
     private static long seedFor(ResourceLocation oreId, int variant) {
         long hash = oreId.toString().hashCode() * 31L + variant;
@@ -239,18 +261,29 @@ final class OreSpeckLibrary {
         return images;
     }
 
-    /** Textures of the ore block's own model (via its blockstate), then the conventional texture path. */
-    private static List<ResourceLocation> blockTextures(ResourceManager resourceManager, ResourceLocation blockId) {
+    /**
+     * Textures of the ore block's own model (via its blockstate), then the conventional texture
+     * path.
+     */
+    private static List<ResourceLocation> blockTextures(
+            ResourceManager resourceManager, ResourceLocation blockId) {
         Set<ResourceLocation> textures = new LinkedHashSet<>();
         for (ResourceLocation modelId : blockStateModels(resourceManager, blockId)) {
-            textures.addAll(OreDepositOreColors.texturesFromModel(resourceManager, modelId, BLOCK_TEXTURE_KEYS));
+            textures.addAll(
+                    OreDepositOreColors.texturesFromModel(
+                            resourceManager, modelId, BLOCK_TEXTURE_KEYS));
         }
-        textures.add(ResourceLocation.fromNamespaceAndPath(blockId.getNamespace(), "block/" + blockId.getPath()));
+        textures.add(
+                ResourceLocation.fromNamespaceAndPath(
+                        blockId.getNamespace(), "block/" + blockId.getPath()));
         return new ArrayList<>(textures);
     }
 
-    private static List<ResourceLocation> blockStateModels(ResourceManager resourceManager, ResourceLocation blockId) {
-        ResourceLocation path = ResourceLocation.fromNamespaceAndPath(blockId.getNamespace(), "blockstates/" + blockId.getPath() + ".json");
+    private static List<ResourceLocation> blockStateModels(
+            ResourceManager resourceManager, ResourceLocation blockId) {
+        ResourceLocation path =
+                ResourceLocation.fromNamespaceAndPath(
+                        blockId.getNamespace(), "blockstates/" + blockId.getPath() + ".json");
         Optional<Resource> resource = resourceManager.getResource(path);
         if (resource.isEmpty()) {
             return List.of();
@@ -260,34 +293,42 @@ final class OreSpeckLibrary {
         try (Reader reader = resource.get().openAsReader()) {
             JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
             if (root.has("variants") && root.get("variants").isJsonObject()) {
-                for (Map.Entry<String, JsonElement> variant : root.getAsJsonObject("variants").entrySet()) {
+                for (Map.Entry<String, JsonElement> variant :
+                        root.getAsJsonObject("variants").entrySet()) {
                     addModel(variant.getValue(), blockId.getNamespace(), models);
                 }
             }
             if (root.has("multipart") && root.get("multipart").isJsonArray()) {
                 for (JsonElement part : root.getAsJsonArray("multipart")) {
                     if (part.isJsonObject() && part.getAsJsonObject().has("apply")) {
-                        addModel(part.getAsJsonObject().get("apply"), blockId.getNamespace(), models);
+                        addModel(
+                                part.getAsJsonObject().get("apply"),
+                                blockId.getNamespace(),
+                                models);
                     }
                 }
             }
         } catch (IOException | RuntimeException exception) {
-            OresAndDrillsMod.LOGGER.debug("Ore deposit: failed to read blockstate {}", path, exception);
+            OresAndDrillsMod.LOGGER.debug(
+                    "Ore deposit: failed to read blockstate {}", path, exception);
         }
         return models;
     }
 
-    private static void addModel(JsonElement element, String defaultNamespace, List<ResourceLocation> models) {
-        JsonElement first = element.isJsonArray() && !element.getAsJsonArray().isEmpty()
-                ? element.getAsJsonArray().get(0)
-                : element;
+    private static void addModel(
+            JsonElement element, String defaultNamespace, List<ResourceLocation> models) {
+        JsonElement first =
+                element.isJsonArray() && !element.getAsJsonArray().isEmpty()
+                        ? element.getAsJsonArray().get(0)
+                        : element;
         if (!first.isJsonObject() || !first.getAsJsonObject().has("model")) {
             return;
         }
         String model = first.getAsJsonObject().get("model").getAsString();
-        ResourceLocation modelId = model.indexOf(':') >= 0
-                ? ResourceLocation.tryParse(model)
-                : ResourceLocation.fromNamespaceAndPath(defaultNamespace, model);
+        ResourceLocation modelId =
+                model.indexOf(':') >= 0
+                        ? ResourceLocation.tryParse(model)
+                        : ResourceLocation.fromNamespaceAndPath(defaultNamespace, model);
         if (modelId != null && !models.contains(modelId)) {
             models.add(modelId);
         }
@@ -295,14 +336,16 @@ final class OreSpeckLibrary {
 
     @Nullable
     static ArgbImage readImage(ResourceManager resourceManager, ResourceLocation textureId) {
-        ResourceLocation path = ResourceLocation.fromNamespaceAndPath(textureId.getNamespace(), "textures/" + textureId.getPath() + ".png");
+        ResourceLocation path =
+                ResourceLocation.fromNamespaceAndPath(
+                        textureId.getNamespace(), "textures/" + textureId.getPath() + ".png");
         Optional<Resource> resource = resourceManager.getResource(path);
         if (resource.isEmpty()) {
             return null;
         }
 
         try (InputStream stream = resource.get().open();
-             NativeImage image = NativeImage.read(stream)) {
+                NativeImage image = NativeImage.read(stream)) {
             int width = image.getWidth();
             int height = image.getHeight();
             int[] pixels = new int[width * height];
@@ -313,7 +356,8 @@ final class OreSpeckLibrary {
             }
             return new ArgbImage(width, height, pixels);
         } catch (IOException | RuntimeException exception) {
-            OresAndDrillsMod.LOGGER.debug("Ore deposit: failed to read texture {}", path, exception);
+            OresAndDrillsMod.LOGGER.debug(
+                    "Ore deposit: failed to read texture {}", path, exception);
             return null;
         }
     }
@@ -333,7 +377,11 @@ final class OreSpeckLibrary {
         return (color & 0xFF00FF00) | ((color & 0xFF) << 16) | ((color >> 16) & 0xFF);
     }
 
-    private record Key(ResourceLocation oreId, @Nullable ResourceLocation dropId, int variants, int resolution) {
+    private record Key(
+            ResourceLocation oreId,
+            @Nullable ResourceLocation dropId,
+            int variants,
+            int resolution) {
         Key {
             Objects.requireNonNull(oreId);
         }

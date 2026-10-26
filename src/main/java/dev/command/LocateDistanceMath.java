@@ -5,8 +5,7 @@ final class LocateDistanceMath {
     /** Sentinel returned by {@link #ringOffset(int, int)} for an invalid ring position. */
     static final long NO_RING_OFFSET = Long.MIN_VALUE;
 
-    private LocateDistanceMath() {
-    }
+    private LocateDistanceMath() {}
 
     static double horizontalDistanceSqr(int firstX, int firstZ, int secondX, int secondZ) {
         long deltaX = (long) firstX - secondX;
@@ -31,10 +30,10 @@ final class LocateDistanceMath {
             int originX,
             int originZ,
             int blockRadius,
-            int horizontalAllowance
-    ) {
+            int horizontalAllowance) {
         double expandedRadius = Math.max(0L, (long) blockRadius) + Math.max(0, horizontalAllowance);
-        return horizontalDistanceSqr(centerX, centerZ, originX, originZ) <= expandedRadius * expandedRadius;
+        return horizontalDistanceSqr(centerX, centerZ, originX, originZ)
+                <= expandedRadius * expandedRadius;
     }
 
     static double minimumReachableDistanceForRing(int ring, int horizontalAllowance) {
@@ -43,10 +42,11 @@ final class LocateDistanceMath {
 
     /**
      * Conservative lower bound for a ring whose offsets are measured in multi-chunk grid cells. The
-     * origin may sit at either edge of its own cell and an anchor may sit at the near edge of the target
-     * cell, so one complete grid-cell span must be deducted for grids wider than one chunk.
+     * origin may sit at either edge of its own cell and an anchor may sit at the near edge of the
+     * target cell, so one complete grid-cell span must be deducted for grids wider than one chunk.
      */
-    static double minimumReachableDistanceForGridRing(int ring, int gridStepChunks, int horizontalAllowance) {
+    static double minimumReachableDistanceForGridRing(
+            int ring, int gridStepChunks, int horizontalAllowance) {
         int step = Math.max(1, gridStepChunks);
         if (step == 1) {
             return minimumReachableDistanceForRing(ring, horizontalAllowance);
@@ -66,9 +66,9 @@ final class LocateDistanceMath {
     }
 
     /**
-     * Returns one perimeter position of a square chunk ring, packed as X in the high 32 bits and Z in
-     * the low 32 bits. Keeping this primitive avoids allocating an {@code int[2]} for every predicted
-     * chunk during a large /locate search.
+     * Returns one perimeter position of a square chunk ring, packed as X in the high 32 bits and Z
+     * in the low 32 bits. Keeping this primitive avoids allocating an {@code int[2]} for every
+     * predicted chunk during a large /locate search.
      */
     static long ringOffset(int ring, int perimeterIndex) {
         if (ring < 0 || perimeterIndex < 0) {

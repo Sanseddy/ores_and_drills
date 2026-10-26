@@ -6,23 +6,20 @@ import java.util.Set;
 
 /** Pure wall-shape invariants, kept independent of Minecraft classes for fast unit testing. */
 final class WallDepositGeometry {
-    private WallDepositGeometry() {
-    }
+    private WallDepositGeometry() {}
 
     static boolean isValid(
             List<Point> positions,
             Point anchor,
             int inwardX,
             int inwardZ,
-            boolean requireInsideMajority
-    ) {
+            boolean requireInsideMajority) {
         if (anchor == null || positions.isEmpty() || !positions.contains(anchor)) {
             return false;
         }
         int insideBlocks = 0;
         for (Point pos : positions) {
-            int inwardDepth = (pos.x() - anchor.x()) * inwardX
-                    + (pos.z() - anchor.z()) * inwardZ;
+            int inwardDepth = (pos.x() - anchor.x()) * inwardX + (pos.z() - anchor.z()) * inwardZ;
             if (inwardDepth < 0) {
                 return false;
             }
@@ -61,6 +58,5 @@ final class WallDepositGeometry {
                 || connected.contains(new Point(point.x(), point.y(), point.z() - 1));
     }
 
-    record Point(int x, int y, int z) {
-    }
+    record Point(int x, int y, int z) {}
 }

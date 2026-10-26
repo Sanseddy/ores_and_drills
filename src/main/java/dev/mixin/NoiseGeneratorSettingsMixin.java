@@ -1,10 +1,11 @@
 package dev.mixin;
 
+import java.util.List;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.NoiseRouter;
 import net.minecraft.world.level.levelgen.NoiseSettings;
-import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.SurfaceRules;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -14,14 +15,9 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.util.List;
-
 @Mixin(NoiseGeneratorSettings.class)
 public abstract class NoiseGeneratorSettingsMixin {
-    @Mutable
-    @Shadow
-    @Final
-    private boolean oreVeinsEnabled;
+    @Mutable @Shadow @Final private boolean oreVeinsEnabled;
 
     @Inject(method = "<init>", at = @At("RETURN"))
     private void oresAndDrills$adjustNoiseSettings(
@@ -36,8 +32,7 @@ public abstract class NoiseGeneratorSettingsMixin {
             boolean aquifersEnabled,
             boolean oreVeinsEnabled,
             boolean useLegacyRandomSource,
-            CallbackInfo callbackInfo
-    ) {
+            CallbackInfo callbackInfo) {
         this.oreVeinsEnabled = false;
     }
 }

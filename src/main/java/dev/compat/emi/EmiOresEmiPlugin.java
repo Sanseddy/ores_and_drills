@@ -5,7 +5,10 @@ import dev.emi.emi.api.EmiPlugin;
 import dev.emi.emi.api.EmiRegistry;
 import net.neoforged.fml.ModList;
 
-/** EMI Ores integration; EMI Ores classes stay in {@link EmiOresDeposits} so they load only when it is installed. */
+/**
+ * EMI Ores integration; EMI Ores classes stay in {@link EmiOresDeposits} so they load only when it
+ * is installed.
+ */
 @EmiEntrypoint
 public final class EmiOresEmiPlugin implements EmiPlugin {
     @Override

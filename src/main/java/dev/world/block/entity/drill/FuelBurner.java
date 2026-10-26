@@ -42,7 +42,10 @@ public final class FuelBurner {
         return false;
     }
 
-    /** Lights the next fuel item exactly like a furnace: smelting burn time, and remainders such as an empty bucket stay. */
+    /**
+     * Lights the next fuel item exactly like a furnace: smelting burn time, and remainders such as
+     * an empty bucket stay.
+     */
     public boolean consume(Container container, int slot) {
         ItemStack fuelStack = container.getItem(slot);
         int burnTime = fuelStack.isEmpty() ? 0 : fuelStack.getBurnTime(RecipeType.SMELTING);

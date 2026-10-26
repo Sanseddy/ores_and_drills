@@ -1,10 +1,14 @@
 package dev.client.ore.speck;
 
-/** Minimal immutable-by-convention ARGB raster, so speck analysis stays independent of {@code NativeImage}. */
+/**
+ * Minimal immutable-by-convention ARGB raster, so speck analysis stays independent of {@code
+ * NativeImage}.
+ */
 public record ArgbImage(int width, int height, int[] pixels) {
     public ArgbImage {
         if (width <= 0 || height <= 0 || pixels.length != width * height) {
-            throw new IllegalArgumentException("Pixel array does not match " + width + "x" + height);
+            throw new IllegalArgumentException(
+                    "Pixel array does not match " + width + "x" + height);
         }
     }
 
@@ -33,8 +37,8 @@ public record ArgbImage(int width, int height, int[] pixels) {
     }
 
     /**
-     * This image as the game draws it with a tint color: every channel multiplied by the tint's RGB, alpha
-     * unchanged. White (and the "no tint" value -1) returns the image itself.
+     * This image as the game draws it with a tint color: every channel multiplied by the tint's
+     * RGB, alpha unchanged. White (and the "no tint" value -1) returns the image itself.
      */
     public ArgbImage tinted(int tintRgb) {
         int rgb = tintRgb & 0xFFFFFF;
@@ -56,8 +60,8 @@ public record ArgbImage(int width, int height, int[] pixels) {
     }
 
     /**
-     * {@code top} drawn over this image with ordinary alpha blending, as stacked translucent model layers are.
-     * Both images are brought to this image's frame size first.
+     * {@code top} drawn over this image with ordinary alpha blending, as stacked translucent model
+     * layers are. Both images are brought to this image's frame size first.
      */
     public ArgbImage over(ArgbImage top) {
         int size = Math.min(width, height);
@@ -83,16 +87,22 @@ public record ArgbImage(int width, int height, int[] pixels) {
         if (outAlpha == 0) {
             return 0;
         }
-        int red = (red(top) * topAlpha + red(bottom) * bottomAlpha * (255 - topAlpha) / 255) / outAlpha;
-        int green = (green(top) * topAlpha + green(bottom) * bottomAlpha * (255 - topAlpha) / 255) / outAlpha;
-        int blue = (blue(top) * topAlpha + blue(bottom) * bottomAlpha * (255 - topAlpha) / 255) / outAlpha;
+        int red =
+                (red(top) * topAlpha + red(bottom) * bottomAlpha * (255 - topAlpha) / 255)
+                        / outAlpha;
+        int green =
+                (green(top) * topAlpha + green(bottom) * bottomAlpha * (255 - topAlpha) / 255)
+                        / outAlpha;
+        int blue =
+                (blue(top) * topAlpha + blue(bottom) * bottomAlpha * (255 - topAlpha) / 255)
+                        / outAlpha;
         return outAlpha << 24 | red << 16 | green << 8 | blue;
     }
 
     /**
-     * Brings any square (or vertically animated) texture to the fixed 16x16 grid speck layouts work on.
-     * Only the first animation frame is used; higher resolutions are sampled at each cell's center so
-     * hard pixel-art edges survive instead of being blurred.
+     * Brings any square (or vertically animated) texture to the fixed 16x16 grid speck layouts work
+     * on. Only the first animation frame is used; higher resolutions are sampled at each cell's
+     * center so hard pixel-art edges survive instead of being blurred.
      */
     public ArgbImage normalized(int size) {
         int frame = Math.min(width, height);

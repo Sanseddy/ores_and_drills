@@ -8,8 +8,7 @@ final class SmallDepositPlacementPriority {
         CANCELLED
     }
 
-    private SmallDepositPlacementPriority() {
-    }
+    private SmallDepositPlacementPriority() {}
 
     static boolean shouldTryUnderground(boolean usableWallShape) {
         return !usableWallShape;

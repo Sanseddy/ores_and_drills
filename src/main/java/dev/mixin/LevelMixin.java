@@ -4,6 +4,7 @@ import dev.registry.ModBlocks;
 import dev.world.level.levelgen.ForeignExplosionDetector;
 import dev.world.level.levelgen.OreDepositData;
 import dev.world.level.levelgen.OreDepositRemovalGuard;
+import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -14,23 +15,20 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import javax.annotation.Nullable;
-
 @Mixin(Level.class)
 public abstract class LevelMixin {
     @Inject(
-            method = "setBlock(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;II)Z",
+            method =
+                    "setBlock(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;II)Z",
             at = @At("HEAD"),
-            cancellable = true
-    )
+            cancellable = true)
     private void oresAndDrills$protectPersistentDeposit(
             BlockPos pos,
             BlockState newState,
             int flags,
             int recursionLeft,
-            CallbackInfoReturnable<Boolean> callbackInfo
-    ) {
-        Level level = (Level)(Object)this;
+            CallbackInfoReturnable<Boolean> callbackInfo) {
+        Level level = (Level) (Object) this;
         if (!(level instanceof ServerLevel serverLevel)
                 || !serverLevel.getBlockState(pos).is(ModBlocks.ORE_DEPOSIT.get())
                 || newState.is(ModBlocks.ORE_DEPOSIT.get())
@@ -39,8 +37,8 @@ public abstract class LevelMixin {
                 || OreDepositData.isPhysicalTransferSource(serverLevel, pos)) {
             return;
         }
-        // Another mod's explosion clearing its crater directly: the deposit becomes an exhausted one,
-        // which this setBlock then replaces as usual.
+        // Another mod's explosion clearing its crater directly: the deposit becomes an exhausted
+        // one, which this setBlock then replaces as usual.
         if (!OreDepositData.ignoresExplosions(serverLevel, pos)
                 && ForeignExplosionDetector.isExplosionInProgress()
                 && OreDepositData.wipeByExplosion(serverLevel, pos)) {
@@ -58,9 +56,8 @@ public abstract class LevelMixin {
             boolean dropBlock,
             @Nullable Entity entity,
             int recursionLeft,
-            CallbackInfoReturnable<Boolean> callbackInfo
-    ) {
-        Level level = (Level)(Object)this;
+            CallbackInfoReturnable<Boolean> callbackInfo) {
+        Level level = (Level) (Object) this;
         if (!dropBlock || !(level instanceof ServerLevel serverLevel)) {
             return;
         }
@@ -69,7 +66,8 @@ public abstract class LevelMixin {
         if (!state.is(ModBlocks.ORE_DEPOSIT.get())) {
             return;
         }
-        // Another mod's explosion: destroyBlock goes on to break the now exhausted deposit with its rock's loot.
+        // Another mod's explosion: destroyBlock goes on to break the now exhausted deposit with its
+        // rock's loot.
         if (!OreDepositData.ignoresExplosions(serverLevel, pos)
                 && ForeignExplosionDetector.isExplosionInProgress()
                 && OreDepositData.wipeByExplosion(serverLevel, pos)) {

@@ -2,8 +2,7 @@ package dev.world.level.levelgen;
 
 /** Seed-to-unit-interval conversion isolated for deterministic TINY/SMALL gate decisions. */
 final class SmallTierSeedMath {
-    private SmallTierSeedMath() {
-    }
+    private SmallTierSeedMath() {}
 
     static double unitDouble(long seed) {
         long mixed = mix64(seed);

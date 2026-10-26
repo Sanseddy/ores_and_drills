@@ -1,18 +1,17 @@
 package dev.world.level.levelgen;
 
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.junit.jupiter.api.Test;
 
 class SmallTierSeedMathTest {
     @Test
     void producesTheSameDecisionValueForTheSameSeed() {
         assertEquals(
                 SmallTierSeedMath.unitDouble(0x1234_5678_9ABCDEFL),
-                SmallTierSeedMath.unitDouble(0x1234_5678_9ABCDEFL)
-        );
+                SmallTierSeedMath.unitDouble(0x1234_5678_9ABCDEFL));
     }
 
     @Test

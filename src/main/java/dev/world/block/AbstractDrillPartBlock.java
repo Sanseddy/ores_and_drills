@@ -18,9 +18,9 @@ import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
@@ -30,22 +30,27 @@ public abstract class AbstractDrillPartBlock extends Block implements EntityBloc
     protected final DrillStructure structure;
     protected final DrillMenuOpener menuOpener;
 
-    protected AbstractDrillPartBlock(Properties properties, DrillStructure structure, DrillMenuOpener menuOpener) {
+    protected AbstractDrillPartBlock(
+            Properties properties, DrillStructure structure, DrillMenuOpener menuOpener) {
         super(properties);
         this.structure = structure;
         this.menuOpener = menuOpener;
-        registerDefaultState(stateDefinition.any()
-                .setValue(AbstractDrillBlock.FACING, Direction.NORTH)
-                .setValue(structure.offsetXProperty(), 0)
-                .setValue(structure.offsetYProperty(), 0)
-                .setValue(structure.offsetZProperty(), 1));
+        registerDefaultState(
+                stateDefinition
+                        .any()
+                        .setValue(AbstractDrillBlock.FACING, Direction.NORTH)
+                        .setValue(structure.offsetXProperty(), 0)
+                        .setValue(structure.offsetYProperty(), 0)
+                        .setValue(structure.offsetZProperty(), 1));
     }
 
     public DrillStructure structure() {
         return structure;
     }
 
-    /** A part is named after its drill (e.g. "burner_mining_drill_part" shows as the burner drill). */
+    /**
+     * A part is named after its drill (e.g. "burner_mining_drill_part" shows as the burner drill).
+     */
     @Override
     public String getDescriptionId() {
         String id = super.getDescriptionId();
@@ -57,9 +62,11 @@ public abstract class AbstractDrillPartBlock extends Block implements EntityBloc
         return new DrillPartBlockEntity(pos, state);
     }
 
-    // Block's constructor calls this before structure is assigned; subclasses use their static offset fields.
+    // Block's constructor calls this before structure is assigned; subclasses use their static
+    // offset fields.
     @Override
-    protected abstract void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder);
+    protected abstract void createBlockStateDefinition(
+            StateDefinition.Builder<Block, BlockState> builder);
 
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
@@ -68,8 +75,8 @@ public abstract class AbstractDrillPartBlock extends Block implements EntityBloc
 
     @Override
     public RenderShape getRenderShape(BlockState state) {
-        // Keeps the part out of chunk-model rendering while allowing vanilla terrain
-        // hit particles, which are suppressed only for RenderShape.INVISIBLE.
+        // Keeps the part out of chunk-model rendering while allowing vanilla terrain hit particles,
+        // which are suppressed only for RenderShape.INVISIBLE.
         return RenderShape.ENTITYBLOCK_ANIMATED;
     }
 
@@ -79,12 +86,14 @@ public abstract class AbstractDrillPartBlock extends Block implements EntityBloc
     }
 
     @Override
-    protected VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+    protected VoxelShape getShape(
+            BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
         return shapeForState(state);
     }
 
     @Override
-    protected VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+    protected VoxelShape getCollisionShape(
+            BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
         return shapeForState(state);
     }
 
@@ -95,7 +104,8 @@ public abstract class AbstractDrillPartBlock extends Block implements EntityBloc
 
     @Override
     protected BlockState rotate(BlockState state, Rotation rotation) {
-        return state.setValue(AbstractDrillBlock.FACING,
+        return state.setValue(
+                AbstractDrillBlock.FACING,
                 rotation.rotate(state.getValue(AbstractDrillBlock.FACING)));
     }
 
@@ -105,19 +115,27 @@ public abstract class AbstractDrillPartBlock extends Block implements EntityBloc
     }
 
     @Override
-    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hitResult) {
+    protected InteractionResult useWithoutItem(
+            BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hitResult) {
         return menuOpener.open(level, structure.originFromPart(pos, state), player);
     }
 
     @SuppressWarnings("deprecation")
     @Override
-    protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos, Player player,
-                                              InteractionHand hand, BlockHitResult hitResult) {
+    protected ItemInteractionResult useItemOn(
+            ItemStack stack,
+            BlockState state,
+            Level level,
+            BlockPos pos,
+            Player player,
+            InteractionHand hand,
+            BlockHitResult hitResult) {
         if (!isFluidPort(state)) {
             return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         }
 
-        net.minecraft.world.level.block.entity.BlockEntity origin = level.getBlockEntity(structure.originFromPart(pos, state));
+        net.minecraft.world.level.block.entity.BlockEntity origin =
+                level.getBlockEntity(structure.originFromPart(pos, state));
         if (!(origin instanceof dev.world.block.entity.AbstractEnergyDrillBlockEntity energyDrill)
                 || !energyDrill.canInteractWithFluidContainer(stack)) {
             return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
@@ -133,7 +151,12 @@ public abstract class AbstractDrillPartBlock extends Block implements EntityBloc
     }
 
     @Override
-    protected void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean movedByPiston) {
+    protected void onPlace(
+            BlockState state,
+            Level level,
+            BlockPos pos,
+            BlockState oldState,
+            boolean movedByPiston) {
         super.onPlace(state, level, pos, oldState, movedByPiston);
         level.invalidateCapabilities(pos);
     }
@@ -144,12 +167,14 @@ public abstract class AbstractDrillPartBlock extends Block implements EntityBloc
     }
 
     @Override
-    public ItemStack getCloneItemStack(BlockState state, HitResult target, LevelReader level, BlockPos pos, Player player) {
+    public ItemStack getCloneItemStack(
+            BlockState state, HitResult target, LevelReader level, BlockPos pos, Player player) {
         return structure.cloneItemStack();
     }
 
     @Override
-    public BlockState playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
+    public BlockState playerWillDestroy(
+            Level level, BlockPos pos, BlockState state, Player player) {
         if (!level.isClientSide) {
             BlockPos origin = structure.originFromPart(pos, state);
             BlockState originState = level.getBlockState(origin);
@@ -162,7 +187,12 @@ public abstract class AbstractDrillPartBlock extends Block implements EntityBloc
     }
 
     @Override
-    public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
+    public void onRemove(
+            BlockState state,
+            Level level,
+            BlockPos pos,
+            BlockState newState,
+            boolean movedByPiston) {
         if (!state.is(newState.getBlock()) && !level.isClientSide) {
             level.invalidateCapabilities(pos);
             if (!SableAssemblyTransfer.isMoving(level, pos)) {
@@ -194,7 +224,6 @@ public abstract class AbstractDrillPartBlock extends Block implements EntityBloc
                 state.getValue(AbstractDrillBlock.FACING),
                 state.getValue(structure.offsetXProperty()),
                 state.getValue(structure.offsetYProperty()),
-                state.getValue(structure.offsetZProperty())
-        );
+                state.getValue(structure.offsetZProperty()));
     }
 }

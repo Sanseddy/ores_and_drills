@@ -1,9 +1,8 @@
 package dev.client.map;
 
+import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
-
-import java.util.List;
 
 public record DiscoveredOreDeposit(
         long id,
@@ -14,13 +13,11 @@ public record DiscoveredOreDeposit(
         int color,
         long remainingOre,
         long initialOre,
-        List<OreMapCell> cells
-) {
+        List<OreMapCell> cells) {
     public DiscoveredOreDeposit {
         center = center.immutable();
         cells = List.copyOf(cells);
     }
 
-    public record OreMapCell(int offsetX, int offsetZ, int remainingOre, int initialOre) {
-    }
+    public record OreMapCell(int offsetX, int offsetZ, int remainingOre, int initialOre) {}
 }

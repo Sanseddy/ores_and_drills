@@ -25,20 +25,27 @@ import net.neoforged.neoforge.client.extensions.common.IClientFluidTypeExtension
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.network.PacketDistributor;
 
-public abstract class AbstractEnergyDrillScreen extends AbstractContainerScreen<AbstractEnergyDrillMenu> {
+public abstract class AbstractEnergyDrillScreen
+        extends AbstractContainerScreen<AbstractEnergyDrillMenu> {
     private static final int FLUID_TILE_SIZE = 16;
     private static final int FLUID_TANK_INSET = 0;
     private static final int WATER_TINT = 0xFF3F76E4;
-    private static final ResourceLocation DRILL_ICON_TEXTURE = ResourceLocation.fromNamespaceAndPath(
-            OresAndDrillsMod.MOD_ID, "textures/gui/drill_gui.png");
+    private static final ResourceLocation DRILL_ICON_TEXTURE =
+            ResourceLocation.fromNamespaceAndPath(
+                    OresAndDrillsMod.MOD_ID, "textures/gui/drill_gui.png");
     private static final int DRILL_ICON_WIDTH = 46;
     private static final int DRILL_ICON_HEIGHT = 66;
-    private static final int DRILL_ICON_SHEET_HEIGHT = DRILL_ICON_HEIGHT * AbstractDrillBlockEntity.GUI_ANIMATION_FRAME_COUNT;
+    private static final int DRILL_ICON_SHEET_HEIGHT =
+            DRILL_ICON_HEIGHT * AbstractDrillBlockEntity.GUI_ANIMATION_FRAME_COUNT;
     private static final String ENERGY_TOOLTIP_KEY = "tooltip.ores_and_drills.mining_drill.energy";
-    private static final String MINING_PROGRESS_TOOLTIP_KEY = "tooltip.ores_and_drills.mining_drill.progress";
-    private static final String PRODUCTIVITY_TOOLTIP_KEY = "tooltip.ores_and_drills.mining_drill.productivity_bar";
-    private static final String FLUID_EMPTY_TOOLTIP_KEY = "tooltip.ores_and_drills.mining_drill.fluid_empty";
-    private static final String FLUID_AMOUNT_TOOLTIP_KEY = "tooltip.ores_and_drills.mining_drill.fluid_amount";
+    private static final String MINING_PROGRESS_TOOLTIP_KEY =
+            "tooltip.ores_and_drills.mining_drill.progress";
+    private static final String PRODUCTIVITY_TOOLTIP_KEY =
+            "tooltip.ores_and_drills.mining_drill.productivity_bar";
+    private static final String FLUID_EMPTY_TOOLTIP_KEY =
+            "tooltip.ores_and_drills.mining_drill.fluid_empty";
+    private static final String FLUID_AMOUNT_TOOLTIP_KEY =
+            "tooltip.ores_and_drills.mining_drill.fluid_amount";
 
     private final ResourceLocation texture;
     private final ResourceLocation energyProgressTexture;
@@ -69,51 +76,153 @@ public abstract class AbstractEnergyDrillScreen extends AbstractContainerScreen<
     private final int drillIconX;
     private final int drillIconY;
 
-    protected AbstractEnergyDrillScreen(AbstractEnergyDrillMenu menu, Inventory playerInventory, Component title,
-                                         ResourceLocation texture, int guiWidth, int guiHeight,
-                                         ResourceLocation energyProgressTexture, int energyProgressX, int energyProgressY, int energyProgressSize,
-                                         ResourceLocation miningProgressTexture, int miningProgressX, int miningProgressY,
-                                         int miningProgressWidth, int miningProgressHeight,
-                                         int textureWidth, int textureHeight, int playerInventoryLabelY) {
-        this(menu, playerInventory, title, texture, guiWidth, guiHeight,
-                energyProgressTexture, energyProgressX, energyProgressY, energyProgressSize, energyProgressSize,
-                miningProgressTexture, miningProgressX, miningProgressY, miningProgressWidth, miningProgressHeight,
-                false, null, 0, 0, 0, 0,
-                -1, -1, -1, -1, 0, 0,
-                -1, -1,
-                textureWidth, textureHeight, playerInventoryLabelY);
+    protected AbstractEnergyDrillScreen(
+            AbstractEnergyDrillMenu menu,
+            Inventory playerInventory,
+            Component title,
+            ResourceLocation texture,
+            int guiWidth,
+            int guiHeight,
+            ResourceLocation energyProgressTexture,
+            int energyProgressX,
+            int energyProgressY,
+            int energyProgressSize,
+            ResourceLocation miningProgressTexture,
+            int miningProgressX,
+            int miningProgressY,
+            int miningProgressWidth,
+            int miningProgressHeight,
+            int textureWidth,
+            int textureHeight,
+            int playerInventoryLabelY) {
+        this(
+                menu,
+                playerInventory,
+                title,
+                texture,
+                guiWidth,
+                guiHeight,
+                energyProgressTexture,
+                energyProgressX,
+                energyProgressY,
+                energyProgressSize,
+                energyProgressSize,
+                miningProgressTexture,
+                miningProgressX,
+                miningProgressY,
+                miningProgressWidth,
+                miningProgressHeight,
+                false,
+                null,
+                0,
+                0,
+                0,
+                0,
+                -1,
+                -1,
+                -1,
+                -1,
+                0,
+                0,
+                -1,
+                -1,
+                textureWidth,
+                textureHeight,
+                playerInventoryLabelY);
     }
 
-    protected AbstractEnergyDrillScreen(AbstractEnergyDrillMenu menu, Inventory playerInventory, Component title,
-                                         ResourceLocation texture, int guiWidth, int guiHeight,
-                                         ResourceLocation energyProgressTexture, int energyProgressX, int energyProgressY,
-                                         int energyProgressWidth, int energyProgressHeight,
-                                         ResourceLocation miningProgressTexture, int miningProgressX, int miningProgressY,
-                                         int miningProgressWidth, int miningProgressHeight,
-                                         int textureWidth, int textureHeight, int playerInventoryLabelY,
-                                         int drillIconX, int drillIconY) {
-        this(menu, playerInventory, title, texture, guiWidth, guiHeight,
-                energyProgressTexture, energyProgressX, energyProgressY, energyProgressWidth, energyProgressHeight,
-                miningProgressTexture, miningProgressX, miningProgressY, miningProgressWidth, miningProgressHeight,
-                false, null, 0, 0, 0, 0,
-                -1, -1, -1, -1, 0, 0,
-                drillIconX, drillIconY,
-                textureWidth, textureHeight, playerInventoryLabelY);
+    protected AbstractEnergyDrillScreen(
+            AbstractEnergyDrillMenu menu,
+            Inventory playerInventory,
+            Component title,
+            ResourceLocation texture,
+            int guiWidth,
+            int guiHeight,
+            ResourceLocation energyProgressTexture,
+            int energyProgressX,
+            int energyProgressY,
+            int energyProgressWidth,
+            int energyProgressHeight,
+            ResourceLocation miningProgressTexture,
+            int miningProgressX,
+            int miningProgressY,
+            int miningProgressWidth,
+            int miningProgressHeight,
+            int textureWidth,
+            int textureHeight,
+            int playerInventoryLabelY,
+            int drillIconX,
+            int drillIconY) {
+        this(
+                menu,
+                playerInventory,
+                title,
+                texture,
+                guiWidth,
+                guiHeight,
+                energyProgressTexture,
+                energyProgressX,
+                energyProgressY,
+                energyProgressWidth,
+                energyProgressHeight,
+                miningProgressTexture,
+                miningProgressX,
+                miningProgressY,
+                miningProgressWidth,
+                miningProgressHeight,
+                false,
+                null,
+                0,
+                0,
+                0,
+                0,
+                -1,
+                -1,
+                -1,
+                -1,
+                0,
+                0,
+                drillIconX,
+                drillIconY,
+                textureWidth,
+                textureHeight,
+                playerInventoryLabelY);
     }
 
-    protected AbstractEnergyDrillScreen(AbstractEnergyDrillMenu menu, Inventory playerInventory, Component title,
-                                         ResourceLocation texture, int guiWidth, int guiHeight,
-                                         ResourceLocation energyProgressTexture, int energyProgressX, int energyProgressY,
-                                         int energyProgressWidth, int energyProgressHeight,
-                                         ResourceLocation miningProgressTexture, int miningProgressX, int miningProgressY,
-                                         int miningProgressWidth, int miningProgressHeight,
-                                         boolean horizontalMiningProgress,
-                                         ResourceLocation productivityProgressTexture, int productivityProgressX, int productivityProgressY,
-                                         int productivityProgressWidth, int productivityProgressHeight,
-                                         int firstFluidTankX, int firstFluidTankY, int secondFluidTankX, int secondFluidTankY,
-                                         int fluidTankWidth, int fluidTankHeight,
-                                         int drillIconX, int drillIconY,
-                                         int textureWidth, int textureHeight, int playerInventoryLabelY) {
+    protected AbstractEnergyDrillScreen(
+            AbstractEnergyDrillMenu menu,
+            Inventory playerInventory,
+            Component title,
+            ResourceLocation texture,
+            int guiWidth,
+            int guiHeight,
+            ResourceLocation energyProgressTexture,
+            int energyProgressX,
+            int energyProgressY,
+            int energyProgressWidth,
+            int energyProgressHeight,
+            ResourceLocation miningProgressTexture,
+            int miningProgressX,
+            int miningProgressY,
+            int miningProgressWidth,
+            int miningProgressHeight,
+            boolean horizontalMiningProgress,
+            ResourceLocation productivityProgressTexture,
+            int productivityProgressX,
+            int productivityProgressY,
+            int productivityProgressWidth,
+            int productivityProgressHeight,
+            int firstFluidTankX,
+            int firstFluidTankY,
+            int secondFluidTankX,
+            int secondFluidTankY,
+            int fluidTankWidth,
+            int fluidTankHeight,
+            int drillIconX,
+            int drillIconY,
+            int textureWidth,
+            int textureHeight,
+            int playerInventoryLabelY) {
         super(menu, playerInventory, title);
         imageWidth = guiWidth;
         imageHeight = guiHeight;
@@ -165,7 +274,10 @@ public abstract class AbstractEnergyDrillScreen extends AbstractContainerScreen<
     }
 
     private boolean tryFluidTankClick(double mouseX, double mouseY, int x, int y) {
-        if (x < 0 || y < 0 || fluidTankWidth <= 0 || fluidTankHeight <= 0
+        if (x < 0
+                || y < 0
+                || fluidTankWidth <= 0
+                || fluidTankHeight <= 0
                 || !isHovering(x, y, fluidTankWidth, fluidTankHeight, mouseX, mouseY)
                 || !canHoldFluid(menu.getCarried())) {
             return false;
@@ -176,36 +288,66 @@ public abstract class AbstractEnergyDrillScreen extends AbstractContainerScreen<
     }
 
     private static boolean canHoldFluid(ItemStack stack) {
-        return !stack.isEmpty() && (stack.is(Items.BUCKET) || stack.getCapability(Capabilities.FluidHandler.ITEM) != null);
+        return !stack.isEmpty()
+                && (stack.is(Items.BUCKET)
+                        || stack.getCapability(Capabilities.FluidHandler.ITEM) != null);
     }
 
     /** A tank's fluid and its area in screen coordinates. */
     public record HoveredFluid(FluidStack fluid, int x, int y, int width, int height) {}
 
-    /** The fluid of the tank under the mouse, so recipe viewers can look it up with the recipe/usage keys. */
+    /**
+     * The fluid of the tank under the mouse, so recipe viewers can look it up with the recipe/usage
+     * keys.
+     */
     public Optional<HoveredFluid> fluidUnderMouse(double mouseX, double mouseY) {
         for (int tank = 0; tank < 2; tank++) {
             int x = tank == 0 ? firstFluidTankX : secondFluidTankX;
             int y = tank == 0 ? firstFluidTankY : secondFluidTankY;
-            if (x < 0 || y < 0 || fluidTankWidth <= 0 || fluidTankHeight <= 0
+            if (x < 0
+                    || y < 0
+                    || fluidTankWidth <= 0
+                    || fluidTankHeight <= 0
                     || !isHovering(x, y, fluidTankWidth, fluidTankHeight, mouseX, mouseY)) {
                 continue;
             }
             FluidStack fluid = menu.getFluidForRender(tank);
-            return fluid.isEmpty() ? Optional.empty()
-                    : Optional.of(new HoveredFluid(fluid, leftPos + x, topPos + y, fluidTankWidth, fluidTankHeight));
+            return fluid.isEmpty()
+                    ? Optional.empty()
+                    : Optional.of(
+                            new HoveredFluid(
+                                    fluid,
+                                    leftPos + x,
+                                    topPos + y,
+                                    fluidTankWidth,
+                                    fluidTankHeight));
         }
         return Optional.empty();
     }
 
     @Override
     protected void renderBg(GuiGraphics guiGraphics, float partialTick, int mouseX, int mouseY) {
-        guiGraphics.blit(texture, leftPos, topPos, 0, 0, imageWidth, imageHeight, textureWidth, textureHeight);
+        guiGraphics.blit(
+                texture,
+                leftPos,
+                topPos,
+                0,
+                0,
+                imageWidth,
+                imageHeight,
+                textureWidth,
+                textureHeight);
 
         int energyHeight = menu.getEnergyProgressHeight(energyProgressHeight);
         if (energyHeight > 0) {
-            blitVerticalProgress(guiGraphics, energyProgressTexture, energyProgressX, energyProgressY,
-                    energyProgressWidth, energyProgressHeight, energyHeight);
+            blitVerticalProgress(
+                    guiGraphics,
+                    energyProgressTexture,
+                    energyProgressX,
+                    energyProgressY,
+                    energyProgressWidth,
+                    energyProgressHeight,
+                    energyHeight);
         }
 
         renderFluidTank(guiGraphics, 0, firstFluidTankX, firstFluidTankY);
@@ -223,14 +365,19 @@ public abstract class AbstractEnergyDrillScreen extends AbstractContainerScreen<
                         miningWidth,
                         miningProgressHeight,
                         miningProgressWidth,
-                        miningProgressHeight
-                );
+                        miningProgressHeight);
             }
         } else {
             int miningHeight = menu.getMiningProgressHeight(miningProgressHeight);
             if (miningHeight > 0) {
-                blitVerticalProgress(guiGraphics, miningProgressTexture, miningProgressX, miningProgressY,
-                        miningProgressWidth, miningProgressHeight, miningHeight);
+                blitVerticalProgress(
+                        guiGraphics,
+                        miningProgressTexture,
+                        miningProgressX,
+                        miningProgressY,
+                        miningProgressWidth,
+                        miningProgressHeight,
+                        miningHeight);
             }
         }
 
@@ -246,8 +393,7 @@ public abstract class AbstractEnergyDrillScreen extends AbstractContainerScreen<
                         productivityWidth,
                         productivityProgressHeight,
                         productivityProgressWidth,
-                        productivityProgressHeight
-                );
+                        productivityProgressHeight);
             }
         }
 
@@ -269,12 +415,17 @@ public abstract class AbstractEnergyDrillScreen extends AbstractContainerScreen<
                 DRILL_ICON_WIDTH,
                 DRILL_ICON_HEIGHT,
                 DRILL_ICON_WIDTH,
-                DRILL_ICON_SHEET_HEIGHT
-        );
+                DRILL_ICON_SHEET_HEIGHT);
     }
 
-    private void blitVerticalProgress(GuiGraphics guiGraphics, ResourceLocation progressTexture,
-                                      int x, int y, int width, int height, int progressHeight) {
+    private void blitVerticalProgress(
+            GuiGraphics guiGraphics,
+            ResourceLocation progressTexture,
+            int x,
+            int y,
+            int width,
+            int height,
+            int progressHeight) {
         int offset = height - progressHeight;
         guiGraphics.blit(
                 progressTexture,
@@ -285,8 +436,7 @@ public abstract class AbstractEnergyDrillScreen extends AbstractContainerScreen<
                 width,
                 progressHeight,
                 width,
-                height
-        );
+                height);
     }
 
     private void renderFluidTank(GuiGraphics guiGraphics, int tank, int x, int y) {
@@ -301,7 +451,9 @@ public abstract class AbstractEnergyDrillScreen extends AbstractContainerScreen<
             int offset = innerHeight - fluidHeight;
             FluidStack fluid = menu.getFluidForRender(tank);
             if (!fluid.isEmpty()) {
-                renderFluid(guiGraphics, fluid,
+                renderFluid(
+                        guiGraphics,
+                        fluid,
                         leftPos + x + FLUID_TANK_INSET,
                         topPos + y + FLUID_TANK_INSET + offset,
                         innerWidth,
@@ -310,11 +462,18 @@ public abstract class AbstractEnergyDrillScreen extends AbstractContainerScreen<
         }
     }
 
-    private void renderFluid(GuiGraphics guiGraphics, FluidStack fluid, int x, int y, int width, int height) {
+    private void renderFluid(
+            GuiGraphics guiGraphics, FluidStack fluid, int x, int y, int width, int height) {
         IClientFluidTypeExtensions extensions = IClientFluidTypeExtensions.of(fluid.getFluid());
         ResourceLocation stillTexture = extensions.getStillTexture(fluid);
-        TextureAtlasSprite sprite = Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(stillTexture);
-        int tint = fluid.is(Fluids.WATER) || fluid.is(Fluids.FLOWING_WATER) ? WATER_TINT : extensions.getTintColor(fluid);
+        TextureAtlasSprite sprite =
+                Minecraft.getInstance()
+                        .getTextureAtlas(TextureAtlas.LOCATION_BLOCKS)
+                        .apply(stillTexture);
+        int tint =
+                fluid.is(Fluids.WATER) || fluid.is(Fluids.FLOWING_WATER)
+                        ? WATER_TINT
+                        : extensions.getTintColor(fluid);
         float alpha = ((tint >> 24) & 0xFF) / 255.0F;
         float red = ((tint >> 16) & 0xFF) / 255.0F;
         float green = ((tint >> 8) & 0xFF) / 255.0F;
@@ -328,27 +487,29 @@ public abstract class AbstractEnergyDrillScreen extends AbstractContainerScreen<
             int tileHeight = Math.min(FLUID_TILE_SIZE, height - drawY);
             for (int drawX = 0; drawX < width; drawX += FLUID_TILE_SIZE) {
                 int tileWidth = Math.min(FLUID_TILE_SIZE, width - drawX);
-                guiGraphics.blit(
-                        x + drawX,
-                        y + drawY,
-                        0,
-                        tileWidth,
-                        tileHeight,
-                        sprite
-                );
+                guiGraphics.blit(x + drawX, y + drawY, 0, tileWidth, tileHeight, sprite);
             }
         }
         guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
     private void renderBarTooltip(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        if (isHovering(energyProgressX, energyProgressY, energyProgressWidth, energyProgressHeight, mouseX, mouseY)) {
+        if (isHovering(
+                energyProgressX,
+                energyProgressY,
+                energyProgressWidth,
+                energyProgressHeight,
+                mouseX,
+                mouseY)) {
             guiGraphics.renderTooltip(
                     font,
-                    plainTooltip(Component.translatable(ENERGY_TOOLTIP_KEY, menu.getEnergyStored(), menu.getEnergyCapacity())),
+                    plainTooltip(
+                            Component.translatable(
+                                    ENERGY_TOOLTIP_KEY,
+                                    menu.getEnergyStored(),
+                                    menu.getEnergyCapacity())),
                     mouseX,
-                    mouseY
-            );
+                    mouseY);
             return;
         }
 
@@ -356,58 +517,86 @@ public abstract class AbstractEnergyDrillScreen extends AbstractContainerScreen<
             return;
         }
 
-        if (renderFluidTooltip(guiGraphics, mouseX, mouseY, 1, secondFluidTankX, secondFluidTankY)) {
+        if (renderFluidTooltip(
+                guiGraphics, mouseX, mouseY, 1, secondFluidTankX, secondFluidTankY)) {
             return;
         }
 
-        if (isHovering(miningProgressX, miningProgressY, miningProgressWidth, miningProgressHeight, mouseX, mouseY)) {
+        if (isHovering(
+                miningProgressX,
+                miningProgressY,
+                miningProgressWidth,
+                miningProgressHeight,
+                mouseX,
+                mouseY)) {
             guiGraphics.renderTooltip(
                     font,
-                    plainTooltip(Component.translatable(MINING_PROGRESS_TOOLTIP_KEY, menu.getMiningProgressPercent())),
+                    plainTooltip(
+                            Component.translatable(
+                                    MINING_PROGRESS_TOOLTIP_KEY, menu.getMiningProgressPercent())),
                     mouseX,
-                    mouseY
-            );
+                    mouseY);
             return;
         }
 
         if (productivityProgressTexture != null
-                && isHovering(productivityProgressX, productivityProgressY, productivityProgressWidth, productivityProgressHeight, mouseX, mouseY)) {
+                && isHovering(
+                        productivityProgressX,
+                        productivityProgressY,
+                        productivityProgressWidth,
+                        productivityProgressHeight,
+                        mouseX,
+                        mouseY)) {
             guiGraphics.renderComponentTooltip(font, productivityTooltip(), mouseX, mouseY);
         }
     }
 
     private List<Component> productivityTooltip() {
         List<Component> lines = new ArrayList<>(4);
-        lines.add(plainTooltip(Component.translatable(PRODUCTIVITY_TOOLTIP_KEY, menu.getProductivityProgressPercent())));
-        lines.add(plainTooltip(Component.translatable(PRODUCTIVITY_TOOLTIP_KEY + ".rate", menu.getProductivityPercent()))
-                .withStyle(ChatFormatting.GRAY));
+        lines.add(
+                plainTooltip(
+                        Component.translatable(
+                                PRODUCTIVITY_TOOLTIP_KEY, menu.getProductivityProgressPercent())));
+        lines.add(
+                plainTooltip(
+                                Component.translatable(
+                                        PRODUCTIVITY_TOOLTIP_KEY + ".rate",
+                                        menu.getProductivityPercent()))
+                        .withStyle(ChatFormatting.GRAY));
         int pendingBonus = menu.getPendingBonusCycles();
         if (pendingBonus > 0) {
-            lines.add(plainTooltip(Component.translatable(PRODUCTIVITY_TOOLTIP_KEY + ".pending", pendingBonus))
-                    .withStyle(ChatFormatting.LIGHT_PURPLE));
+            lines.add(
+                    plainTooltip(
+                                    Component.translatable(
+                                            PRODUCTIVITY_TOOLTIP_KEY + ".pending", pendingBonus))
+                            .withStyle(ChatFormatting.LIGHT_PURPLE));
         }
         return lines;
     }
 
-    private boolean renderFluidTooltip(GuiGraphics guiGraphics, int mouseX, int mouseY, int tank, int x, int y) {
+    private boolean renderFluidTooltip(
+            GuiGraphics guiGraphics, int mouseX, int mouseY, int tank, int x, int y) {
         if (x < 0 || y < 0 || !isHovering(x, y, fluidTankWidth, fluidTankHeight, mouseX, mouseY)) {
             return false;
         }
 
         FluidStack fluid = menu.getFluidForRender(tank);
-        Component name = fluid.isEmpty()
-                ? plainTooltip(Component.translatable(FLUID_EMPTY_TOOLTIP_KEY))
-                : fluid.getHoverName().copy().withStyle(style -> style.withItalic(false));
+        Component name =
+                fluid.isEmpty()
+                        ? plainTooltip(Component.translatable(FLUID_EMPTY_TOOLTIP_KEY))
+                        : fluid.getHoverName().copy().withStyle(style -> style.withItalic(false));
         guiGraphics.renderTooltip(
                 font,
                 java.util.List.of(
                         name,
-                        plainTooltip(Component.translatable(FLUID_AMOUNT_TOOLTIP_KEY, menu.getFluidAmount(tank), menu.getFluidCapacity(tank)))
-                ),
+                        plainTooltip(
+                                Component.translatable(
+                                        FLUID_AMOUNT_TOOLTIP_KEY,
+                                        menu.getFluidAmount(tank),
+                                        menu.getFluidCapacity(tank)))),
                 java.util.Optional.empty(),
                 mouseX,
-                mouseY
-        );
+                mouseY);
         return true;
     }
 
@@ -418,6 +607,7 @@ public abstract class AbstractEnergyDrillScreen extends AbstractContainerScreen<
     @Override
     protected void renderLabels(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         guiGraphics.drawString(font, title, 8, 6, 0x404040, false);
-        guiGraphics.drawString(font, playerInventoryTitle, 8, playerInventoryLabelY, 0x404040, false);
+        guiGraphics.drawString(
+                font, playerInventoryTitle, 8, playerInventoryLabelY, 0x404040, false);
     }
 }

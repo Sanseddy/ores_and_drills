@@ -8,14 +8,17 @@ import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 public final class ModSounds {
-    public static final DeferredRegister<SoundEvent> SOUND_EVENTS = DeferredRegister.create(
-            Registries.SOUND_EVENT, OresAndDrillsMod.MOD_ID);
+    public static final DeferredRegister<SoundEvent> SOUND_EVENTS =
+            DeferredRegister.create(Registries.SOUND_EVENT, OresAndDrillsMod.MOD_ID);
 
-    /** Looped while an ultimate drill works; its range comes from {@code attenuation_distance} in sounds.json. */
-    public static final DeferredHolder<SoundEvent, SoundEvent> ULTIMATE_MINING_DRILL_WORK = register("block.ultimate_mining_drill.work");
+    /**
+     * Looped while an ultimate drill works; its range comes from {@code attenuation_distance} in
+     * sounds.json.
+     */
+    public static final DeferredHolder<SoundEvent, SoundEvent> ULTIMATE_MINING_DRILL_WORK =
+            register("block.ultimate_mining_drill.work");
 
-    private ModSounds() {
-    }
+    private ModSounds() {}
 
     private static DeferredHolder<SoundEvent, SoundEvent> register(String name) {
         ResourceLocation id = ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, name);

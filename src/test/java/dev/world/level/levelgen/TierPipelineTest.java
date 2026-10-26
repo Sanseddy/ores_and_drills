@@ -1,25 +1,26 @@
 package dev.world.level.levelgen;
 
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
 
 class TierPipelineTest {
     @Test
     void everyTierSelectsItsOwnResolverAndSeedSpace() {
-        Set<Class<?>> resolverTypes = Arrays.stream(OreDepositTier.values())
-                .map(DepositResolvers::forTier)
-                .map(Object::getClass)
-                .collect(Collectors.toSet());
-        Set<Long> salts = Arrays.stream(OreDepositTier.values())
-                .map(DepositResolvers::forTier)
-                .map(TierDepositResolver::tierSalt)
-                .collect(Collectors.toSet());
+        Set<Class<?>> resolverTypes =
+                Arrays.stream(OreDepositTier.values())
+                        .map(DepositResolvers::forTier)
+                        .map(Object::getClass)
+                        .collect(Collectors.toSet());
+        Set<Long> salts =
+                Arrays.stream(OreDepositTier.values())
+                        .map(DepositResolvers::forTier)
+                        .map(TierDepositResolver::tierSalt)
+                        .collect(Collectors.toSet());
 
         assertEquals(OreDepositTier.values().length, resolverTypes.size());
         assertEquals(OreDepositTier.values().length, salts.size());
@@ -56,5 +57,4 @@ class TierPipelineTest {
 
         assertEquals(4, Set.of(tiny, small, medium, large).size());
     }
-
 }

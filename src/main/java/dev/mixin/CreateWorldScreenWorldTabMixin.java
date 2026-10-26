@@ -16,31 +16,37 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 
-/** Adds the "Ore Settings" button to the World tab of vanilla's world-creation screen, right below the seed field. */
+/**
+ * Adds the "Ore Settings" button to the World tab of vanilla's world-creation screen, right below
+ * the seed field.
+ */
 @Mixin(targets = "net.minecraft.client.gui.screens.worldselection.CreateWorldScreen$WorldTab")
 public abstract class CreateWorldScreenWorldTabMixin {
-    @Shadow
-    @Final
-    CreateWorldScreen this$0;
+    @Shadow @Final CreateWorldScreen this$0;
 
     @Inject(
             method = "<init>",
-            at = @At(
-                    value = "INVOKE",
-                    target = "Lnet/minecraft/client/gui/screens/worldselection/SwitchGrid;builder(I)Lnet/minecraft/client/gui/screens/worldselection/SwitchGrid$Builder;"
-            ),
-            locals = LocalCapture.CAPTURE_FAILHARD
-    )
+            at =
+                    @At(
+                            value = "INVOKE",
+                            target =
+                                    "Lnet/minecraft/client/gui/screens/worldselection/SwitchGrid;builder(I)Lnet/minecraft/client/gui/screens/worldselection/SwitchGrid$Builder;"),
+            locals = LocalCapture.CAPTURE_FAILHARD)
     private void oresAndDrills$addOreSettingsButton(
             CreateWorldScreen createWorldScreen,
             CallbackInfo callbackInfo,
             GridLayout.RowHelper rowHelper,
-            CycleButton<WorldCreationUiState.WorldTypeEntry> worldTypeButton
-    ) {
-        Button oreSettingsButton = Button.builder(
-                Component.translatable("gui.ores_and_drills.ore_settings.open_button"),
-                button -> Minecraft.getInstance().setScreen(new OreDepositSettingsScreen(this.this$0))
-        ).width(308).build();
+            CycleButton<WorldCreationUiState.WorldTypeEntry> worldTypeButton) {
+        Button oreSettingsButton =
+                Button.builder(
+                                Component.translatable(
+                                        "gui.ores_and_drills.ore_settings.open_button"),
+                                button ->
+                                        Minecraft.getInstance()
+                                                .setScreen(
+                                                        new OreDepositSettingsScreen(this.this$0)))
+                        .width(308)
+                        .build();
         rowHelper.addChild(oreSettingsButton, 2);
     }
 }

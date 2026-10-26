@@ -1,15 +1,14 @@
 package dev.world.block;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
-
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 
 /** Exact, non-axis-aligned model geometry clipped to one block-local 16x16x16 cell. */
 public final class DrillModelCell {
@@ -32,10 +31,14 @@ public final class DrillModelCell {
         return lines;
     }
 
-    /** Visits every model triangle of this cell in block-local coordinates (used for placement previews). */
+    /**
+     * Visits every model triangle of this cell in block-local coordinates (used for placement
+     * previews).
+     */
     public void forEachTriangle(TriangleVisitor visitor) {
         for (Triangle triangle : triangles) {
-            visitor.accept(triangle.first(), triangle.second(), triangle.third(), triangle.normal());
+            visitor.accept(
+                    triangle.first(), triangle.second(), triangle.third(), triangle.normal());
         }
     }
 
@@ -52,7 +55,8 @@ public final class DrillModelCell {
 
         for (Triangle triangle : triangles) {
             Intersection intersection = triangle.intersect(start, delta);
-            if (intersection != null && (nearest == null || intersection.distance() < nearest.distance())) {
+            if (intersection != null
+                    && (nearest == null || intersection.distance() < nearest.distance())) {
                 nearest = intersection;
             }
         }
@@ -65,7 +69,8 @@ public final class DrillModelCell {
             normal = normal.scale(-1.0D);
         }
         Vec3 location = worldStart.add(delta.scale(nearest.distance()));
-        return new BlockHitResult(location, Direction.getNearest(normal.x, normal.y, normal.z), blockPos, false);
+        return new BlockHitResult(
+                location, Direction.getNearest(normal.x, normal.y, normal.z), blockPos, false);
     }
 
     DrillModelCell rotateY(int clockwiseQuarterTurns) {
@@ -79,8 +84,7 @@ public final class DrillModelCell {
             builder.addTriangle(
                     rotatePoint(triangle.first(), turns),
                     rotatePoint(triangle.second(), turns),
-                    rotatePoint(triangle.third(), turns)
-            );
+                    rotatePoint(triangle.third(), turns));
         }
         for (Line line : lines) {
             builder.addLine(rotatePoint(line.start(), turns), rotatePoint(line.end(), turns));
@@ -101,10 +105,10 @@ public final class DrillModelCell {
         };
     }
 
-    public record Line(Vec3 start, Vec3 end) {
-    }
+    public record Line(Vec3 start, Vec3 end) {}
 
-    private record Triangle(Vec3 first, Vec3 second, Vec3 third, Vec3 edgeOne, Vec3 edgeTwo, Vec3 normal) {
+    private record Triangle(
+            Vec3 first, Vec3 second, Vec3 third, Vec3 edgeOne, Vec3 edgeTwo, Vec3 normal) {
         private Triangle(Vec3 first, Vec3 second, Vec3 third) {
             this(
                     first,
@@ -112,8 +116,7 @@ public final class DrillModelCell {
                     third,
                     second.subtract(first),
                     third.subtract(first),
-                    second.subtract(first).cross(third.subtract(first)).normalize()
-            );
+                    second.subtract(first).cross(third.subtract(first)).normalize());
         }
 
         private Intersection intersect(Vec3 start, Vec3 direction) {
@@ -144,8 +147,7 @@ public final class DrillModelCell {
         }
     }
 
-    private record Intersection(double distance, Vec3 normal) {
-    }
+    private record Intersection(double distance, Vec3 normal) {}
 
     static final class Builder {
         private static final double KEY_SCALE = 1.0E7D;
@@ -167,7 +169,8 @@ public final class DrillModelCell {
         }
 
         private void addTriangle(Vec3 first, Vec3 second, Vec3 third) {
-            if (second.subtract(first).cross(third.subtract(first)).lengthSqr() <= EPSILON * EPSILON) {
+            if (second.subtract(first).cross(third.subtract(first)).lengthSqr()
+                    <= EPSILON * EPSILON) {
                 return;
             }
             triangles.add(new Triangle(first, second, third));
@@ -184,7 +187,9 @@ public final class DrillModelCell {
         }
 
         DrillModelCell build() {
-            return triangles.isEmpty() ? EMPTY : new DrillModelCell(List.copyOf(triangles), List.copyOf(lines));
+            return triangles.isEmpty()
+                    ? EMPTY
+                    : new DrillModelCell(List.copyOf(triangles), List.copyOf(lines));
         }
 
         private record PointKey(long x, long y, long z) implements Comparable<PointKey> {
@@ -192,8 +197,7 @@ public final class DrillModelCell {
                 return new PointKey(
                         Math.round(point.x * KEY_SCALE),
                         Math.round(point.y * KEY_SCALE),
-                        Math.round(point.z * KEY_SCALE)
-                );
+                        Math.round(point.z * KEY_SCALE));
             }
 
             @Override

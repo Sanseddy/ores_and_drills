@@ -2,19 +2,18 @@ package dev.world.level.levelgen;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-
 import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * Block states a serialized feature configuration can place. Any feature type writes its block states with
- * the {@code BlockState} codec ({@code {"Name": id, "Properties": {...}}}), whether directly, through a state
- * provider or inside a nested feature, so walking the encoded tree finds them without knowing the feature.
- * Rule tests ({@code predicate_type}) only describe which blocks get replaced and are skipped.
+ * Block states a serialized feature configuration can place. Any feature type writes its block
+ * states with the {@code BlockState} codec ({@code {"Name": id, "Properties": {...}}}), whether
+ * directly, through a state provider or inside a nested feature, so walking the encoded tree finds
+ * them without knowing the feature. Rule tests ({@code predicate_type}) only describe which blocks
+ * get replaced and are skipped.
  */
 final class FeatureBlockStates {
-    private FeatureBlockStates() {
-    }
+    private FeatureBlockStates() {}
 
     static void forEachPlacedStateName(JsonElement element, Consumer<String> names) {
         if (element == null) {

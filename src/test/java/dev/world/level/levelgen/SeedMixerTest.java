@@ -1,15 +1,17 @@
 package dev.world.level.levelgen;
 
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+
+import org.junit.jupiter.api.Test;
 
 class SeedMixerTest {
     @Test
     void stringHashIsStable() {
-        assertEquals(SeedMixer.hash64("minecraft:overworld"), SeedMixer.hash64("minecraft:overworld"));
-        assertNotEquals(SeedMixer.hash64("minecraft:overworld"), SeedMixer.hash64("minecraft:the_nether"));
+        assertEquals(
+                SeedMixer.hash64("minecraft:overworld"), SeedMixer.hash64("minecraft:overworld"));
+        assertNotEquals(
+                SeedMixer.hash64("minecraft:overworld"), SeedMixer.hash64("minecraft:the_nether"));
     }
 
     @Test

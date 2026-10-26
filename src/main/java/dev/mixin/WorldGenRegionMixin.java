@@ -14,27 +14,34 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(WorldGenRegion.class)
 public abstract class WorldGenRegionMixin {
     @Inject(
-            method = "setBlock(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;II)Z",
+            method =
+                    "setBlock(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;II)Z",
             at = @At("HEAD"),
-            cancellable = true
-    )
+            cancellable = true)
     private void oresAndDrills$keepDepositOnSet(
-            BlockPos pos, BlockState state, int flags, int recursionLeft, CallbackInfoReturnable<Boolean> cir
-    ) {
+            BlockPos pos,
+            BlockState state,
+            int flags,
+            int recursionLeft,
+            CallbackInfoReturnable<Boolean> cir) {
         if (DepositWorldgenGuard.blocksWrite((WorldGenRegion) (Object) this, pos, state)) {
             cir.setReturnValue(false);
         }
     }
 
     @Inject(
-            method = "destroyBlock(Lnet/minecraft/core/BlockPos;ZLnet/minecraft/world/entity/Entity;I)Z",
+            method =
+                    "destroyBlock(Lnet/minecraft/core/BlockPos;ZLnet/minecraft/world/entity/Entity;I)Z",
             at = @At("HEAD"),
-            cancellable = true
-    )
+            cancellable = true)
     private void oresAndDrills$keepDepositOnDestroy(
-            BlockPos pos, boolean dropBlock, Entity entity, int recursionLeft, CallbackInfoReturnable<Boolean> cir
-    ) {
-        if (DepositWorldgenGuard.blocksWrite((WorldGenRegion) (Object) this, pos, Blocks.AIR.defaultBlockState())) {
+            BlockPos pos,
+            boolean dropBlock,
+            Entity entity,
+            int recursionLeft,
+            CallbackInfoReturnable<Boolean> cir) {
+        if (DepositWorldgenGuard.blocksWrite(
+                (WorldGenRegion) (Object) this, pos, Blocks.AIR.defaultBlockState())) {
             cir.setReturnValue(false);
         }
     }

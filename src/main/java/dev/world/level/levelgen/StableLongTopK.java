@@ -6,8 +6,9 @@ import java.util.List;
 import java.util.PriorityQueue;
 
 /**
- * Primitive-long variant of {@link StableTopK}. It is used while scanning deposit lenses so rejected
- * block positions do not need a {@code BlockPos} and {@code DepositPosition} allocation of their own.
+ * Primitive-long variant of {@link StableTopK}. It is used while scanning deposit lenses so
+ * rejected block positions do not need a {@code BlockPos} and {@code DepositPosition} allocation of
+ * their own.
  */
 final class StableLongTopK<T> {
     private final int limit;

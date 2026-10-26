@@ -1,23 +1,24 @@
 package dev.drill;
 
-import dev.OresAndDrillsMod;
-import dev.registry.ModBlockEntities;
-import dev.registry.ModBlocks;
-import dev.registry.ModMenuTypes;
-import dev.world.block.AbstractDrillBlock;
-import dev.world.block.AbstractDrillPartBlock;
-import dev.world.inventory.DrillMenuValidity;
-import dev.world.block.MiningDrillTier;
-import dev.world.block.entity.AbstractDrillBlockEntity;
-import dev.world.block.entity.drill.DrillBit;
-import dev.world.block.entity.drill.FuelBurner;
-import dev.world.item.AbstractDrillBlockItem;
-import dev.util.ProgressMath;
-import java.util.function.Consumer;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import com.mojang.serialization.MapCodec;
+import dev.OresAndDrillsMod;
+import dev.client.drill.DrillGeoRenderer;
+import dev.registry.ModBlockEntities;
+import dev.registry.ModBlocks;
+import dev.registry.ModMenuTypes;
+import dev.util.ProgressMath;
+import dev.world.block.AbstractDrillBlock;
+import dev.world.block.AbstractDrillPartBlock;
+import dev.world.block.MiningDrillTier;
+import dev.world.block.entity.AbstractDrillBlockEntity;
+import dev.world.block.entity.drill.DrillBit;
+import dev.world.block.entity.drill.FuelBurner;
+import dev.world.inventory.DrillMenuValidity;
+import dev.world.item.AbstractDrillBlockItem;
+import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -50,40 +51,45 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
-import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.animatable.client.GeoRenderProvider;
+import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.model.GeoModel;
-import dev.client.drill.DrillGeoRenderer;
 import software.bernie.geckolib.renderer.GeoItemRenderer;
 
 public final class BurnerMiningDrill {
-    public static final MiningDrillTier TIER = new MiningDrillTier(2, 160, 1, new ItemStack(Items.STONE_PICKAXE), 0);
-    /** The bit sits at the centre of the 2×2 body: half a block left of and in front of the main block. */
+    public static final MiningDrillTier TIER =
+            new MiningDrillTier(2, 160, 1, new ItemStack(Items.STONE_PICKAXE), 0);
+
+    /**
+     * The bit sits at the centre of the 2×2 body: half a block left of and in front of the main
+     * block.
+     */
     public static final DrillBit DRILL_BIT = new DrillBit(-0.5D, 0.5D, 0.3D, 1.6D);
 
-    private static final Component MENU_TITLE = Component.translatable("block.ores_and_drills.burner_mining_drill");
+    private static final Component MENU_TITLE =
+            Component.translatable("block.ores_and_drills.burner_mining_drill");
 
-    private BurnerMiningDrill() {
-    }
+    private BurnerMiningDrill() {}
 
     private static InteractionResult openMenu(Level level, BlockPos origin, Player player) {
         if (!level.isClientSide) {
-            net.minecraft.world.level.block.entity.BlockEntity blockEntity = level.getBlockEntity(origin);
+            net.minecraft.world.level.block.entity.BlockEntity blockEntity =
+                    level.getBlockEntity(origin);
             if (!(blockEntity instanceof BlockEntity drillBlockEntity)) {
                 return InteractionResult.CONSUME;
             }
 
-            player.openMenu(new SimpleMenuProvider(
-                    (containerId, playerInventory, menuPlayer) -> new Menu(
-                            containerId,
-                            playerInventory,
-                            ContainerLevelAccess.create(level, origin),
-                            drillBlockEntity.getInventory(),
-                            drillBlockEntity.getPreviewContainer(),
-                            drillBlockEntity
-                    ),
-                    MENU_TITLE
-            ));
+            player.openMenu(
+                    new SimpleMenuProvider(
+                            (containerId, playerInventory, menuPlayer) ->
+                                    new Menu(
+                                            containerId,
+                                            playerInventory,
+                                            ContainerLevelAccess.create(level, origin),
+                                            drillBlockEntity.getInventory(),
+                                            drillBlockEntity.getPreviewContainer(),
+                                            drillBlockEntity),
+                            MENU_TITLE));
         }
 
         return InteractionResult.sidedSuccess(level.isClientSide);
@@ -102,28 +108,36 @@ public final class BurnerMiningDrill {
         }
 
         @Override
-        public net.minecraft.world.level.block.entity.BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
+        public net.minecraft.world.level.block.entity.BlockEntity newBlockEntity(
+                BlockPos pos, BlockState state) {
             return new BlockEntity(pos, state);
         }
 
         @Override
-        public <T extends net.minecraft.world.level.block.entity.BlockEntity> BlockEntityTicker<T> getTicker(
-                Level level, BlockState state, BlockEntityType<T> blockEntityType) {
-            return createTickerHelper(blockEntityType, ModBlockEntities.BURNER_MINING_DRILL.get(), BlockEntity::tick);
+        public <T extends net.minecraft.world.level.block.entity.BlockEntity>
+                BlockEntityTicker<T> getTicker(
+                        Level level, BlockState state, BlockEntityType<T> blockEntityType) {
+            return createTickerHelper(
+                    blockEntityType, ModBlockEntities.BURNER_MINING_DRILL.get(), BlockEntity::tick);
         }
     }
 
     public static class PartBlock extends AbstractDrillPartBlock {
-        public static final IntegerProperty OFFSET_X = IntegerProperty.create("offset_x", 0, TIER.size() - 1);
-        public static final IntegerProperty OFFSET_Y = IntegerProperty.create("offset_y", 0, TIER.size() - 1);
-        public static final IntegerProperty OFFSET_Z = IntegerProperty.create("offset_z", 0, TIER.size() - 1);
+        public static final IntegerProperty OFFSET_X =
+                IntegerProperty.create("offset_x", 0, TIER.size() - 1);
+        public static final IntegerProperty OFFSET_Y =
+                IntegerProperty.create("offset_y", 0, TIER.size() - 1);
+        public static final IntegerProperty OFFSET_Z =
+                IntegerProperty.create("offset_z", 0, TIER.size() - 1);
 
         public PartBlock(Properties properties) {
             super(properties, ModBlocks.BURNER_STRUCTURE, BurnerMiningDrill::openMenu);
         }
 
         @Override
-        protected void createBlockStateDefinition(StateDefinition.Builder<net.minecraft.world.level.block.Block, BlockState> builder) {
+        protected void createBlockStateDefinition(
+                StateDefinition.Builder<net.minecraft.world.level.block.Block, BlockState>
+                        builder) {
             builder.add(AbstractDrillBlock.FACING, OFFSET_X, OFFSET_Y, OFFSET_Z);
         }
     }
@@ -135,7 +149,14 @@ public final class BurnerMiningDrill {
         private final FuelBurner fuelBurner = new FuelBurner();
 
         public BlockEntity(BlockPos pos, BlockState blockState) {
-            super(ModBlockEntities.BURNER_MINING_DRILL.get(), pos, blockState, TIER, ModBlocks.BURNER_STRUCTURE, 2, OUTPUT_SLOT);
+            super(
+                    ModBlockEntities.BURNER_MINING_DRILL.get(),
+                    pos,
+                    blockState,
+                    TIER,
+                    ModBlocks.BURNER_STRUCTURE,
+                    2,
+                    OUTPUT_SLOT);
         }
 
         @Override
@@ -171,7 +192,8 @@ public final class BurnerMiningDrill {
             fuelBurner.setFuelDuration(fuelDuration);
         }
 
-        public static void tick(Level level, BlockPos pos, BlockState state, BlockEntity blockEntity) {
+        public static void tick(
+                Level level, BlockPos pos, BlockState state, BlockEntity blockEntity) {
             if (!state.is(ModBlocks.BURNER_MINING_DRILL.get())) {
                 return;
             }
@@ -189,8 +211,8 @@ public final class BurnerMiningDrill {
             changed |= scan.changed();
             FuelBurner fuelBurner = blockEntity.fuelBurner;
 
-            // Like a furnace: new fuel is lit only when there is work, but lit fuel burns down every tick
-            // until it is spent, whether or not the drill can keep mining.
+            // Like a furnace: new fuel is lit only when there is work, but lit fuel burns down
+            // every tick until it is spent, whether or not the drill can keep mining.
             if (!fuelBurner.isBurning() && canMine && outputReady) {
                 changed |= fuelBurner.consume(blockEntity.inventory, FUEL_SLOT);
             } else if (!fuelBurner.isBurning()) {
@@ -238,11 +260,22 @@ public final class BurnerMiningDrill {
         private final int[] clientData = new int[5];
 
         public Menu(int containerId, Inventory playerInventory) {
-            this(containerId, playerInventory, ContainerLevelAccess.NULL, new SimpleContainer(2), new SimpleContainer(6), null);
+            this(
+                    containerId,
+                    playerInventory,
+                    ContainerLevelAccess.NULL,
+                    new SimpleContainer(2),
+                    new SimpleContainer(6),
+                    null);
         }
 
-        public Menu(int containerId, Inventory playerInventory, ContainerLevelAccess access,
-                    Container fuelContainer, Container previewContainer, BlockEntity blockEntity) {
+        public Menu(
+                int containerId,
+                Inventory playerInventory,
+                ContainerLevelAccess access,
+                Container fuelContainer,
+                Container previewContainer,
+                BlockEntity blockEntity) {
             super(ModMenuTypes.BURNER_MINING_DRILL.get(), containerId);
             this.access = access;
 
@@ -258,7 +291,12 @@ public final class BurnerMiningDrill {
 
             for (int row = 0; row < 3; row++) {
                 for (int column = 0; column < 9; column++) {
-                    addSlot(new Slot(playerInventory, column + row * 9 + 9, 8 + column * 18, 106 + row * 18));
+                    addSlot(
+                            new Slot(
+                                    playerInventory,
+                                    column + row * 9 + 9,
+                                    8 + column * 18,
+                                    106 + row * 18));
                 }
             }
 
@@ -296,7 +334,8 @@ public final class BurnerMiningDrill {
                     if (!moveItemStackTo(stack, HOTBAR_START, HOTBAR_END, false)) {
                         return ItemStack.EMPTY;
                     }
-                } else if (!moveItemStackTo(stack, PLAYER_INVENTORY_START, PLAYER_INVENTORY_END, false)) {
+                } else if (!moveItemStackTo(
+                        stack, PLAYER_INVENTORY_START, PLAYER_INVENTORY_END, false)) {
                     return ItemStack.EMPTY;
                 }
 
@@ -312,7 +351,11 @@ public final class BurnerMiningDrill {
 
         @Override
         public boolean stillValid(Player player) {
-            return DrillMenuValidity.stillValid(access, player, ModBlocks.BURNER_MINING_DRILL.get(), ModBlocks.BURNER_STRUCTURE);
+            return DrillMenuValidity.stillValid(
+                    access,
+                    player,
+                    ModBlocks.BURNER_MINING_DRILL.get(),
+                    ModBlocks.BURNER_STRUCTURE);
         }
 
         public int getFuelProgressHeight() {
@@ -357,64 +400,69 @@ public final class BurnerMiningDrill {
                 return;
             }
 
-            addDataSlot(new DataSlot() {
-                @Override
-                public int get() {
-                    return blockEntity.getFuelTime();
-                }
+            addDataSlot(
+                    new DataSlot() {
+                        @Override
+                        public int get() {
+                            return blockEntity.getFuelTime();
+                        }
 
-                @Override
-                public void set(int value) {
-                    blockEntity.setFuelTime(value);
-                    clientData[0] = value;
-                }
-            });
-            addDataSlot(new DataSlot() {
-                @Override
-                public int get() {
-                    return blockEntity.getFuelDuration();
-                }
+                        @Override
+                        public void set(int value) {
+                            blockEntity.setFuelTime(value);
+                            clientData[0] = value;
+                        }
+                    });
+            addDataSlot(
+                    new DataSlot() {
+                        @Override
+                        public int get() {
+                            return blockEntity.getFuelDuration();
+                        }
 
-                @Override
-                public void set(int value) {
-                    blockEntity.setFuelDuration(value);
-                    clientData[1] = value;
-                }
-            });
-            addDataSlot(new DataSlot() {
-                @Override
-                public int get() {
-                    return blockEntity.getMiningProgress();
-                }
+                        @Override
+                        public void set(int value) {
+                            blockEntity.setFuelDuration(value);
+                            clientData[1] = value;
+                        }
+                    });
+            addDataSlot(
+                    new DataSlot() {
+                        @Override
+                        public int get() {
+                            return blockEntity.getMiningProgress();
+                        }
 
-                @Override
-                public void set(int value) {
-                    blockEntity.setMiningProgress(value);
-                    clientData[2] = value;
-                }
-            });
-            addDataSlot(new DataSlot() {
-                @Override
-                public int get() {
-                    return blockEntity.getMiningDuration();
-                }
+                        @Override
+                        public void set(int value) {
+                            blockEntity.setMiningProgress(value);
+                            clientData[2] = value;
+                        }
+                    });
+            addDataSlot(
+                    new DataSlot() {
+                        @Override
+                        public int get() {
+                            return blockEntity.getMiningDuration();
+                        }
 
-                @Override
-                public void set(int value) {
-                    clientData[3] = value;
-                }
-            });
-            addDataSlot(new DataSlot() {
-                @Override
-                public int get() {
-                    return blockEntity.getGuiAnimationFrame();
-                }
+                        @Override
+                        public void set(int value) {
+                            clientData[3] = value;
+                        }
+                    });
+            addDataSlot(
+                    new DataSlot() {
+                        @Override
+                        public int get() {
+                            return blockEntity.getGuiAnimationFrame();
+                        }
 
-                @Override
-                public void set(int value) {
-                    clientData[4] = value;
-                }
-            });
+                        @Override
+                        public void set(int value) {
+                            clientData[4] = value;
+                        }
+                    });
         }
 
         private static class FuelSlot extends Slot {
@@ -467,36 +515,43 @@ public final class BurnerMiningDrill {
     }
 
     public static class Item extends AbstractDrillBlockItem {
-        public Item(net.minecraft.world.level.block.Block block, net.minecraft.world.item.Item.Properties properties) {
+        public Item(
+                net.minecraft.world.level.block.Block block,
+                net.minecraft.world.item.Item.Properties properties) {
             super(block, properties, TIER, null, 0);
         }
 
         @Override
         public void createGeoRenderer(Consumer<GeoRenderProvider> consumer) {
-            consumer.accept(new GeoRenderProvider() {
-                private ItemRenderer renderer;
+            consumer.accept(
+                    new GeoRenderProvider() {
+                        private ItemRenderer renderer;
 
-                @Override
-                public ItemRenderer getGeoItemRenderer() {
-                    if (renderer == null) {
-                        renderer = new ItemRenderer();
-                    }
+                        @Override
+                        public ItemRenderer getGeoItemRenderer() {
+                            if (renderer == null) {
+                                renderer = new ItemRenderer();
+                            }
 
-                    return renderer;
-                }
-            });
+                            return renderer;
+                        }
+                    });
         }
     }
 
     public static class Screen extends AbstractContainerScreen<Menu> {
-        private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(
-                OresAndDrillsMod.MOD_ID, "textures/gui/burner_drill_gui.png");
-        private static final ResourceLocation FUEL_PROGRESS_TEXTURE = ResourceLocation.fromNamespaceAndPath(
-                OresAndDrillsMod.MOD_ID, "textures/gui/burner_drill_fuel_progress.png");
-        private static final ResourceLocation MINING_PROGRESS_TEXTURE = ResourceLocation.fromNamespaceAndPath(
-                OresAndDrillsMod.MOD_ID, "textures/gui/progress_1.png");
-        private static final ResourceLocation DRILL_ICON_TEXTURE = ResourceLocation.fromNamespaceAndPath(
-                OresAndDrillsMod.MOD_ID, "textures/gui/drill_gui.png");
+        private static final ResourceLocation TEXTURE =
+                ResourceLocation.fromNamespaceAndPath(
+                        OresAndDrillsMod.MOD_ID, "textures/gui/burner_drill_gui.png");
+        private static final ResourceLocation FUEL_PROGRESS_TEXTURE =
+                ResourceLocation.fromNamespaceAndPath(
+                        OresAndDrillsMod.MOD_ID, "textures/gui/burner_drill_fuel_progress.png");
+        private static final ResourceLocation MINING_PROGRESS_TEXTURE =
+                ResourceLocation.fromNamespaceAndPath(
+                        OresAndDrillsMod.MOD_ID, "textures/gui/progress_1.png");
+        private static final ResourceLocation DRILL_ICON_TEXTURE =
+                ResourceLocation.fromNamespaceAndPath(
+                        OresAndDrillsMod.MOD_ID, "textures/gui/drill_gui.png");
         private static final int GUI_WIDTH = 176;
         private static final int GUI_HEIGHT = 188;
         private static final int FUEL_PROGRESS_X = 26;
@@ -510,10 +565,12 @@ public final class BurnerMiningDrill {
         private static final int DRILL_ICON_Y = 21;
         private static final int DRILL_ICON_WIDTH = 46;
         private static final int DRILL_ICON_HEIGHT = 66;
-        private static final int DRILL_ICON_SHEET_HEIGHT = DRILL_ICON_HEIGHT * AbstractDrillBlockEntity.GUI_ANIMATION_FRAME_COUNT;
+        private static final int DRILL_ICON_SHEET_HEIGHT =
+                DRILL_ICON_HEIGHT * AbstractDrillBlockEntity.GUI_ANIMATION_FRAME_COUNT;
         private static final int TEXTURE_WIDTH = 256;
         private static final int TEXTURE_HEIGHT = 256;
-        private static final String MINING_PROGRESS_TOOLTIP_KEY = "tooltip.ores_and_drills.mining_drill.progress";
+        private static final String MINING_PROGRESS_TOOLTIP_KEY =
+                "tooltip.ores_and_drills.mining_drill.progress";
 
         public Screen(Menu menu, Inventory playerInventory, Component title) {
             super(menu, playerInventory, title);
@@ -524,21 +581,38 @@ public final class BurnerMiningDrill {
         @Override
         public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
             super.render(guiGraphics, mouseX, mouseY, partialTick);
-            if (isHovering(MINING_PROGRESS_X, MINING_PROGRESS_Y, MINING_PROGRESS_WIDTH, MINING_PROGRESS_HEIGHT, mouseX, mouseY)) {
+            if (isHovering(
+                    MINING_PROGRESS_X,
+                    MINING_PROGRESS_Y,
+                    MINING_PROGRESS_WIDTH,
+                    MINING_PROGRESS_HEIGHT,
+                    mouseX,
+                    mouseY)) {
                 guiGraphics.renderTooltip(
                         font,
-                        Component.translatable(MINING_PROGRESS_TOOLTIP_KEY, menu.getMiningProgressPercent())
+                        Component.translatable(
+                                        MINING_PROGRESS_TOOLTIP_KEY,
+                                        menu.getMiningProgressPercent())
                                 .withStyle(style -> style.withItalic(false)),
                         mouseX,
-                        mouseY
-                );
+                        mouseY);
             }
             renderTooltip(guiGraphics, mouseX, mouseY);
         }
 
         @Override
-        protected void renderBg(GuiGraphics guiGraphics, float partialTick, int mouseX, int mouseY) {
-            guiGraphics.blit(TEXTURE, leftPos, topPos, 0, 0, imageWidth, imageHeight, TEXTURE_WIDTH, TEXTURE_HEIGHT);
+        protected void renderBg(
+                GuiGraphics guiGraphics, float partialTick, int mouseX, int mouseY) {
+            guiGraphics.blit(
+                    TEXTURE,
+                    leftPos,
+                    topPos,
+                    0,
+                    0,
+                    imageWidth,
+                    imageHeight,
+                    TEXTURE_WIDTH,
+                    TEXTURE_HEIGHT);
             int fuelProgressHeight = menu.getFuelProgressHeight();
             if (fuelProgressHeight > 0) {
                 int offset = FUEL_PROGRESS_SIZE - fuelProgressHeight;
@@ -551,8 +625,7 @@ public final class BurnerMiningDrill {
                         FUEL_PROGRESS_SIZE,
                         fuelProgressHeight,
                         FUEL_PROGRESS_SIZE,
-                        FUEL_PROGRESS_SIZE
-                );
+                        FUEL_PROGRESS_SIZE);
             }
 
             int miningProgressHeight = menu.getMiningProgressHeight();
@@ -567,8 +640,7 @@ public final class BurnerMiningDrill {
                         MINING_PROGRESS_WIDTH,
                         miningProgressHeight,
                         MINING_PROGRESS_WIDTH,
-                        MINING_PROGRESS_HEIGHT
-                );
+                        MINING_PROGRESS_HEIGHT);
             }
 
             int frame = menu.getAnimationFrame();
@@ -581,8 +653,7 @@ public final class BurnerMiningDrill {
                     DRILL_ICON_WIDTH,
                     DRILL_ICON_HEIGHT,
                     DRILL_ICON_WIDTH,
-                    DRILL_ICON_SHEET_HEIGHT
-            );
+                    DRILL_ICON_SHEET_HEIGHT);
         }
 
         @Override
@@ -593,15 +664,19 @@ public final class BurnerMiningDrill {
     }
 
     public static class Model extends GeoModel<BlockEntity> {
-        private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(
-                OresAndDrillsMod.MOD_ID, "textures/block/burner_mining_drill.png");
+        private static final ResourceLocation TEXTURE =
+                ResourceLocation.fromNamespaceAndPath(
+                        OresAndDrillsMod.MOD_ID, "textures/block/burner_mining_drill.png");
+
         /** Shown while the drill burns fuel and mines, the same state that runs its animation. */
-        private static final ResourceLocation ACTIVE_TEXTURE = ResourceLocation.fromNamespaceAndPath(
-                OresAndDrillsMod.MOD_ID, "textures/block/burner_mining_drill_on.png");
+        private static final ResourceLocation ACTIVE_TEXTURE =
+                ResourceLocation.fromNamespaceAndPath(
+                        OresAndDrillsMod.MOD_ID, "textures/block/burner_mining_drill_on.png");
 
         @Override
         public ResourceLocation getModelResource(BlockEntity animatable) {
-            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "geo/burner_mining_drill.geo.json");
+            return ResourceLocation.fromNamespaceAndPath(
+                    OresAndDrillsMod.MOD_ID, "geo/burner_mining_drill.geo.json");
         }
 
         @Override
@@ -611,7 +686,8 @@ public final class BurnerMiningDrill {
 
         @Override
         public ResourceLocation getAnimationResource(BlockEntity animatable) {
-            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "animations/burner_mining_drill.animation.json");
+            return ResourceLocation.fromNamespaceAndPath(
+                    OresAndDrillsMod.MOD_ID, "animations/burner_mining_drill.animation.json");
         }
     }
 
@@ -625,29 +701,62 @@ public final class BurnerMiningDrill {
         }
 
         @Override
-        public RenderType getRenderType(BlockEntity animatable, ResourceLocation texture, MultiBufferSource bufferSource, float partialTick) {
+        public RenderType getRenderType(
+                BlockEntity animatable,
+                ResourceLocation texture,
+                MultiBufferSource bufferSource,
+                float partialTick) {
             return RenderType.entityTranslucent(texture);
         }
 
         @Override
-        public void render(BlockEntity animatable, float partialTick, PoseStack poseStack, MultiBufferSource bufferSource,
-                           int packedLight, int packedOverlay) {
+        public void render(
+                BlockEntity animatable,
+                float partialTick,
+                PoseStack poseStack,
+                MultiBufferSource bufferSource,
+                int packedLight,
+                int packedOverlay) {
             Direction facing = animatable.getBlockState().getValue(AbstractDrillBlock.FACING);
             Direction right = facing.getClockWise();
 
-            double offsetX = facing.getStepX() * CENTER_FORWARD_OFFSET - right.getStepX() * CENTER_LEFT_OFFSET;
-            double offsetZ = facing.getStepZ() * CENTER_FORWARD_OFFSET - right.getStepZ() * CENTER_LEFT_OFFSET;
+            double offsetX =
+                    facing.getStepX() * CENTER_FORWARD_OFFSET
+                            - right.getStepX() * CENTER_LEFT_OFFSET;
+            double offsetZ =
+                    facing.getStepZ() * CENTER_FORWARD_OFFSET
+                            - right.getStepZ() * CENTER_LEFT_OFFSET;
 
             poseStack.pushPose();
             poseStack.translate(offsetX, 0.0D, offsetZ);
-            super.render(animatable, partialTick, poseStack, bufferSource, packedLight, packedOverlay);
+            super.render(
+                    animatable, partialTick, poseStack, bufferSource, packedLight, packedOverlay);
             poseStack.popPose();
         }
 
         @Override
-        public void preRender(PoseStack poseStack, BlockEntity animatable, BakedGeoModel model, MultiBufferSource bufferSource,
-                              VertexConsumer buffer, boolean isReRender, float partialTick, int packedLight, int packedOverlay, int colour) {
-            super.preRender(poseStack, animatable, model, bufferSource, buffer, isReRender, partialTick, packedLight, packedOverlay, colour);
+        public void preRender(
+                PoseStack poseStack,
+                BlockEntity animatable,
+                BakedGeoModel model,
+                MultiBufferSource bufferSource,
+                VertexConsumer buffer,
+                boolean isReRender,
+                float partialTick,
+                int packedLight,
+                int packedOverlay,
+                int colour) {
+            super.preRender(
+                    poseStack,
+                    animatable,
+                    model,
+                    bufferSource,
+                    buffer,
+                    isReRender,
+                    partialTick,
+                    packedLight,
+                    packedOverlay,
+                    colour);
             poseStack.mulPose(Axis.YP.rotationDegrees(MODEL_YAW_DEGREES));
         }
     }
@@ -655,17 +764,20 @@ public final class BurnerMiningDrill {
     public static class ItemModel extends GeoModel<Item> {
         @Override
         public ResourceLocation getModelResource(Item animatable) {
-            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "geo/burner_mining_drill.geo.json");
+            return ResourceLocation.fromNamespaceAndPath(
+                    OresAndDrillsMod.MOD_ID, "geo/burner_mining_drill.geo.json");
         }
 
         @Override
         public ResourceLocation getTextureResource(Item animatable) {
-            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "textures/block/burner_mining_drill.png");
+            return ResourceLocation.fromNamespaceAndPath(
+                    OresAndDrillsMod.MOD_ID, "textures/block/burner_mining_drill.png");
         }
 
         @Override
         public ResourceLocation getAnimationResource(Item animatable) {
-            return ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "animations/burner_mining_drill.animation.json");
+            return ResourceLocation.fromNamespaceAndPath(
+                    OresAndDrillsMod.MOD_ID, "animations/burner_mining_drill.animation.json");
         }
     }
 
@@ -677,9 +789,28 @@ public final class BurnerMiningDrill {
         }
 
         @Override
-        public void preRender(PoseStack poseStack, Item animatable, BakedGeoModel model, MultiBufferSource bufferSource,
-                              VertexConsumer buffer, boolean isReRender, float partialTick, int packedLight, int packedOverlay, int colour) {
-            super.preRender(poseStack, animatable, model, bufferSource, buffer, isReRender, partialTick, packedLight, packedOverlay, colour);
+        public void preRender(
+                PoseStack poseStack,
+                Item animatable,
+                BakedGeoModel model,
+                MultiBufferSource bufferSource,
+                VertexConsumer buffer,
+                boolean isReRender,
+                float partialTick,
+                int packedLight,
+                int packedOverlay,
+                int colour) {
+            super.preRender(
+                    poseStack,
+                    animatable,
+                    model,
+                    bufferSource,
+                    buffer,
+                    isReRender,
+                    partialTick,
+                    packedLight,
+                    packedOverlay,
+                    colour);
             poseStack.mulPose(Axis.YP.rotationDegrees(MODEL_YAW_DEGREES));
         }
     }

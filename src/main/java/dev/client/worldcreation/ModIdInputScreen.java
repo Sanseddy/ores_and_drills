@@ -1,5 +1,9 @@
 package dev.client.worldcreation;
 
+import java.util.List;
+import java.util.Set;
+import java.util.function.Consumer;
+import java.util.regex.Pattern;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -7,20 +11,17 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.neoforged.fml.ModList;
 
-import java.util.List;
-import java.util.Set;
-import java.util.function.Consumer;
-import java.util.regex.Pattern;
-
 /**
- * Asks for one mod id for the priority list. Ids that are malformed or already listed can't be confirmed;
- * mods that aren't installed are allowed (packs may add them later) with a warning. Installed ore mods
- * that aren't listed yet are offered as one-click picks.
+ * Asks for one mod id for the priority list. Ids that are malformed or already listed can't be
+ * confirmed; mods that aren't installed are allowed (packs may add them later) with a warning.
+ * Installed ore mods that aren't listed yet are offered as one-click picks.
  */
 final class ModIdInputScreen extends Screen {
     private static final String KEY = "gui.ores_and_drills.mod_priorities.";
+
     /** NeoForge mod id format. */
     private static final Pattern MOD_ID = Pattern.compile("[a-z][a-z0-9_]{1,63}");
+
     private static final int FIELD_WIDTH = 220;
     private static final int PICK_WIDTH = 106;
     private static final int MAX_PICK_ROWS = 6;
@@ -35,8 +36,13 @@ final class ModIdInputScreen extends Screen {
     private Component status = Component.empty();
     private int statusColor;
 
-    ModIdInputScreen(Screen parent, Component title, String initial, Set<String> taken,
-                     List<String> suggestions, Consumer<String> onDone) {
+    ModIdInputScreen(
+            Screen parent,
+            Component title,
+            String initial,
+            Set<String> taken,
+            List<String> suggestions,
+            Consumer<String> onDone) {
         super(title);
         this.parent = parent;
         this.initial = initial;
@@ -50,7 +56,15 @@ final class ModIdInputScreen extends Screen {
         int left = this.width / 2 - FIELD_WIDTH / 2;
         int top = this.height / 2 - 70;
         String text = field == null ? initial : field.getValue();
-        field = addRenderableWidget(new EditBox(this.font, left, top, FIELD_WIDTH, 20, Component.translatable(KEY + "mod_id")));
+        field =
+                addRenderableWidget(
+                        new EditBox(
+                                this.font,
+                                left,
+                                top,
+                                FIELD_WIDTH,
+                                20,
+                                Component.translatable(KEY + "mod_id")));
         field.setMaxLength(64);
         field.setValue(text);
         field.setResponder(value -> validate());
@@ -65,19 +79,34 @@ final class ModIdInputScreen extends Screen {
             int y = top + 44 + (index / 2) * 22;
             String label = ModPrioritiesScreen.modName(mod).getString();
             if (this.font.width(label) > PICK_WIDTH - 8) {
-                label = this.font.plainSubstrByWidth(label, PICK_WIDTH - 8 - this.font.width("…")) + "…";
+                label =
+                        this.font.plainSubstrByWidth(label, PICK_WIDTH - 8 - this.font.width("…"))
+                                + "…";
             }
-            addRenderableWidget(Button.builder(Component.literal(label), button -> field.setValue(mod))
-                    .bounds(x, y, PICK_WIDTH, 20).build());
+            addRenderableWidget(
+                    Button.builder(Component.literal(label), button -> field.setValue(mod))
+                            .bounds(x, y, PICK_WIDTH, 20)
+                            .build());
         }
 
         int buttonY = this.height - 28;
-        done = addRenderableWidget(Button.builder(Component.translatable("gui.ores_and_drills.ore_settings.done"), button -> {
-            onDone.accept(field.getValue().trim());
-            this.minecraft.setScreen(parent);
-        }).bounds(this.width / 2 - 105, buttonY, 100, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("gui.ores_and_drills.ore_settings.cancel"), button -> onClose())
-                .bounds(this.width / 2 + 5, buttonY, 100, 20).build());
+        done =
+                addRenderableWidget(
+                        Button.builder(
+                                        Component.translatable(
+                                                "gui.ores_and_drills.ore_settings.done"),
+                                        button -> {
+                                            onDone.accept(field.getValue().trim());
+                                            this.minecraft.setScreen(parent);
+                                        })
+                                .bounds(this.width / 2 - 105, buttonY, 100, 20)
+                                .build());
+        addRenderableWidget(
+                Button.builder(
+                                Component.translatable("gui.ores_and_drills.ore_settings.cancel"),
+                                button -> onClose())
+                        .bounds(this.width / 2 + 5, buttonY, 100, 20)
+                        .build());
         validate();
     }
 
@@ -125,8 +154,12 @@ final class ModIdInputScreen extends Screen {
         guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, top - 16, 0xFFFFFF);
         guiGraphics.drawCenteredString(this.font, status, this.width / 2, top + 26, statusColor);
         if (!suggestions.isEmpty()) {
-            guiGraphics.drawCenteredString(this.font, Component.translatable(KEY + "suggestions"),
-                    this.width / 2, top + 36 - this.font.lineHeight / 2, 0xA0A0A0);
+            guiGraphics.drawCenteredString(
+                    this.font,
+                    Component.translatable(KEY + "suggestions"),
+                    this.width / 2,
+                    top + 36 - this.font.lineHeight / 2,
+                    0xA0A0A0);
         }
     }
 }

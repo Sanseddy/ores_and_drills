@@ -24,7 +24,8 @@ public final class ResultSlot {
         }
 
         return ItemStack.isSameItemSameComponents(output, stack)
-                && output.getCount() + stack.getCount() <= Math.min(output.getMaxStackSize(), container.getMaxStackSize());
+                && output.getCount() + stack.getCount()
+                        <= Math.min(output.getMaxStackSize(), container.getMaxStackSize());
     }
 
     public void insert(ItemStack stack) {

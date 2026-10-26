@@ -21,7 +21,7 @@ import net.minecraft.world.level.saveddata.SavedData;
  *
  * <p>Sable persists the blocks that make up a sub-level, but its storage path does not serialize
  * arbitrary NeoForge chunk attachments. Normal deposits continue to use their chunk attachment;
- * only entries that pass through a physical assembly are mirrored here.</p>
+ * only entries that pass through a physical assembly are mirrored here.
  */
 public final class PhysicalOreDepositSavedData extends FastSavedData {
     private static final String FILE_ID = OresAndDrillsMod.MOD_ID + "_physical_ore_deposits";
@@ -29,19 +29,21 @@ public final class PhysicalOreDepositSavedData extends FastSavedData {
     private static final String TAG_CHUNK_X = "ChunkX";
     private static final String TAG_CHUNK_Z = "ChunkZ";
     private static final SavedData.Factory<PhysicalOreDepositSavedData> FACTORY =
-            new SavedData.Factory<>(PhysicalOreDepositSavedData::new, PhysicalOreDepositSavedData::load);
+            new SavedData.Factory<>(
+                    PhysicalOreDepositSavedData::new, PhysicalOreDepositSavedData::load);
 
-    private final Long2ObjectOpenHashMap<OreDepositChunkData> entriesByChunk = new Long2ObjectOpenHashMap<>();
+    private final Long2ObjectOpenHashMap<OreDepositChunkData> entriesByChunk =
+            new Long2ObjectOpenHashMap<>();
 
-    PhysicalOreDepositSavedData() {
-    }
+    PhysicalOreDepositSavedData() {}
 
     public static PhysicalOreDepositSavedData get(ServerLevel level) {
         return level.getDataStorage().computeIfAbsent(FACTORY, FILE_ID);
     }
 
     public synchronized void put(BlockPos pos, OreDepositChunkData.Entry entry) {
-        OreDepositChunkData data = entriesByChunk.computeIfAbsent(chunkKey(pos), ignored -> new OreDepositChunkData());
+        OreDepositChunkData data =
+                entriesByChunk.computeIfAbsent(chunkKey(pos), ignored -> new OreDepositChunkData());
         if (data.putIfChanged(
                 pos,
                 entry.baseIndex(),
@@ -50,24 +52,24 @@ public final class PhysicalOreDepositSavedData extends FastSavedData {
                 entry.initialOre(),
                 entry.initialRichness(),
                 entry.richnessReferenceAmount(),
-                entry.tier()
-        )) {
+                entry.tier())) {
             setDirty();
         }
     }
 
     public synchronized void updateIfTracked(BlockPos pos, OreDepositChunkData.Entry entry) {
         OreDepositChunkData data = entriesByChunk.get(chunkKey(pos));
-        if (data != null && data.get(pos) != null && data.putIfChanged(
-                pos,
-                entry.baseIndex(),
-                entry.oreIndex(),
-                entry.remainingOre(),
-                entry.initialOre(),
-                entry.initialRichness(),
-                entry.richnessReferenceAmount(),
-                entry.tier()
-        )) {
+        if (data != null
+                && data.get(pos) != null
+                && data.putIfChanged(
+                        pos,
+                        entry.baseIndex(),
+                        entry.oreIndex(),
+                        entry.remainingOre(),
+                        entry.initialOre(),
+                        entry.initialRichness(),
+                        entry.richnessReferenceAmount(),
+                        entry.tier())) {
             setDirty();
         }
     }
@@ -87,10 +89,7 @@ public final class PhysicalOreDepositSavedData extends FastSavedData {
 
     /** Restores one authoritative mirrored entry before the chunk attachment is queried. */
     public synchronized OreDepositChunkData.Entry restoreEntry(
-            ServerLevel level,
-            ChunkAccess targetChunk,
-            BlockPos pos
-    ) {
+            ServerLevel level, ChunkAccess targetChunk, BlockPos pos) {
         OreDepositChunkData persisted = entriesByChunk.get(chunkKey(pos));
         OreDepositChunkData.Entry entry = persisted != null ? persisted.get(pos) : null;
         if (entry == null) {
@@ -118,14 +117,17 @@ public final class PhysicalOreDepositSavedData extends FastSavedData {
         OreDepositChunkData target = targetChunk.getData(ModAttachments.ORE_DEPOSITS);
         boolean[] changed = {false};
         java.util.ArrayList<BlockPos> stale = new java.util.ArrayList<>();
-        persisted.forEach(targetChunk.getPos().x, targetChunk.getPos().z, (pos, entry) -> {
-            BlockState state = level.getBlockState(pos);
-            if (!isDepositState(state)) {
-                stale.add(pos);
-                return;
-            }
-            changed[0] |= put(target, pos, entry);
-        });
+        persisted.forEach(
+                targetChunk.getPos().x,
+                targetChunk.getPos().z,
+                (pos, entry) -> {
+                    BlockState state = level.getBlockState(pos);
+                    if (!isDepositState(state)) {
+                        stale.add(pos);
+                        return;
+                    }
+                    changed[0] |= put(target, pos, entry);
+                });
         for (BlockPos pos : stale) {
             remove(pos);
         }
@@ -135,7 +137,8 @@ public final class PhysicalOreDepositSavedData extends FastSavedData {
         return changed[0];
     }
 
-    private static boolean put(OreDepositChunkData target, BlockPos pos, OreDepositChunkData.Entry entry) {
+    private static boolean put(
+            OreDepositChunkData target, BlockPos pos, OreDepositChunkData.Entry entry) {
         return target.putIfChanged(
                 pos,
                 entry.baseIndex(),
@@ -144,12 +147,12 @@ public final class PhysicalOreDepositSavedData extends FastSavedData {
                 entry.initialOre(),
                 entry.initialRichness(),
                 entry.richnessReferenceAmount(),
-                entry.tier()
-        );
+                entry.tier());
     }
 
     private static boolean isDepositState(BlockState state) {
-        return state.is(ModBlocks.ORE_DEPOSIT.get()) || state.is(ModBlocks.EXHAUSTED_ORE_DEPOSIT.get());
+        return state.is(ModBlocks.ORE_DEPOSIT.get())
+                || state.is(ModBlocks.EXHAUSTED_ORE_DEPOSIT.get());
     }
 
     private static long chunkKey(BlockPos pos) {
@@ -164,10 +167,9 @@ public final class PhysicalOreDepositSavedData extends FastSavedData {
             OreDepositChunkData data = new OreDepositChunkData();
             data.loadTag(chunkTag);
             if (!data.isEmpty()) {
-                result.entriesByChunk.put(ChunkPos.asLong(
-                        chunkTag.getInt(TAG_CHUNK_X),
-                        chunkTag.getInt(TAG_CHUNK_Z)
-                ), data);
+                result.entriesByChunk.put(
+                        ChunkPos.asLong(chunkTag.getInt(TAG_CHUNK_X), chunkTag.getInt(TAG_CHUNK_Z)),
+                        data);
             }
         }
         return result;
@@ -176,16 +178,19 @@ public final class PhysicalOreDepositSavedData extends FastSavedData {
     @Override
     public synchronized CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
         ListTag chunks = new ListTag();
-        entriesByChunk.long2ObjectEntrySet().forEach(mapEntry -> {
-            if (mapEntry.getValue().isEmpty()) {
-                return;
-            }
-            ChunkPos chunkPos = new ChunkPos(mapEntry.getLongKey());
-            CompoundTag chunkTag = mapEntry.getValue().saveTag();
-            chunkTag.putInt(TAG_CHUNK_X, chunkPos.x);
-            chunkTag.putInt(TAG_CHUNK_Z, chunkPos.z);
-            chunks.add(chunkTag);
-        });
+        entriesByChunk
+                .long2ObjectEntrySet()
+                .forEach(
+                        mapEntry -> {
+                            if (mapEntry.getValue().isEmpty()) {
+                                return;
+                            }
+                            ChunkPos chunkPos = new ChunkPos(mapEntry.getLongKey());
+                            CompoundTag chunkTag = mapEntry.getValue().saveTag();
+                            chunkTag.putInt(TAG_CHUNK_X, chunkPos.x);
+                            chunkTag.putInt(TAG_CHUNK_Z, chunkPos.z);
+                            chunks.add(chunkTag);
+                        });
         tag.put(TAG_CHUNKS, chunks);
         return tag;
     }

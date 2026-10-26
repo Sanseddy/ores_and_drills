@@ -1,28 +1,26 @@
 package dev.world.block;
 
+import com.mojang.serialization.MapCodec;
 import dev.registry.ModBlocks;
 import dev.world.level.levelgen.OreDepositData;
-import dev.world.level.levelgen.OreDepositOrePalette;
 import dev.world.level.levelgen.OreDepositRemovalGuard;
-import com.mojang.serialization.MapCodec;
+import java.util.List;
+import java.util.function.BiConsumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelReader;
-import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.HitResult;
-
-import java.util.List;
-import java.util.function.BiConsumer;
 
 public class OreDepositBlock extends Block {
     public static final MapCodec<OreDepositBlock> CODEC = simpleCodec(OreDepositBlock::new);
@@ -42,14 +40,15 @@ public class OreDepositBlock extends Block {
     }
 
     @Override
-    public SoundType getSoundType(BlockState state, LevelReader level, BlockPos pos, Entity entity) {
+    public SoundType getSoundType(
+            BlockState state, LevelReader level, BlockPos pos, Entity entity) {
         return OreDepositData.baseBlockStateAt(level, pos).getSoundType(level, pos, entity);
     }
 
     /**
-     * A deposit is a visual container for one concrete ore stored in its chunk attachment. Returning
-     * that ore here lets Jade/recipe-viewer integrations use the real recipe subject rather than the
-     * technical ore_deposit item.
+     * A deposit is a visual container for one concrete ore stored in its chunk attachment.
+     * Returning that ore here lets Jade/recipe-viewer integrations use the real recipe subject
+     * rather than the technical ore_deposit item.
      */
     @Override
     public ItemStack getCloneItemStack(LevelReader level, BlockPos pos, BlockState state) {
@@ -58,12 +57,7 @@ public class OreDepositBlock extends Block {
 
     @Override
     public ItemStack getCloneItemStack(
-            BlockState state,
-            HitResult target,
-            LevelReader level,
-            BlockPos pos,
-            Player player
-    ) {
+            BlockState state, HitResult target, LevelReader level, BlockPos pos, Player player) {
         return pickedOre(level, pos, super.getCloneItemStack(state, target, level, pos, player));
     }
 
@@ -81,7 +75,8 @@ public class OreDepositBlock extends Block {
     }
 
     @Override
-    protected float getDestroyProgress(BlockState state, Player player, BlockGetter level, BlockPos pos) {
+    protected float getDestroyProgress(
+            BlockState state, Player player, BlockGetter level, BlockPos pos) {
         if (!(level instanceof Level concreteLevel)) {
             return super.getDestroyProgress(state, player, level, pos);
         }
@@ -91,19 +86,21 @@ public class OreDepositBlock extends Block {
             return super.getDestroyProgress(state, player, level, pos);
         }
 
-        float singleOreProgress = oreBlock.defaultBlockState().getDestroyProgress(player, level, pos);
-        // The remaining-ore multiplier is applied through PlayerEvent.BreakSpeed so it
-        // composes with tool/enchantment and other-mod speed modifiers on both sides.
+        float singleOreProgress =
+                oreBlock.defaultBlockState().getDestroyProgress(player, level, pos);
+        // The remaining-ore multiplier is applied through PlayerEvent.BreakSpeed so it composes
+        // with tool/enchantment and other-mod speed modifiers on both sides.
         return singleOreProgress;
     }
 
     /**
-     * Mines one virtual ore unit before vanilla damages the tool. The following
-     * {@link #onDestroyedByPlayer} call keeps the physical deposit in place until its stored ore is
+     * Mines one virtual ore unit before vanilla damages the tool. The following {@link
+     * #onDestroyedByPlayer} call keeps the physical deposit in place until its stored ore is
      * exhausted, without cancelling NeoForge's {@code BlockEvent.BreakEvent}.
      */
     @Override
-    public BlockState playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
+    public BlockState playerWillDestroy(
+            Level level, BlockPos pos, BlockState state, Player player) {
         if (!player.isCreative() && level instanceof ServerLevel serverLevel) {
             OreDepositData.mineByPlayerBeforeRemoval(serverLevel, pos, state, player);
             return state;
@@ -119,21 +116,26 @@ public class OreDepositBlock extends Block {
             BlockPos pos,
             Player player,
             boolean willHarvest,
-            FluidState fluid
-    ) {
+            FluidState fluid) {
         if (!player.isCreative()) {
             return false;
         }
 
         // Creative deletion is an intentional administrative action. Keep it working while direct
         // machine setBlock/removeBlock calls remain protected by the global deposit guard.
-        return OreDepositRemovalGuard.runAuthorized(level, pos,
-                () -> super.onDestroyedByPlayer(state, level, pos, player, willHarvest, fluid)
-        );
+        return OreDepositRemovalGuard.runAuthorized(
+                level,
+                pos,
+                () -> super.onDestroyedByPlayer(state, level, pos, player, willHarvest, fluid));
     }
 
     @Override
-    protected void onExplosionHit(BlockState state, Level level, BlockPos pos, Explosion explosion, BiConsumer<ItemStack, BlockPos> dropConsumer) {
+    protected void onExplosionHit(
+            BlockState state,
+            Level level,
+            BlockPos pos,
+            Explosion explosion,
+            BiConsumer<ItemStack, BlockPos> dropConsumer) {
         if (state.isAir()
                 || explosion.getBlockInteraction() == Explosion.BlockInteraction.TRIGGER_BLOCK
                 || !(level instanceof ServerLevel serverLevel)
@@ -148,12 +150,19 @@ public class OreDepositBlock extends Block {
             mined.forEach(drop -> dropConsumer.accept(drop, pos));
         }
         if (OreDepositExplosionHandler.blastOutlastsOre(serverLevel, pos, units, remaining)) {
-            serverLevel.getBlockState(pos).onExplosionHit(serverLevel, pos, explosion, dropConsumer);
+            serverLevel
+                    .getBlockState(pos)
+                    .onExplosionHit(serverLevel, pos, explosion, dropConsumer);
         }
     }
 
     @Override
-    protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
+    protected void onRemove(
+            BlockState state,
+            Level level,
+            BlockPos pos,
+            BlockState newState,
+            boolean movedByPiston) {
         if (!state.is(newState.getBlock())
                 && !newState.is(ModBlocks.EXHAUSTED_ORE_DEPOSIT.get())
                 && level instanceof ServerLevel serverLevel) {

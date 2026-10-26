@@ -4,8 +4,7 @@ package dev.world.block;
 final class DrillHitboxCellMath {
     private static final double EPSILON = 1.0E-5D;
 
-    private DrillHitboxCellMath() {
-    }
+    private DrillHitboxCellMath() {}
 
     static Box expandFlatAxes(Box box, double minimumThickness) {
         if (minimumThickness <= 0.0D) {
@@ -20,12 +19,12 @@ final class DrillHitboxCellMath {
 
     private static double[] expandFlatAxis(double minimum, double maximum, double thickness) {
         if (maximum - minimum > EPSILON) {
-            return new double[]{minimum, maximum};
+            return new double[] {minimum, maximum};
         }
 
         double centre = (minimum + maximum) * 0.5D;
         double halfThickness = thickness * 0.5D;
-        return new double[]{centre - halfThickness, centre + halfThickness};
+        return new double[] {centre - halfThickness, centre + halfThickness};
     }
 
     static Box clipToCell(Box modelBox, double cellX, double cellY, double cellZ) {
@@ -45,25 +44,36 @@ final class DrillHitboxCellMath {
                 clampUnit(minZ - cellZ),
                 clampUnit(maxX - cellX),
                 clampUnit(maxY - cellY),
-                clampUnit(maxZ - cellZ)
-        );
+                clampUnit(maxZ - cellZ));
     }
 
     static Box rotateY(Box northBox, int clockwiseQuarterTurns) {
         return switch (Math.floorMod(clockwiseQuarterTurns, 4)) {
             case 0 -> northBox;
-            case 1 -> new Box(
-                    1.0D - northBox.maxZ(), northBox.minY(), northBox.minX(),
-                    1.0D - northBox.minZ(), northBox.maxY(), northBox.maxX()
-            );
-            case 2 -> new Box(
-                    1.0D - northBox.maxX(), northBox.minY(), 1.0D - northBox.maxZ(),
-                    1.0D - northBox.minX(), northBox.maxY(), 1.0D - northBox.minZ()
-            );
-            case 3 -> new Box(
-                    northBox.minZ(), northBox.minY(), 1.0D - northBox.maxX(),
-                    northBox.maxZ(), northBox.maxY(), 1.0D - northBox.minX()
-            );
+            case 1 ->
+                    new Box(
+                            1.0D - northBox.maxZ(),
+                            northBox.minY(),
+                            northBox.minX(),
+                            1.0D - northBox.minZ(),
+                            northBox.maxY(),
+                            northBox.maxX());
+            case 2 ->
+                    new Box(
+                            1.0D - northBox.maxX(),
+                            northBox.minY(),
+                            1.0D - northBox.maxZ(),
+                            1.0D - northBox.minX(),
+                            northBox.maxY(),
+                            1.0D - northBox.minZ());
+            case 3 ->
+                    new Box(
+                            northBox.minZ(),
+                            northBox.minY(),
+                            1.0D - northBox.maxX(),
+                            northBox.maxZ(),
+                            northBox.maxY(),
+                            1.0D - northBox.minX());
             default -> throw new AssertionError("floorMod must return 0..3");
         };
     }
@@ -72,6 +82,5 @@ final class DrillHitboxCellMath {
         return Math.clamp(value, 0.0D, 1.0D);
     }
 
-    record Box(double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
-    }
+    record Box(double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {}
 }

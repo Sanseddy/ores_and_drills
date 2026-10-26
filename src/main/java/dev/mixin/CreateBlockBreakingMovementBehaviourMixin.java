@@ -19,7 +19,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * completed breaking cycle always removes the block and immediately lets the contraption advance.
  */
 @Pseudo
-@Mixin(targets = "com.simibubi.create.content.kinetics.base.BlockBreakingMovementBehaviour", remap = false)
+@Mixin(
+        targets = "com.simibubi.create.content.kinetics.base.BlockBreakingMovementBehaviour",
+        remap = false)
 public abstract class CreateBlockBreakingMovementBehaviourMixin {
     private static final String RETRY_POS = "OresAndDrillsRetryPos";
     private static final String BREAKING_POS = "BreakingPos";
@@ -29,9 +31,7 @@ public abstract class CreateBlockBreakingMovementBehaviourMixin {
 
     @Inject(method = "tickBreaker", at = @At("HEAD"), require = 0, remap = false)
     private void oresAndDrills$rememberOreDeposit(
-            @Coerce Object movementContext,
-            CallbackInfo callbackInfo
-    ) {
+            @Coerce Object movementContext, CallbackInfo callbackInfo) {
         CreateMovementContextAccessor context = (CreateMovementContextAccessor) movementContext;
         Level level = context.oresAndDrills$getWorld();
         CompoundTag data = context.oresAndDrills$getData();
@@ -43,9 +43,7 @@ public abstract class CreateBlockBreakingMovementBehaviourMixin {
 
     @Inject(method = "tickBreaker", at = @At("RETURN"), require = 0, remap = false)
     private void oresAndDrills$retryPersistentOreDeposit(
-            @Coerce Object movementContext,
-            CallbackInfo callbackInfo
-    ) {
+            @Coerce Object movementContext, CallbackInfo callbackInfo) {
         CreateMovementContextAccessor context = (CreateMovementContextAccessor) movementContext;
         CompoundTag data = context.oresAndDrills$getData();
         if (!data.contains(RETRY_POS)) {
@@ -55,11 +53,12 @@ public abstract class CreateBlockBreakingMovementBehaviourMixin {
         BlockPos pos = BlockPos.of(data.getLong(RETRY_POS));
         data.remove(RETRY_POS);
 
-        // BreakingPos is only removed when Create considers this breaking cycle finished. On the final
-        // virtual ore unit the deposit changes directly into its stored base rock. Create still assumes the
-        // old block was removed to air, so without starting a fresh cycle it unstalls and moves into that
-        // newly-created solid block. Re-arm the breaker for either the persistent deposit or its breakable
-        // replacement; the next cycle then mines the base rock normally before movement can resume.
+        // BreakingPos is only removed when Create considers this breaking cycle finished. On the
+        // final virtual ore unit the deposit changes directly into its stored base rock. Create
+        // still assumes the old block was removed to air, so without starting a fresh cycle it
+        // unstalls and moves into that newly-created solid block. Re-arm the breaker for either the
+        // persistent deposit or its breakable replacement; the next cycle then mines the base rock
+        // normally before movement can resume.
         Level level = context.oresAndDrills$getWorld();
         BlockState currentState = level.getBlockState(pos);
         if (data.contains(BREAKING_POS)

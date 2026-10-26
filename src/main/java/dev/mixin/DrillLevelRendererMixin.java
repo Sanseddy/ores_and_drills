@@ -18,16 +18,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(LevelRenderer.class)
 abstract class DrillLevelRendererMixin {
-    @Unique
-    private boolean oresAndDrills$redirectingDrillBreakProgress;
+    @Unique private boolean oresAndDrills$redirectingDrillBreakProgress;
 
     @Inject(method = "destroyBlockProgress", at = @At("HEAD"), cancellable = true)
     private void oresAndDrills$renderPartBreakingOnDrillModel(
-            int breakerId,
-            BlockPos pos,
-            int progress,
-            CallbackInfo callback
-    ) {
+            int breakerId, BlockPos pos, int progress, CallbackInfo callback) {
         if (oresAndDrills$redirectingDrillBreakProgress) {
             return;
         }
@@ -42,11 +37,9 @@ abstract class DrillLevelRendererMixin {
             callback.cancel();
             oresAndDrills$redirectingDrillBreakProgress = true;
             try {
-                ((LevelRenderer) (Object) this).destroyBlockProgress(
-                        breakerId,
-                        part.structure().originFromPart(pos, state),
-                        progress
-                );
+                ((LevelRenderer) (Object) this)
+                        .destroyBlockProgress(
+                                breakerId, part.structure().originFromPart(pos, state), progress);
             } finally {
                 oresAndDrills$redirectingDrillBreakProgress = false;
             }
@@ -63,8 +56,7 @@ abstract class DrillLevelRendererMixin {
             double cameraZ,
             BlockPos pos,
             BlockState state,
-            CallbackInfo callback
-    ) {
+            CallbackInfo callback) {
         if (DrillExactHitboxes.render(state, poseStack, consumer, pos, cameraX, cameraY, cameraZ)) {
             callback.cancel();
         }

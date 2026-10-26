@@ -5,6 +5,11 @@ import dev.client.worldcreation.ModPrioritiesScreen;
 import dev.config.ConfigReloader;
 import dev.config.OreDepositConfig;
 import dev.config.OreSettingsPresetManager;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.function.IntConsumer;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -21,15 +26,10 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
-import java.util.function.IntConsumer;
-
 /**
- * The mod's own config screen (mod list "Config" button). Edits are held here and written to the common
- * config together on "Done"; "Cancel" discards all of them, including mod priorities and excluded ores.
+ * The mod's own config screen (mod list "Config" button). Edits are held here and written to the
+ * common config together on "Done"; "Cancel" discards all of them, including mod priorities and
+ * excluded ores.
  */
 public final class OresAndDrillsSettingsScreen extends Screen {
     private static final int MARGIN = 20;
@@ -70,7 +70,8 @@ public final class OresAndDrillsSettingsScreen extends Screen {
             values.minSpacing = OreDepositConfig.MIN_LARGE_DEPOSIT_SPACING.getDefault();
             values.maxSpacing = OreDepositConfig.MAX_LARGE_DEPOSIT_SPACING.getDefault();
             values.growth = OreDepositConfig.ORE_MINING_EXPONENTIAL_GROWTH.getDefault();
-            values.maxMultiplier = OreDepositConfig.ORE_MINING_MAX_EXPONENTIAL_MULTIPLIER.getDefault();
+            values.maxMultiplier =
+                    OreDepositConfig.ORE_MINING_MAX_EXPONENTIAL_MULTIPLIER.getDefault();
             values.ignoredOres = List.copyOf(OreDepositConfig.IGNORED_ORES.getDefault());
             values.modPriorities = List.copyOf(OreDepositConfig.MOD_PRIORITIES.getDefault());
             values.preset = OreDepositConfig.ACTIVE_PRESET.getDefault();
@@ -97,20 +98,39 @@ public final class OresAndDrillsSettingsScreen extends Screen {
     protected void init() {
         int listY = MARGIN + 16;
         double scroll = list == null ? 0.0D : list.getScrollAmount();
-        list = addRenderableWidget(new SettingsList(this.minecraft, this.width, Math.max(48, this.height - listY - 36), listY));
+        list =
+                addRenderableWidget(
+                        new SettingsList(
+                                this.minecraft,
+                                this.width,
+                                Math.max(48, this.height - listY - 36),
+                                listY));
         populate();
         list.setScrollAmount(scroll);
 
         int buttonY = this.height - 28;
-        addRenderableWidget(Button.builder(Component.translatable(KEY + "reset"), button -> {
-            Values defaults = Values.defaults();
-            copy(defaults, values);
-            rebuildWidgets();
-        }).bounds(this.width / 2 - 155, buttonY, 100, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("gui.ores_and_drills.ore_settings.done"), button -> onDone())
-                .bounds(this.width / 2 - 50, buttonY, 100, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("gui.ores_and_drills.ore_settings.cancel"), button -> onClose())
-                .bounds(this.width / 2 + 55, buttonY, 100, 20).build());
+        addRenderableWidget(
+                Button.builder(
+                                Component.translatable(KEY + "reset"),
+                                button -> {
+                                    Values defaults = Values.defaults();
+                                    copy(defaults, values);
+                                    rebuildWidgets();
+                                })
+                        .bounds(this.width / 2 - 155, buttonY, 100, 20)
+                        .build());
+        addRenderableWidget(
+                Button.builder(
+                                Component.translatable("gui.ores_and_drills.ore_settings.done"),
+                                button -> onDone())
+                        .bounds(this.width / 2 - 50, buttonY, 100, 20)
+                        .build());
+        addRenderableWidget(
+                Button.builder(
+                                Component.translatable("gui.ores_and_drills.ore_settings.cancel"),
+                                button -> onClose())
+                        .bounds(this.width / 2 + 55, buttonY, 100, 20)
+                        .build());
     }
 
     private void populate() {
@@ -118,76 +138,149 @@ public final class OresAndDrillsSettingsScreen extends Screen {
         int max = OreDepositConfig.MAX_LARGE_DEPOSIT_SPACING_LIMIT;
 
         list.section("deposits");
-        list.setting("min_spacing", integerBox(values.minSpacing, min, max, value -> values.minSpacing = value));
-        list.setting("max_spacing", integerBox(values.maxSpacing, min, max, value -> values.maxSpacing = value));
-        list.setting("small_placement", CycleButton.<OreDepositConfig.SmallDepositPlacement>builder(
-                        placement -> Component.translatable(KEY + "small_placement." + placement.name().toLowerCase(Locale.ROOT)))
-                .withValues(OreDepositConfig.SmallDepositPlacement.values()).withInitialValue(values.smallPlacement)
-                .displayOnlyValue()
-                .create(0, 0, WIDGET_WIDTH, 20, Component.empty(), (button, value) -> values.smallPlacement = value));
+        list.setting(
+                "min_spacing",
+                integerBox(values.minSpacing, min, max, value -> values.minSpacing = value));
+        list.setting(
+                "max_spacing",
+                integerBox(values.maxSpacing, min, max, value -> values.maxSpacing = value));
+        list.setting(
+                "small_placement",
+                CycleButton.<OreDepositConfig.SmallDepositPlacement>builder(
+                                placement ->
+                                        Component.translatable(
+                                                KEY
+                                                        + "small_placement."
+                                                        + placement
+                                                                .name()
+                                                                .toLowerCase(Locale.ROOT)))
+                        .withValues(OreDepositConfig.SmallDepositPlacement.values())
+                        .withInitialValue(values.smallPlacement)
+                        .displayOnlyValue()
+                        .create(
+                                0,
+                                0,
+                                WIDGET_WIDTH,
+                                20,
+                                Component.empty(),
+                                (button, value) -> values.smallPlacement = value));
 
         list.section("mining");
-        list.setting("growth", new RangeSlider(WIDGET_WIDTH, 0.0D, 1.0D, 0.01D, values.growth,
-                value -> Component.literal(String.format(Locale.ROOT, "%.2f", value)), value -> values.growth = value));
-        list.setting("max_multiplier", new RangeSlider(WIDGET_WIDTH, 1.0D, 100.0D, 0.5D, values.maxMultiplier,
-                value -> Component.literal(String.format(Locale.ROOT, "×%.1f", value)), value -> values.maxMultiplier = value));
+        list.setting(
+                "growth",
+                new RangeSlider(
+                        WIDGET_WIDTH,
+                        0.0D,
+                        1.0D,
+                        0.01D,
+                        values.growth,
+                        value -> Component.literal(String.format(Locale.ROOT, "%.2f", value)),
+                        value -> values.growth = value));
+        list.setting(
+                "max_multiplier",
+                new RangeSlider(
+                        WIDGET_WIDTH,
+                        1.0D,
+                        100.0D,
+                        0.5D,
+                        values.maxMultiplier,
+                        value -> Component.literal(String.format(Locale.ROOT, "×%.1f", value)),
+                        value -> values.maxMultiplier = value));
 
         list.section("generation");
         list.setting("preset", presetWidget());
-        list.setting("ignored_ores", Button.builder(
-                Component.translatable(KEY + "edit", values.ignoredOres.size()),
-                button -> this.minecraft.setScreen(new StringListScreen(this,
-                        Component.translatable(KEY + "ignored_ores"),
-                        Component.translatable(KEY + "ignored_ores.hint"),
-                        values.ignoredOres,
-                        OresAndDrillsSettingsScreen::isBlockOrTagId,
-                        edited -> values.ignoredOres = List.copyOf(edited))))
-                .size(WIDGET_WIDTH, 20).build());
-        list.setting("mod_priorities", Button.builder(Component.translatable(KEY + "configure"),
-                button -> this.minecraft.setScreen(new ModPrioritiesScreen(this, values.modPriorities,
-                        edited -> values.modPriorities = List.copyOf(edited))))
-                .size(WIDGET_WIDTH, 20).build());
+        list.setting(
+                "ignored_ores",
+                Button.builder(
+                                Component.translatable(KEY + "edit", values.ignoredOres.size()),
+                                button ->
+                                        this.minecraft.setScreen(
+                                                new StringListScreen(
+                                                        this,
+                                                        Component.translatable(
+                                                                KEY + "ignored_ores"),
+                                                        Component.translatable(
+                                                                KEY + "ignored_ores.hint"),
+                                                        values.ignoredOres,
+                                                        OresAndDrillsSettingsScreen::isBlockOrTagId,
+                                                        edited ->
+                                                                values.ignoredOres =
+                                                                        List.copyOf(edited))))
+                        .size(WIDGET_WIDTH, 20)
+                        .build());
+        list.setting(
+                "mod_priorities",
+                Button.builder(
+                                Component.translatable(KEY + "configure"),
+                                button ->
+                                        this.minecraft.setScreen(
+                                                new ModPrioritiesScreen(
+                                                        this,
+                                                        values.modPriorities,
+                                                        edited ->
+                                                                values.modPriorities =
+                                                                        List.copyOf(edited))))
+                        .size(WIDGET_WIDTH, 20)
+                        .build());
     }
 
-    /** A typed whole number; out-of-range or non-numeric text turns red and keeps the last valid value. */
+    /**
+     * A typed whole number; out-of-range or non-numeric text turns red and keeps the last valid
+     * value.
+     */
     private EditBox integerBox(int initial, int min, int max, IntConsumer onValid) {
         EditBox box = new EditBox(this.font, 0, 0, WIDGET_WIDTH, 20, Component.empty());
         box.setMaxLength(String.valueOf(max).length());
         box.setFilter(text -> text.chars().allMatch(Character::isDigit));
         box.setValue(String.valueOf(initial));
-        box.setResponder(text -> {
-            int value;
-            try {
-                value = Integer.parseInt(text);
-            } catch (NumberFormatException exception) {
-                value = -1;
-            }
-            boolean valid = value >= min && value <= max;
-            box.setTextColor(valid ? 0xE0E0E0 : 0xFF5555);
-            if (valid) {
-                onValid.accept(value);
-            }
-        });
+        box.setResponder(
+                text -> {
+                    int value;
+                    try {
+                        value = Integer.parseInt(text);
+                    } catch (NumberFormatException exception) {
+                        value = -1;
+                    }
+                    boolean valid = value >= min && value <= max;
+                    box.setTextColor(valid ? 0xE0E0E0 : 0xFF5555);
+                    if (valid) {
+                        onValid.accept(value);
+                    }
+                });
         return box;
     }
 
-    /** Presets come from datapacks, so outside a world the list may be unknown; then the id is typed in. */
+    /**
+     * Presets come from datapacks, so outside a world the list may be unknown; then the id is typed
+     * in.
+     */
     private AbstractWidget presetWidget() {
-        Set<ResourceLocation> known = new LinkedHashSet<>(OreSettingsPresetManager.presets().keySet());
+        Set<ResourceLocation> known =
+                new LinkedHashSet<>(OreSettingsPresetManager.presets().keySet());
         ResourceLocation current = ResourceLocation.tryParse(values.preset);
         if (current != null) known.add(current);
         if (known.size() > 1 && current != null) {
             return CycleButton.<ResourceLocation>builder(id -> Component.literal(id.toString()))
-                    .withValues(List.copyOf(known)).withInitialValue(current).displayOnlyValue()
-                    .create(0, 0, WIDGET_WIDTH, 20, Component.empty(), (button, value) -> values.preset = value.toString());
+                    .withValues(List.copyOf(known))
+                    .withInitialValue(current)
+                    .displayOnlyValue()
+                    .create(
+                            0,
+                            0,
+                            WIDGET_WIDTH,
+                            20,
+                            Component.empty(),
+                            (button, value) -> values.preset = value.toString());
         }
         EditBox box = new EditBox(this.font, 0, 0, WIDGET_WIDTH, 20, Component.empty());
         box.setMaxLength(256);
         box.setValue(values.preset);
-        box.setResponder(text -> {
-            values.preset = text.trim();
-            box.setTextColor(ResourceLocation.tryParse(values.preset) != null ? 0xE0E0E0 : 0xFF5555);
-        });
+        box.setResponder(
+                text -> {
+                    values.preset = text.trim();
+                    box.setTextColor(
+                            ResourceLocation.tryParse(values.preset) != null ? 0xE0E0E0 : 0xFF5555);
+                });
         return box;
     }
 
@@ -208,14 +301,17 @@ public final class OresAndDrillsSettingsScreen extends Screen {
     }
 
     private void onDone() {
-        OreDepositConfig.MIN_LARGE_DEPOSIT_SPACING.set(Math.min(values.minSpacing, values.maxSpacing));
-        OreDepositConfig.MAX_LARGE_DEPOSIT_SPACING.set(Math.max(values.minSpacing, values.maxSpacing));
+        OreDepositConfig.MIN_LARGE_DEPOSIT_SPACING.set(
+                Math.min(values.minSpacing, values.maxSpacing));
+        OreDepositConfig.MAX_LARGE_DEPOSIT_SPACING.set(
+                Math.max(values.minSpacing, values.maxSpacing));
         OreDepositConfig.ORE_MINING_EXPONENTIAL_GROWTH.set(values.growth);
         OreDepositConfig.ORE_MINING_MAX_EXPONENTIAL_MULTIPLIER.set(values.maxMultiplier);
         OreDepositConfig.IGNORED_ORES.set(values.ignoredOres);
         OreDepositConfig.MOD_PRIORITIES.set(values.modPriorities);
         OreDepositConfig.SMALL_DEPOSIT_PLACEMENT.set(values.smallPlacement);
-        if (ResourceLocation.tryParse(values.preset) != null) OreDepositConfig.ACTIVE_PRESET.set(values.preset);
+        if (ResourceLocation.tryParse(values.preset) != null)
+            OreDepositConfig.ACTIVE_PRESET.set(values.preset);
         OreDepositConfig.SPEC.save();
         ConfigReloader.reload();
         OresAndDrillsMod.LOGGER.debug("Ores & Drills: settings saved from the config screen");
@@ -253,8 +349,7 @@ public final class OresAndDrillsSettingsScreen extends Screen {
             return Math.min(420, this.width - 40);
         }
 
-        abstract class Row extends ContainerObjectSelectionList.Entry<Row> {
-        }
+        abstract class Row extends ContainerObjectSelectionList.Entry<Row> {}
 
         private final class SectionRow extends Row {
             private final Component title;
@@ -264,8 +359,17 @@ public final class OresAndDrillsSettingsScreen extends Screen {
             }
 
             @Override
-            public void render(GuiGraphics guiGraphics, int index, int top, int left, int width, int height,
-                               int mouseX, int mouseY, boolean hovering, float partialTick) {
+            public void render(
+                    GuiGraphics guiGraphics,
+                    int index,
+                    int top,
+                    int left,
+                    int width,
+                    int height,
+                    int mouseX,
+                    int mouseY,
+                    boolean hovering,
+                    float partialTick) {
                 var font = Minecraft.getInstance().font;
                 int textY = top + height - font.lineHeight - 3;
                 guiGraphics.drawString(font, title, left, textY, 0xFFFFFF);
@@ -295,8 +399,17 @@ public final class OresAndDrillsSettingsScreen extends Screen {
             }
 
             @Override
-            public void render(GuiGraphics guiGraphics, int index, int top, int left, int width, int height,
-                               int mouseX, int mouseY, boolean hovering, float partialTick) {
+            public void render(
+                    GuiGraphics guiGraphics,
+                    int index,
+                    int top,
+                    int left,
+                    int width,
+                    int height,
+                    int mouseX,
+                    int mouseY,
+                    boolean hovering,
+                    float partialTick) {
                 var font = Minecraft.getInstance().font;
                 int labelWidth = width - WIDGET_WIDTH - 8;
                 String text = label.getString();
@@ -307,8 +420,15 @@ public final class OresAndDrillsSettingsScreen extends Screen {
                 guiGraphics.drawString(font, text, left, textY, 0xE0E0E0);
                 if (hovering && mouseX < left + labelWidth) {
                     // The label explains the setting too, not only the widget's own tooltip.
-                    setTooltipForNextRenderPass(font.split(label.copy().append("\n").append(
-                            description.copy().withStyle(ChatFormatting.GRAY)), 260));
+                    setTooltipForNextRenderPass(
+                            font.split(
+                                    label.copy()
+                                            .append("\n")
+                                            .append(
+                                                    description
+                                                            .copy()
+                                                            .withStyle(ChatFormatting.GRAY)),
+                                    260));
                 }
                 widget.setPosition(left + width - WIDGET_WIDTH, top + (height - 20) / 2);
                 widget.render(guiGraphics, mouseX, mouseY, partialTick);

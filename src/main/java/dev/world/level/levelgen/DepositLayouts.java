@@ -9,8 +9,7 @@ public final class DepositLayouts {
     public static final long MEDIUM_SALT = 0x4D454449554D4F52L;
     public static final long LARGE_SALT = 0x4C415247455F4F52L;
 
-    private DepositLayouts() {
-    }
+    private DepositLayouts() {}
 
     public static DepositTierLayout forTier(OreDepositTier tier) {
         int largeChunks = configuredLargeSpacingChunks();
@@ -33,16 +32,17 @@ public final class DepositLayouts {
     }
 
     public static long tierSalt(int tier) {
-        return tierSalt(OreDepositTier.fromIndex(tier)
-                .orElseThrow(() -> new IllegalArgumentException("Unknown deposit tier index: " + tier)));
+        return tierSalt(
+                OreDepositTier.fromIndex(tier)
+                        .orElseThrow(
+                                () ->
+                                        new IllegalArgumentException(
+                                                "Unknown deposit tier index: " + tier)));
     }
 
     public static long anchorChunkKey(OreDepositTier tier, int cellX, int cellZ) {
         int sizeChunks = forTier(tier).cellSizeChunks();
-        return packChunk(
-                cellX * sizeChunks + sizeChunks / 2,
-                cellZ * sizeChunks + sizeChunks / 2
-        );
+        return packChunk(cellX * sizeChunks + sizeChunks / 2, cellZ * sizeChunks + sizeChunks / 2);
     }
 
     public static boolean isAnchorChunk(OreDepositTier tier, int chunkX, int chunkZ) {
@@ -70,14 +70,14 @@ public final class DepositLayouts {
         try {
             spacingBlocks = OreDepositConfig.MAX_LARGE_DEPOSIT_SPACING.get();
         } catch (LinkageError | RuntimeException unavailableRuntime) {
-            // Plain unit tests intentionally run without the NeoForge runtime. The config default keeps
-            // pure layout tests on the production grid.
+            // Plain unit tests intentionally run without the NeoForge runtime. The config default
+            // keeps pure layout tests on the production grid.
             spacingBlocks = OreDepositConfig.DEFAULT_MAX_LARGE_DEPOSIT_SPACING;
         }
-        spacingBlocks = Math.max(
-                OreDepositConfig.MIN_LARGE_DEPOSIT_SPACING_LIMIT,
-                Math.min(OreDepositConfig.MAX_LARGE_DEPOSIT_SPACING_LIMIT, spacingBlocks)
-        );
+        spacingBlocks =
+                Math.max(
+                        OreDepositConfig.MIN_LARGE_DEPOSIT_SPACING_LIMIT,
+                        Math.min(OreDepositConfig.MAX_LARGE_DEPOSIT_SPACING_LIMIT, spacingBlocks));
         return Math.max(1, (spacingBlocks + 15) / 16);
     }
 }

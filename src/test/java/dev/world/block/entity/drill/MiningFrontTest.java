@@ -1,12 +1,11 @@
 package dev.world.block.entity.drill;
 
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.junit.jupiter.api.Test;
 
 class MiningFrontTest {
     private static final List<String> TARGETS = List.of("a", "b", "c", "d", "e");

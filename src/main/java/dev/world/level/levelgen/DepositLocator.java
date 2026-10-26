@@ -2,7 +2,14 @@ package dev.world.level.levelgen;
 
 import dev.OresAndDrillsMod;
 import dev.config.OreGenerationMode;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.visitors.CollectFields;
@@ -10,17 +17,9 @@ import net.minecraft.nbt.visitors.FieldSelector;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
-
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
 
 /** Ring-based nearest search over confirmed records and deterministic generation cells. */
 public final class DepositLocator {
@@ -34,16 +33,19 @@ public final class DepositLocator {
     }
 
     /**
-     * Vanilla-like TINY/SMALL deposits are as common as ordinary veins and are neither predicted nor
-     * indexed; only an explicit datapack rule keeps those tiers locatable for its ore. Regular-mode
-     * automatic TINY/SMALL are located through {@link SmallDepositLocate}.
+     * Vanilla-like TINY/SMALL deposits are as common as ordinary veins and are neither predicted
+     * nor indexed; only an explicit datapack rule keeps those tiers locatable for its ore.
+     * Regular-mode automatic TINY/SMALL are located through {@link SmallDepositLocate}.
      */
-    public static boolean isLocatable(ServerLevel level, ResourceLocation ore, OreDepositTier tier) {
-        if (tier.index() >= OreDepositFeature.TIER_MEDIUM || !OreGenerationMode.vanillaLikeGeneration()) {
+    public static boolean isLocatable(
+            ServerLevel level, ResourceLocation ore, OreDepositTier tier) {
+        if (tier.index() >= OreDepositFeature.TIER_MEDIUM
+                || !OreGenerationMode.vanillaLikeGeneration()) {
             return true;
         }
         Block block = BuiltInRegistries.BLOCK.get(ore);
-        return block != null && DataDrivenOreDepositBiomeModifier.explicitlyConfigured(level, block);
+        return block != null
+                && DataDrivenOreDepositBiomeModifier.explicitlyConfigured(level, block);
     }
 
     public Optional<LocatedDeposit> findNearest(
@@ -51,22 +53,22 @@ public final class DepositLocator {
             BlockPos origin,
             ResourceLocation requestedOre,
             OreDepositTier requestedTier,
-            int searchRadius
-    ) {
+            int searchRadius) {
         long searchRadiusSquared = (long) searchRadius * searchRadius;
         Block requestedBlock = BuiltInRegistries.BLOCK.get(requestedOre);
-        Block unifiedBlock = requestedBlock == null
-                ? null
-                : OreUnifier.canonicalMaterialBlockFor(requestedBlock).orElse(requestedBlock);
-        ResourceLocation effectiveOre = unifiedBlock == null
-                ? requestedOre
-                : BuiltInRegistries.BLOCK.getKey(unifiedBlock);
+        Block unifiedBlock =
+                requestedBlock == null
+                        ? null
+                        : OreUnifier.canonicalMaterialBlockFor(requestedBlock)
+                                .orElse(requestedBlock);
+        ResourceLocation effectiveOre =
+                unifiedBlock == null ? requestedOre : BuiltInRegistries.BLOCK.getKey(unifiedBlock);
         LocatedDeposit best = null;
         Set<Long> confirmedIds = new HashSet<>();
         Map<Long, Boolean> decoratedChunks = new HashMap<>();
-        List<ConfirmedDeposit> confirmed = ConfirmedDepositIndex.get(level).recordsWithin(
-                origin, searchRadius, effectiveOre, requestedTier
-        );
+        List<ConfirmedDeposit> confirmed =
+                ConfirmedDepositIndex.get(level)
+                        .recordsWithin(origin, searchRadius, effectiveOre, requestedTier);
         for (ConfirmedDeposit deposit : confirmed) {
             confirmedIds.add(deposit.depositId());
             long distanceSquared = horizontalDistanceSquared(origin, deposit.center());
@@ -74,15 +76,29 @@ public final class DepositLocator {
                 continue;
             }
             DepositCandidate candidate = confirmedCandidate(deposit);
-            best = nearer(origin, best, new LocatedDeposit(
-                    candidate, DepositLocateStatus.CONFIRMED, floorDistance(distanceSquared), 1.0D
-            ));
+            best =
+                    nearer(
+                            origin,
+                            best,
+                            new LocatedDeposit(
+                                    candidate,
+                                    DepositLocateStatus.CONFIRMED,
+                                    floorDistance(distanceSquared),
+                                    1.0D));
         }
 
-        boolean dataDriven = requestedBlock != null
-                && DataDrivenOreDepositBiomeModifier.explicitlyConfigured(level, requestedBlock);
+        boolean dataDriven =
+                requestedBlock != null
+                        && DataDrivenOreDepositBiomeModifier.explicitlyConfigured(
+                                level, requestedBlock);
         if (SmallDepositLocate.usesSourceAttempts(requestedTier, dataDriven)) {
-            return findNearestSourceAttemptDeposit(level, origin, effectiveOre, requestedTier, searchRadius, best,
+            return findNearestSourceAttemptDeposit(
+                    level,
+                    origin,
+                    effectiveOre,
+                    requestedTier,
+                    searchRadius,
+                    best,
                     decoratedChunks);
         }
 
@@ -95,9 +111,9 @@ public final class DepositLocator {
         int searchCenterCellZ = originCellZ;
         Set<Long> dataSearchCells = Set.of();
         if (dataDriven) {
-            BlockPos nearestAllowedBiome = DataDrivenOreDepositBiomeModifier.findClosestAllowedBiome(
-                    level, origin, requestedBlock, requestedTier, searchRadius
-            );
+            BlockPos nearestAllowedBiome =
+                    DataDrivenOreDepositBiomeModifier.findClosestAllowedBiome(
+                            level, origin, requestedBlock, requestedTier, searchRadius);
             if (nearestAllowedBiome == null) {
                 return Optional.ofNullable(best);
             }
@@ -106,9 +122,9 @@ public final class DepositLocator {
             searchCenterCellX = biomeCellX;
             searchCenterCellZ = biomeCellZ;
             Set<Long> nearbyCells = new HashSet<>();
-            // The closest allowed point can sit on a cell edge while the immutable slot selects a source
-            // in the neighbouring cell. Evaluate a small fixed neighbourhood, then let the ordinary
-            // candidate/terrain checks decide which plans truly exist.
+            // The closest allowed point can sit on a cell edge while the immutable slot selects a
+            // source in the neighbouring cell. Evaluate a small fixed neighbourhood, then let the
+            // ordinary candidate/terrain checks decide which plans truly exist.
             for (int offsetX = -2; offsetX <= 2; offsetX++) {
                 for (int offsetZ = -2; offsetZ <= 2; offsetZ++) {
                     nearbyCells.add(ChunkPos.asLong(biomeCellX + offsetX, biomeCellZ + offsetZ));
@@ -117,15 +133,18 @@ public final class DepositLocator {
             dataSearchCells = Set.copyOf(nearbyCells);
         }
         // A data-driven search has already reduced the entire radius to the 5x5 neighbourhood of
-        // the nearest allowed 3D biome. Iterating every ring from the player merely to skip all other
-        // cells was especially dangerous for TINY (millions of server-thread iterations) and could
-        // trip the watchdog. Search that bounded neighbourhood directly.
-        int cellSearchRadius = dataDriven ? 2 : Mth.ceil(
-                (searchRadius + layout.maximumRadius()) / (double) cellSizeBlocks
-        );
+        // the nearest allowed 3D biome. Iterating every ring from the player merely to skip all
+        // other cells would cost TINY millions of server-thread iterations and could trip the
+        // watchdog. Search that bounded neighbourhood directly.
+        int cellSearchRadius =
+                dataDriven
+                        ? 2
+                        : Mth.ceil(
+                                (searchRadius + layout.maximumRadius()) / (double) cellSizeBlocks);
         OresAndDrillsMod.LOGGER.debug(
-                "Ore locate pipeline: tier={}, resolver={}, cellSizeBlocks={}, cellSearchRadius={}, "
-                        + "tierSalt={}, sampleCount={}..{}, maximumRadius={}, validation=coverage>={}, sections>={}",
+                "Ore locate pipeline: tier={}, resolver={}, cellSizeBlocks={}, cellSearchRadius={},"
+                        + " tierSalt={}, sampleCount={}..{}, maximumRadius={}, validation=coverage>={},"
+                        + " sections>={}",
                 requestedTier.serializedName(),
                 resolver.getClass().getSimpleName(),
                 cellSizeBlocks,
@@ -135,8 +154,7 @@ public final class DepositLocator {
                 layout.maximumSamples(),
                 layout.maximumRadius(),
                 layout.requiredStoneCoverage(),
-                TieredDepositSampler.minimumValidSections(requestedTier)
-        );
+                TieredDepositSampler.minimumValidSections(requestedTier));
 
         for (int ring = 0; ring <= cellSearchRadius; ring++) {
             int perimeter = ring == 0 ? 1 : ring * 8;
@@ -147,109 +165,136 @@ public final class DepositLocator {
                 if (dataDriven && !dataSearchCells.contains(ChunkPos.asLong(cellX, cellZ))) {
                     continue;
                 }
-                List<DataDrivenOreDepositBiomeModifier.PlannedDeposit> dataPlans = dataDriven
-                        ? DataDrivenOreDepositBiomeModifier.plansForCell(
-                                level, cellX, cellZ, requestedOre, requestedTier
-                        )
-                        : List.of();
-                List<DepositCandidate> candidates = dataDriven
-                        ? dataPlans.stream().map(DataDrivenOreDepositBiomeModifier.PlannedDeposit::candidate).toList()
-                        : resolver.getCandidatesForCell(level, cellX, cellZ, effectiveOre);
+                List<DataDrivenOreDepositBiomeModifier.PlannedDeposit> dataPlans =
+                        dataDriven
+                                ? DataDrivenOreDepositBiomeModifier.plansForCell(
+                                        level, cellX, cellZ, requestedOre, requestedTier)
+                                : List.of();
+                List<DepositCandidate> candidates =
+                        dataDriven
+                                ? dataPlans.stream()
+                                        .map(
+                                                DataDrivenOreDepositBiomeModifier.PlannedDeposit
+                                                        ::candidate)
+                                        .toList()
+                                : resolver.getCandidatesForCell(level, cellX, cellZ, effectiveOre);
                 for (int candidateIndex = 0; candidateIndex < candidates.size(); candidateIndex++) {
                     DepositCandidate candidate = candidates.get(candidateIndex);
-                    DataDrivenOreDepositBiomeModifier.PlannedDeposit dataPlan = dataDriven
-                            ? dataPlans.get(candidateIndex)
-                            : null;
+                    DataDrivenOreDepositBiomeModifier.PlannedDeposit dataPlan =
+                            dataDriven ? dataPlans.get(candidateIndex) : null;
                     if (confirmedIds.contains(candidate.depositId())
                             || !candidate.oreId().equals(effectiveOre)
                             || candidate.tier() != requestedTier) {
                         continue;
                     }
-                    // A loaded FULL chunk has already had its features applied. If its candidate is not
-                    // in the authoritative confirmed index, base-terrain prediction must not resurrect it.
-                    // Snapshot the candidate's real source chunk. Data-driven frequency slots may use a
-                    // different source than the tier's automatic anchor.
-                    boolean sourceChunkIsLoaded = level.getChunkSource().getChunkNow(
-                            candidate.sourceChunkX(), candidate.sourceChunkZ()
-                    ) != null;
+                    // A loaded FULL chunk has already had its features applied. If its candidate is
+                    // not in the authoritative confirmed index, base-terrain prediction must not
+                    // resurrect it. Snapshot the candidate's real source chunk. Data-driven
+                    // frequency slots may use a different source than the tier's automatic anchor.
+                    boolean sourceChunkIsLoaded =
+                            level.getChunkSource()
+                                            .getChunkNow(
+                                                    candidate.sourceChunkX(),
+                                                    candidate.sourceChunkZ())
+                                    != null;
                     if (sourceChunkIsLoaded) {
                         continue;
                     }
                     if (dataPlan != null
                             && dataPlan.placement() == OreDepositFeature.PlacementMode.CAVE_WALL) {
-                        // Remote base terrain has no carvers, so a strict wall-only rule can only be
-                        // returned from the authoritative confirmed index after its chunk generates.
+                        // Remote base terrain has no carvers, so a strict wall-only rule can only
+                        // be returned from the authoritative confirmed index after its chunk
+                        // generates.
                         continue;
                     }
-                    java.util.function.Predicate<BlockPos> dataWriteBounds = dataPlan == null
-                            ? ignored -> true
-                            : dataDrivenWriteBounds(candidate);
-                    java.util.function.BiPredicate<BlockPos, net.minecraft.world.level.block.state.BlockState>
-                            predictedReplacement = dataPlan == null
-                            ? (ignoredPos, ignoredState) -> false
-                            : dataPlan.predictedReplacement(level);
-                    DepositCandidate locatedCandidate = dataPlan != null
-                            ? terrainValidator.relocateToMatchingHost(
-                                    level, candidate, predictedReplacement, dataWriteBounds
-                            )
-                            : requestedTier.prefersCaveWall()
-                                    ? terrainValidator.undergroundFallbackCandidate(level, candidate)
-                                    : candidate;
+                    java.util.function.Predicate<BlockPos> dataWriteBounds =
+                            dataPlan == null ? ignored -> true : dataDrivenWriteBounds(candidate);
+                    java.util.function.BiPredicate<
+                                    BlockPos, net.minecraft.world.level.block.state.BlockState>
+                            predictedReplacement =
+                                    dataPlan == null
+                                            ? (ignoredPos, ignoredState) -> false
+                                            : dataPlan.predictedReplacement(level);
+                    DepositCandidate locatedCandidate =
+                            dataPlan != null
+                                    ? terrainValidator.relocateToMatchingHost(
+                                            level, candidate, predictedReplacement, dataWriteBounds)
+                                    : requestedTier.prefersCaveWall()
+                                            ? terrainValidator.undergroundFallbackCandidate(
+                                                    level, candidate)
+                                            : candidate;
                     if (locatedCandidate == null) {
                         continue;
                     }
-                    long distanceSquared = horizontalDistanceSquared(origin, locatedCandidate.center());
+                    long distanceSquared =
+                            horizontalDistanceSquared(origin, locatedCandidate.center());
                     if (distanceSquared > searchRadiusSquared
-                            || best != null && distanceSquared >= horizontalDistanceSquared(
-                                    origin, best.candidate().center()
-                            )) {
+                            || best != null
+                                    && distanceSquared
+                                            >= horizontalDistanceSquared(
+                                                    origin, best.candidate().center())) {
                         continue;
                     }
-                    ValidationResult validation = dataPlan != null
-                            ? terrainValidator.validateMatching(
-                                    level, locatedCandidate, layout, predictedReplacement, dataWriteBounds
-                            )
-                            : terrainValidator.validate(level, locatedCandidate, layout);
+                    ValidationResult validation =
+                            dataPlan != null
+                                    ? terrainValidator.validateMatching(
+                                            level,
+                                            locatedCandidate,
+                                            layout,
+                                            predictedReplacement,
+                                            dataWriteBounds)
+                                    : terrainValidator.validate(level, locatedCandidate, layout);
                     if (!validation.viable()) {
                         continue;
                     }
-                    // getChunkNow only covers the live cache. An explored chunk can already be saved on
-                    // disk and later unloaded; predicting its rejected candidate again was the remaining
-                    // source of stale /locate results. Read only the saved Status field and reject chunks
-                    // whose FEATURES step has already run, without loading or generating the chunk.
+                    // getChunkNow only covers the live cache. An explored chunk can already be
+                    // saved on disk and later unloaded; predicting its rejected candidate again
+                    // would return a stale /locate result. Read only the saved Status field and
+                    // reject chunks whose FEATURES step has already run, without loading or
+                    // generating the chunk.
                     if (sourceChunkAlreadyDecorated(level, candidate, decoratedChunks)) {
                         continue;
                     }
-                    // Last, as it builds the worldgen plan: a sampled pass can still accept a lens that worldgen rejects.
-                    if (dataPlan == null && !OreDepositFeature.compactCandidateGenerates(level, locatedCandidate)) {
+                    // Last, as it builds the worldgen plan: a sampled pass can still accept a lens
+                    // that worldgen rejects.
+                    if (dataPlan == null
+                            && !OreDepositFeature.compactCandidateGenerates(
+                                    level, locatedCandidate)) {
                         continue;
                     }
-                    // Unexplored carvers cannot be reproduced by getBaseColumn. Validate the guaranteed
-                    // underground fallback without loading the remote chunk; a real cave-wall placement
-                    // replaces this prediction with its authoritative confirmed record after generation.
-                    best = nearer(origin, best, new LocatedDeposit(
-                            locatedCandidate,
-                            DepositLocateStatus.SEED_PREDICTED,
-                            floorDistance(distanceSquared),
-                            validation.stoneCoverage()
-                    ));
+                    // Unexplored carvers cannot be reproduced by getBaseColumn. Validate the
+                    // guaranteed underground fallback without loading the remote chunk; a real
+                    // cave-wall placement replaces this prediction with its authoritative confirmed
+                    // record after generation.
+                    best =
+                            nearer(
+                                    origin,
+                                    best,
+                                    new LocatedDeposit(
+                                            locatedCandidate,
+                                            DepositLocateStatus.SEED_PREDICTED,
+                                            floorDistance(distanceSquared),
+                                            validation.stoneCoverage()));
                 }
             }
 
-            if (best != null && nextRingCannotBeat(
-                    ring + 1,
-                    cellSizeBlocks,
-                    layout.maximumRadius(),
-                    origin,
-                    best.candidate().center()
-            )) {
+            if (best != null
+                    && nextRingCannotBeat(
+                            ring + 1,
+                            cellSizeBlocks,
+                            layout.maximumRadius(),
+                            origin,
+                            best.candidate().center())) {
                 break;
             }
         }
         return Optional.ofNullable(best);
     }
 
-    /** Synchronous counterpart of the automatic TINY/SMALL branch of {@link IncrementalDepositSearch}. */
+    /**
+     * Synchronous counterpart of the automatic TINY/SMALL branch of {@link
+     * IncrementalDepositSearch}.
+     */
     private static Optional<LocatedDeposit> findNearestSourceAttemptDeposit(
             ServerLevel level,
             BlockPos origin,
@@ -257,8 +302,7 @@ public final class DepositLocator {
             OreDepositTier tier,
             int searchRadius,
             LocatedDeposit best,
-            Map<Long, Boolean> decoratedChunks
-    ) {
+            Map<Long, Boolean> decoratedChunks) {
         long searchRadiusSquared = (long) searchRadius * searchRadius;
         int originChunkX = origin.getX() >> 4;
         int originChunkZ = origin.getZ() >> 4;
@@ -270,28 +314,41 @@ public final class DepositLocator {
                 int chunkX = originChunkX + (int) (offset >> 32);
                 int chunkZ = originChunkZ + (int) offset;
                 if (SmallDepositLocate.isLoaded(level, chunkX, chunkZ)) {
-                    LocatedDeposit confirmed = SmallDepositLocate.confirmedInLoadedChunk(
-                            level, chunkX, chunkZ, effectiveOre, tier, origin);
-                    if (confirmed != null && horizontalDistanceSquared(origin, confirmed.candidate().center())
-                            <= searchRadiusSquared) {
+                    LocatedDeposit confirmed =
+                            SmallDepositLocate.confirmedInLoadedChunk(
+                                    level, chunkX, chunkZ, effectiveOre, tier, origin);
+                    if (confirmed != null
+                            && horizontalDistanceSquared(origin, confirmed.candidate().center())
+                                    <= searchRadiusSquared) {
                         best = nearer(origin, best, confirmed);
                     }
                     continue;
                 }
-                for (SmallDepositAttemptPlanner.Prediction prediction
-                        : SmallDepositLocate.predictions(level, chunkX, chunkZ, effectiveOre, tier)) {
+                for (SmallDepositAttemptPlanner.Prediction prediction :
+                        SmallDepositLocate.predictions(level, chunkX, chunkZ, effectiveOre, tier)) {
                     DepositCandidate candidate = prediction.candidate();
                     long distanceSquared = horizontalDistanceSquared(origin, candidate.center());
-                    if (distanceSquared > searchRadiusSquared || best != null && distanceSquared
-                            >= horizontalDistanceSquared(origin, best.candidate().center())
+                    if (distanceSquared > searchRadiusSquared
+                            || best != null
+                                    && distanceSquared
+                                            >= horizontalDistanceSquared(
+                                                    origin, best.candidate().center())
                             || sourceChunkAlreadyDecorated(level, candidate, decoratedChunks)) {
                         continue;
                     }
-                    best = nearer(origin, best, new LocatedDeposit(candidate, DepositLocateStatus.SEED_PREDICTED,
-                            floorDistance(distanceSquared), prediction.hostCoverage()));
+                    best =
+                            nearer(
+                                    origin,
+                                    best,
+                                    new LocatedDeposit(
+                                            candidate,
+                                            DepositLocateStatus.SEED_PREDICTED,
+                                            floorDistance(distanceSquared),
+                                            prediction.hostCoverage()));
                 }
             }
-            if (best != null && nextRingCannotBeat(ring + 1, 16, 16, origin, best.candidate().center())) {
+            if (best != null
+                    && nextRingCannotBeat(ring + 1, 16, 16, origin, best.candidate().center())) {
                 break;
             }
         }
@@ -299,42 +356,54 @@ public final class DepositLocator {
     }
 
     private static boolean sourceChunkAlreadyDecorated(
-            ServerLevel level,
-            DepositCandidate candidate,
-            Map<Long, Boolean> cache
-    ) {
+            ServerLevel level, DepositCandidate candidate, Map<Long, Boolean> cache) {
         long chunkKey = ChunkPos.asLong(candidate.sourceChunkX(), candidate.sourceChunkZ());
-        return cache.computeIfAbsent(chunkKey, ignored -> {
-            CollectFields visitor = new CollectFields(new FieldSelector(StringTag.TYPE, "Status"));
-            try {
-                level.getChunkSource().chunkScanner()
-                        .scanChunk(new ChunkPos(candidate.sourceChunkX(), candidate.sourceChunkZ()), visitor)
-                        .join();
-                if (!(visitor.getResult() instanceof CompoundTag root)) {
-                    return false;
-                }
-                ChunkStatus status = ChunkStatus.byName(root.getString("Status"));
-                return status != null && status.isOrAfter(ChunkStatus.FEATURES);
-            } catch (RuntimeException exception) {
-                OresAndDrillsMod.LOGGER.debug(
-                        "Could not inspect saved status of ore-deposit source chunk [{}, {}] in {}",
-                        candidate.sourceChunkX(), candidate.sourceChunkZ(), level.dimension().location(), exception
-                );
-                // A failed metadata read is not proof that the chunk was generated. Keep the deterministic
-                // prediction available instead of turning a transient I/O failure into a false not-found.
-                return false;
-            }
-        });
+        return cache.computeIfAbsent(
+                chunkKey,
+                ignored -> {
+                    CollectFields visitor =
+                            new CollectFields(new FieldSelector(StringTag.TYPE, "Status"));
+                    try {
+                        level.getChunkSource()
+                                .chunkScanner()
+                                .scanChunk(
+                                        new ChunkPos(
+                                                candidate.sourceChunkX(), candidate.sourceChunkZ()),
+                                        visitor)
+                                .join();
+                        if (!(visitor.getResult() instanceof CompoundTag root)) {
+                            return false;
+                        }
+                        ChunkStatus status = ChunkStatus.byName(root.getString("Status"));
+                        return status != null && status.isOrAfter(ChunkStatus.FEATURES);
+                    } catch (RuntimeException exception) {
+                        OresAndDrillsMod.LOGGER.debug(
+                                "Could not inspect saved status of ore-deposit source chunk [{},"
+                                        + " {}] in {}",
+                                candidate.sourceChunkX(),
+                                candidate.sourceChunkZ(),
+                                level.dimension().location(),
+                                exception);
+                        // A failed metadata read is not proof that the chunk was generated. Keep
+                        // the deterministic prediction available instead of turning a transient I/O
+                        // failure into a false not-found.
+                        return false;
+                    }
+                });
     }
 
-    static java.util.function.Predicate<BlockPos> dataDrivenWriteBounds(DepositCandidate candidate) {
+    static java.util.function.Predicate<BlockPos> dataDrivenWriteBounds(
+            DepositCandidate candidate) {
         int radius = OreDepositFeature.FEATURE_WRITE_RADIUS_CHUNKS;
         int minimumX = (candidate.sourceChunkX() - radius) << 4;
         int maximumX = ((candidate.sourceChunkX() + radius + 1) << 4) - 1;
         int minimumZ = (candidate.sourceChunkZ() - radius) << 4;
         int maximumZ = ((candidate.sourceChunkZ() + radius + 1) << 4) - 1;
-        return pos -> pos.getX() >= minimumX && pos.getX() <= maximumX
-                && pos.getZ() >= minimumZ && pos.getZ() <= maximumZ;
+        return pos ->
+                pos.getX() >= minimumX
+                        && pos.getX() <= maximumX
+                        && pos.getZ() >= minimumZ
+                        && pos.getZ() <= maximumZ;
     }
 
     static DepositCandidate confirmedCandidate(ConfirmedDeposit deposit) {
@@ -350,8 +419,7 @@ public final class DepositLocator {
                 deposit.wallDirection(),
                 deposit.placedBlocks(),
                 deposit.center().getX() >> 4,
-                deposit.center().getZ() >> 4
-        );
+                deposit.center().getZ() >> 4);
     }
 
     static boolean nextRingCannotBeat(
@@ -359,21 +427,15 @@ public final class DepositLocator {
             int cellSizeBlocks,
             int maximumRadius,
             BlockPos origin,
-            BlockPos currentBest
-    ) {
-        long guaranteedDistance = Math.max(
-                0L,
-                (long) (nextRing - 1) * cellSizeBlocks - maximumRadius
-        );
+            BlockPos currentBest) {
+        long guaranteedDistance =
+                Math.max(0L, (long) (nextRing - 1) * cellSizeBlocks - maximumRadius);
         long bestDistanceSquared = horizontalDistanceSquared(origin, currentBest);
         return guaranteedDistance * guaranteedDistance >= bestDistanceSquared;
     }
 
     static LocatedDeposit nearer(
-            BlockPos origin,
-            LocatedDeposit current,
-            LocatedDeposit candidate
-    ) {
+            BlockPos origin, LocatedDeposit current, LocatedDeposit candidate) {
         if (current == null) {
             return candidate;
         }

@@ -1,25 +1,25 @@
 package dev.world.level.levelgen;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.WeakHashMap;
 import net.minecraft.core.Holder;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.biome.Biome;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.WeakHashMap;
-
 /** Bounded, per-world cache for immutable noise-biome samples used by generation prediction. */
 final class BiomeNoiseCache {
     private static final int MAX_ENTRIES_PER_WORLD = 65_536;
-    private static final Map<ServerLevel, Map<QuartKey, Holder<Biome>>> BY_LEVEL = new WeakHashMap<>();
+    private static final Map<ServerLevel, Map<QuartKey, Holder<Biome>>> BY_LEVEL =
+            new WeakHashMap<>();
 
-    private BiomeNoiseCache() {
-    }
+    private BiomeNoiseCache() {}
 
     static Holder<Biome> get(ServerLevel level, int quartX, int quartY, int quartZ) {
         QuartKey key = new QuartKey(quartX, quartY, quartZ);
         synchronized (BY_LEVEL) {
-            Map<QuartKey, Holder<Biome>> cache = BY_LEVEL.computeIfAbsent(level, ignored -> newCache());
+            Map<QuartKey, Holder<Biome>> cache =
+                    BY_LEVEL.computeIfAbsent(level, ignored -> newCache());
             Holder<Biome> cached = cache.get(key);
             if (cached != null) return cached;
             Holder<Biome> biome = level.getUncachedNoiseBiome(quartX, quartY, quartZ);
@@ -43,6 +43,5 @@ final class BiomeNoiseCache {
         };
     }
 
-    private record QuartKey(int x, int y, int z) {
-    }
+    private record QuartKey(int x, int y, int z) {}
 }

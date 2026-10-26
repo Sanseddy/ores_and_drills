@@ -1,10 +1,9 @@
 package dev.world.level.levelgen;
 
+import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
-
-import javax.annotation.Nullable;
 
 /** Immutable seed plan shared by ore-deposit generation and locating. */
 public record DepositCandidate(
@@ -20,14 +19,36 @@ public record DepositCandidate(
         int expectedBlocks,
         int sourceChunkX,
         int sourceChunkZ,
-        float geometrySize
-) {
-    public DepositCandidate(long depositId, ResourceLocation oreId, OreDepositTier tier, BlockPos center,
-            int radiusX, int radiusZ, int verticalRadius, long shapeSeed, @Nullable Direction wallDirection,
-            int expectedBlocks, int sourceChunkX, int sourceChunkZ) {
-        this(depositId, oreId, tier, center, radiusX, radiusZ, verticalRadius, shapeSeed, wallDirection,
-                expectedBlocks, sourceChunkX, sourceChunkZ, 1.0F);
+        float geometrySize) {
+    public DepositCandidate(
+            long depositId,
+            ResourceLocation oreId,
+            OreDepositTier tier,
+            BlockPos center,
+            int radiusX,
+            int radiusZ,
+            int verticalRadius,
+            long shapeSeed,
+            @Nullable Direction wallDirection,
+            int expectedBlocks,
+            int sourceChunkX,
+            int sourceChunkZ) {
+        this(
+                depositId,
+                oreId,
+                tier,
+                center,
+                radiusX,
+                radiusZ,
+                verticalRadius,
+                shapeSeed,
+                wallDirection,
+                expectedBlocks,
+                sourceChunkX,
+                sourceChunkZ,
+                1.0F);
     }
+
     public DepositCandidate {
         if (oreId == null || tier == null || center == null) {
             throw new IllegalArgumentException("Deposit identity, tier and center are required");
@@ -37,7 +58,8 @@ public record DepositCandidate(
             throw new IllegalArgumentException("Finite positive geometry size required");
         }
         if (radiusX < 1 || radiusZ < 1 || verticalRadius < 1 || expectedBlocks < 1) {
-            throw new IllegalArgumentException("Deposit dimensions and expected block count must be positive");
+            throw new IllegalArgumentException(
+                    "Deposit dimensions and expected block count must be positive");
         }
         if (wallDirection != null && wallDirection.getAxis().isVertical()) {
             throw new IllegalArgumentException("A deposit wall direction must be horizontal");
@@ -45,8 +67,20 @@ public record DepositCandidate(
     }
 
     public DepositCandidate withExpectedBlocks(int blocks) {
-        return new DepositCandidate(depositId,oreId,tier,center,radiusX,radiusZ,verticalRadius,shapeSeed,
-                wallDirection,blocks,sourceChunkX,sourceChunkZ,geometrySize);
+        return new DepositCandidate(
+                depositId,
+                oreId,
+                tier,
+                center,
+                radiusX,
+                radiusZ,
+                verticalRadius,
+                shapeSeed,
+                wallDirection,
+                blocks,
+                sourceChunkX,
+                sourceChunkZ,
+                geometrySize);
     }
 
     public DepositCandidate withWallAnchor(CaveWallAnchor anchor) {
@@ -54,16 +88,36 @@ public record DepositCandidate(
             return this;
         }
         return new DepositCandidate(
-                depositId, oreId, tier, anchor.position(), radiusX, radiusZ, verticalRadius,
-                shapeSeed, anchor.inwardDirection(), expectedBlocks, sourceChunkX, sourceChunkZ, geometrySize
-        );
+                depositId,
+                oreId,
+                tier,
+                anchor.position(),
+                radiusX,
+                radiusZ,
+                verticalRadius,
+                shapeSeed,
+                anchor.inwardDirection(),
+                expectedBlocks,
+                sourceChunkX,
+                sourceChunkZ,
+                geometrySize);
     }
 
     /** Converts a wall-preferred seed plan to its deterministic underground fallback. */
     public DepositCandidate withUndergroundCenter(BlockPos undergroundCenter) {
         return new DepositCandidate(
-                depositId, oreId, tier, undergroundCenter, radiusX, radiusZ, verticalRadius,
-                shapeSeed, null, expectedBlocks, sourceChunkX, sourceChunkZ, geometrySize
-        );
+                depositId,
+                oreId,
+                tier,
+                undergroundCenter,
+                radiusX,
+                radiusZ,
+                verticalRadius,
+                shapeSeed,
+                null,
+                expectedBlocks,
+                sourceChunkX,
+                sourceChunkZ,
+                geometrySize);
     }
 }

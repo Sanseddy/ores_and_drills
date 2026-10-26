@@ -5,10 +5,10 @@ import dev.world.block.entity.AbstractDrillBlockEntity;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.Containers;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -35,7 +35,8 @@ public abstract class AbstractDrillBlock extends BaseEntityBlock {
     protected final DrillStructure structure;
     protected final DrillMenuOpener menuOpener;
 
-    protected AbstractDrillBlock(Properties properties, DrillStructure structure, DrillMenuOpener menuOpener) {
+    protected AbstractDrillBlock(
+            Properties properties, DrillStructure structure, DrillMenuOpener menuOpener) {
         super(properties);
         this.structure = structure;
         this.menuOpener = menuOpener;
@@ -63,15 +64,27 @@ public abstract class AbstractDrillBlock extends BaseEntityBlock {
     }
 
     @Override
-    public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack stack) {
+    public void setPlacedBy(
+            Level level,
+            BlockPos pos,
+            BlockState state,
+            @Nullable LivingEntity placer,
+            ItemStack stack) {
         if (!level.isClientSide) {
             structure.placeParts(level, pos, state.getValue(FACING));
         }
     }
 
     @Override
-    public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
-        if (!state.is(newState.getBlock()) && !level.isClientSide && !SableAssemblyTransfer.isMoving(level, pos)) {
+    public void onRemove(
+            BlockState state,
+            Level level,
+            BlockPos pos,
+            BlockState newState,
+            boolean movedByPiston) {
+        if (!state.is(newState.getBlock())
+                && !level.isClientSide
+                && !SableAssemblyTransfer.isMoving(level, pos)) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof AbstractDrillBlockEntity drillBlockEntity) {
                 Containers.dropContents(level, pos, drillBlockEntity.getInventory());
@@ -102,12 +115,14 @@ public abstract class AbstractDrillBlock extends BaseEntityBlock {
     }
 
     @Override
-    protected VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+    protected VoxelShape getShape(
+            BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
         return structure.mainCollisionShape(state.getValue(FACING));
     }
 
     @Override
-    protected VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+    protected VoxelShape getCollisionShape(
+            BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
         return structure.mainCollisionShape(state.getValue(FACING));
     }
 
@@ -117,17 +132,26 @@ public abstract class AbstractDrillBlock extends BaseEntityBlock {
     }
 
     @Override
-    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hitResult) {
+    protected InteractionResult useWithoutItem(
+            BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hitResult) {
         return menuOpener.open(level, pos, player);
     }
 
     @SuppressWarnings("deprecation")
     @Override
-    protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos, Player player,
-                                              InteractionHand hand, BlockHitResult hitResult) {
+    protected ItemInteractionResult useItemOn(
+            ItemStack stack,
+            BlockState state,
+            Level level,
+            BlockPos pos,
+            Player player,
+            InteractionHand hand,
+            BlockHitResult hitResult) {
         BlockEntity blockEntity = level.getBlockEntity(pos);
         if (!(blockEntity instanceof AbstractDrillBlockEntity drillBlockEntity)
-                || !(drillBlockEntity instanceof dev.world.block.entity.AbstractEnergyDrillBlockEntity energyDrill)
+                || !(drillBlockEntity
+                        instanceof
+                        dev.world.block.entity.AbstractEnergyDrillBlockEntity energyDrill)
                 || !energyDrill.canInteractWithFluidContainer(stack)) {
             return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         }

@@ -6,6 +6,9 @@ import dev.client.map.OreMapPainter;
 import dev.client.map.OreMapPatch;
 import dev.client.map.OreMapTooltip;
 import dev.client.map.OreMapTransform;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -21,16 +24,14 @@ import xaero.hud.minimap.element.render.MinimapElementRenderer;
 import xaero.hud.minimap.element.render.MinimapElementRendererHandler;
 import xaero.hud.minimap.element.render.map.MinimapElementMapRendererHandler;
 
-import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.List;
-
 /**
- * Xaero's Minimap layer. It renders inside the minimap's own framebuffer pass, so Xaero applies its round or
- * square mask, its rotation and its frame exactly as for the terrain underneath. Xaero exposes that pass's
- * handler and its rotation only as private fields, which are the sole reflective reads here.
+ * Xaero's Minimap layer. It renders inside the minimap's own framebuffer pass, so Xaero applies its
+ * round or square mask, its rotation and its frame exactly as for the terrain underneath. Xaero
+ * exposes that pass's handler and its rotation only as private fields, which are the sole
+ * reflective reads here.
  */
-public final class XaeroMinimapOreLayer extends MinimapElementRenderer<OreMapPatch, XaeroMinimapOreLayer.Context> {
+public final class XaeroMinimapOreLayer
+        extends MinimapElementRenderer<OreMapPatch, XaeroMinimapOreLayer.Context> {
     private static final XaeroMinimapOreLayer INSTANCE = new XaeroMinimapOreLayer();
     private static Field handlerField;
     private static Field sinField;
@@ -44,7 +45,10 @@ public final class XaeroMinimapOreLayer extends MinimapElementRenderer<OreMapPat
         super(new Reader(), new Provider(), new Context());
     }
 
-    /** The minimap creates its framebuffer pass lazily on first render, so registration is retried each tick. */
+    /**
+     * The minimap creates its framebuffer pass lazily on first render, so registration is retried
+     * each tick.
+     */
     public static void ensureRegistered() {
         if (broken || HudMod.INSTANCE == null || HudMod.INSTANCE.getMinimap() == null) {
             return;
@@ -55,7 +59,9 @@ public final class XaeroMinimapOreLayer extends MinimapElementRenderer<OreMapPat
                 return;
             }
             if (handlerField == null) {
-                handlerField = MinimapFBORenderer.class.getDeclaredField("minimapElementMapRendererHandler");
+                handlerField =
+                        MinimapFBORenderer.class.getDeclaredField(
+                                "minimapElementMapRendererHandler");
                 handlerField.setAccessible(true);
                 sinField = field("ps");
                 cosField = field("pc");
@@ -63,13 +69,15 @@ public final class XaeroMinimapOreLayer extends MinimapElementRenderer<OreMapPat
                 halfViewField = field("halfWView");
             }
             Object handler = handlerField.get(renderer);
-            if (handler instanceof MinimapElementRendererHandler mapHandler && mapHandler != registeredOn) {
+            if (handler instanceof MinimapElementRendererHandler mapHandler
+                    && mapHandler != registeredOn) {
                 mapHandler.add(INSTANCE);
                 registeredOn = mapHandler;
             }
         } catch (ReflectiveOperationException | RuntimeException exception) {
             broken = true;
-            OresAndDrillsMod.LOGGER.warn("Ore deposits cannot be drawn on this Xaero's Minimap version", exception);
+            OresAndDrillsMod.LOGGER.warn(
+                    "Ore deposits cannot be drawn on this Xaero's Minimap version", exception);
         }
     }
 
@@ -86,12 +94,16 @@ public final class XaeroMinimapOreLayer extends MinimapElementRenderer<OreMapPat
 
     @Override
     public boolean shouldRender(MinimapElementRenderLocation location) {
-        return location == MinimapElementRenderLocation.IN_MINIMAP && OreMapMarkers.isEnabled() && !broken;
+        return location == MinimapElementRenderLocation.IN_MINIMAP
+                && OreMapMarkers.isEnabled()
+                && !broken;
     }
 
     @Override
-    public void preRender(MinimapElementRenderInfo info, MultiBufferSource.BufferSource buffers,
-                          MultiTextureRenderTypeRendererProvider rendererProvider) {
+    public void preRender(
+            MinimapElementRenderInfo info,
+            MultiBufferSource.BufferSource buffers,
+            MultiTextureRenderTypeRendererProvider rendererProvider) {
         context.valid = false;
         if (!(registeredOn instanceof MinimapElementMapRendererHandler handler)) {
             return;
@@ -103,29 +115,47 @@ public final class XaeroMinimapOreLayer extends MinimapElementRenderer<OreMapPat
             context.halfView = halfViewField.getFloat(handler);
         } catch (ReflectiveOperationException | RuntimeException exception) {
             broken = true;
-            OresAndDrillsMod.LOGGER.warn("Ore deposits cannot be drawn on this Xaero's Minimap version", exception);
+            OresAndDrillsMod.LOGGER.warn(
+                    "Ore deposits cannot be drawn on this Xaero's Minimap version", exception);
             return;
         }
-        context.dimension = info.mapDimension != null ? info.mapDimension.location() : info.renderEntityDimension.location();
+        context.dimension =
+                info.mapDimension != null
+                        ? info.mapDimension.location()
+                        : info.renderEntityDimension.location();
         context.renderPos = info.renderPos;
         context.valid = context.zoom > 0.0D;
     }
 
     @Override
-    public void postRender(MinimapElementRenderInfo info, MultiBufferSource.BufferSource buffers,
-                           MultiTextureRenderTypeRendererProvider rendererProvider) {
-    }
+    public void postRender(
+            MinimapElementRenderInfo info,
+            MultiBufferSource.BufferSource buffers,
+            MultiTextureRenderTypeRendererProvider rendererProvider) {}
 
     @Override
-    public boolean renderElement(OreMapPatch patch, boolean highlighted, boolean outOfBounds, double optionalDepth,
-                                 float optionalScale, double partialX, double partialY, MinimapElementRenderInfo info,
-                                 GuiGraphics graphics, MultiBufferSource.BufferSource buffers) {
-        // Xaero places each element at (ps*dx - pc*dz, pc*dx + ps*dz) * zoom; the cells follow the same rotation.
+    public boolean renderElement(
+            OreMapPatch patch,
+            boolean highlighted,
+            boolean outOfBounds,
+            double optionalDepth,
+            float optionalScale,
+            double partialX,
+            double partialY,
+            MinimapElementRenderInfo info,
+            GuiGraphics graphics,
+            MultiBufferSource.BufferSource buffers) {
+        // Xaero places each element at (ps*dx - pc*dz, pc*dx + ps*dz) * zoom; the cells follow the
+        // same rotation.
         double zoom = context.zoom;
-        OreMapTransform transform = new OreMapTransform(
-                context.sin * zoom, -context.cos * zoom, partialX,
-                context.cos * zoom, context.sin * zoom, partialY
-        );
+        OreMapTransform transform =
+                new OreMapTransform(
+                        context.sin * zoom,
+                        -context.cos * zoom,
+                        partialX,
+                        context.cos * zoom,
+                        context.sin * zoom,
+                        partialY);
         OreMapPainter.paint(graphics, patch, transform, OreMapPainter.TILE_ALPHA, null);
         return true;
     }
@@ -201,7 +231,8 @@ public final class XaeroMinimapOreLayer extends MinimapElementRenderer<OreMapPat
         }
 
         @Override
-        public double getCoordinateScale(OreMapPatch patch, Context context, MinimapElementRenderInfo info) {
+        public double getCoordinateScale(
+                OreMapPatch patch, Context context, MinimapElementRenderInfo info) {
             // Patch coordinates already belong to the dimension being drawn; never rescale them.
             return info.backgroundCoordinateScale;
         }

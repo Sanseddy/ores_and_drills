@@ -20,22 +20,19 @@ public abstract class SableSubLevelAssemblyHelperMixin {
             ServerLevel sourceLevel,
             @Coerce Object rawTransform,
             Iterable<BlockPos> positions,
-            CallbackInfo callbackInfo
-    ) {
-        SableAssemblyTransformAccessor transform = (SableAssemblyTransformAccessor)rawTransform;
+            CallbackInfo callbackInfo) {
+        SableAssemblyTransformAccessor transform = (SableAssemblyTransformAccessor) rawTransform;
         SableAssemblyTransfer.begin(
                 sourceLevel,
                 transform.oresAndDrills$getLevel(),
                 transform::oresAndDrills$apply,
                 transform::oresAndDrills$apply,
-                positions
-        );
+                positions);
         OreDepositData.beginPhysicalTransfer(
                 sourceLevel,
                 transform.oresAndDrills$getLevel(),
                 transform::oresAndDrills$apply,
-                positions
-        );
+                positions);
     }
 
     @Inject(method = "moveBlocks", at = @At("RETURN"), require = 0, remap = false)
@@ -43,8 +40,7 @@ public abstract class SableSubLevelAssemblyHelperMixin {
             ServerLevel sourceLevel,
             @Coerce Object rawTransform,
             Iterable<BlockPos> positions,
-            CallbackInfo callbackInfo
-    ) {
+            CallbackInfo callbackInfo) {
         OreDepositData.finishPhysicalTransfer();
         SableAssemblyTransfer.finish();
     }

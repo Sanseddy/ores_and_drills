@@ -5,8 +5,7 @@ public record LocatedDeposit(
         DepositCandidate candidate,
         DepositLocateStatus status,
         int distance,
-        double stoneCoverage
-) {
+        double stoneCoverage) {
     public boolean confirmed() {
         return status == DepositLocateStatus.CONFIRMED;
     }

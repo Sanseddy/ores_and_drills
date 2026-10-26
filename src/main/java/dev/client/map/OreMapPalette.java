@@ -6,7 +6,10 @@ import java.util.Map;
 
 /** Minecraft-free colour and number rules of the Factorio-style ore map. */
 final class OreMapPalette {
-    /** Ordered so specific names win over substrings ("redstone" before "red", "certus_quartz" before "quartz"). */
+    /**
+     * Ordered so specific names win over substrings ("redstone" before "red", "certus_quartz"
+     * before "quartz").
+     */
     private static final Map<String, Integer> MATERIALS = new LinkedHashMap<>();
 
     static {
@@ -17,7 +20,8 @@ final class OreMapPalette {
         MATERIALS.put("uranium", 0x00B300);
         MATERIALS.put("uraninite", 0x00B300);
         MATERIALS.put("stone", 0xB09C6D);
-        // Everything else follows the same rule: one saturated, instantly recognisable tone per resource.
+        // Everything else follows the same rule: one saturated, instantly recognisable tone per
+        // resource.
         MATERIALS.put("ancient_debris", 0x6E4C3C);
         MATERIALS.put("netherite", 0x6E4C3C);
         MATERIALS.put("redstone", 0xC4241B);
@@ -61,16 +65,17 @@ final class OreMapPalette {
         MATERIALS.put("calorite", 0xB13A3A);
     }
 
-    private OreMapPalette() {
-    }
+    private OreMapPalette() {}
 
     /**
-     * RGB for a material or ore name such as {@code iron} or {@code deepslate_copper_ore}; null if unknown.
-     * Whole words are matched first so "redstone" is never read as "stone", "platinum" as "tin" or "basalt"
-     * as "salt"; run-together words such as {@code ironore} are also read as their material.
+     * RGB for a material or ore name such as {@code iron} or {@code deepslate_copper_ore}; null if
+     * unknown. Whole words are matched first so "redstone" is never read as "stone", "platinum" as
+     * "tin" or "basalt" as "salt"; run-together words such as {@code ironore} are also read as
+     * their material.
      */
     static Integer materialColor(String name) {
-        String normalized = "_" + name.toLowerCase(Locale.ROOT).replace('/', '_').replace('-', '_') + "_";
+        String normalized =
+                "_" + name.toLowerCase(Locale.ROOT).replace('/', '_').replace('-', '_') + "_";
         for (Map.Entry<String, Integer> material : MATERIALS.entrySet()) {
             if (normalized.contains("_" + material.getKey() + "_")) {
                 return material.getValue();
@@ -110,11 +115,12 @@ final class OreMapPalette {
     }
 
     /**
-     * Factorio paints resource tiles in one flat colour; a gentle brightness falloff on depleted tiles keeps
-     * that look while still showing where drills have already eaten into the patch.
+     * Factorio paints resource tiles in one flat colour; a gentle brightness falloff on depleted
+     * tiles keeps that look while still showing where drills have already eaten into the patch.
      */
     static int shade(int rgb, long remaining, long initial) {
-        double fullness = initial <= 0 ? 1.0D : Math.max(0.0D, Math.min(1.0D, remaining / (double) initial));
+        double fullness =
+                initial <= 0 ? 1.0D : Math.max(0.0D, Math.min(1.0D, remaining / (double) initial));
         double brightness = 0.72D + fullness * 0.28D;
         int red = (int) Math.round((rgb >> 16 & 255) * brightness);
         int green = (int) Math.round((rgb >> 8 & 255) * brightness);
@@ -142,7 +148,8 @@ final class OreMapPalette {
 
     private static String compact(double value, String suffix) {
         return (value >= 100.0D || Math.abs(value - Math.rint(value)) < 0.05D
-                ? String.format(Locale.ROOT, "%.0f", value)
-                : String.format(Locale.ROOT, "%.1f", value)) + suffix;
+                        ? String.format(Locale.ROOT, "%.0f", value)
+                        : String.format(Locale.ROOT, "%.1f", value))
+                + suffix;
     }
 }

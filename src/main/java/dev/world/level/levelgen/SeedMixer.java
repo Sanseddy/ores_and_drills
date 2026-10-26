@@ -1,9 +1,10 @@
 package dev.world.level.levelgen;
 
-/** Stable hashing helpers; deliberately independent from Java object identity and iteration order. */
+/**
+ * Stable hashing helpers; deliberately independent from Java object identity and iteration order.
+ */
 final class SeedMixer {
-    private SeedMixer() {
-    }
+    private SeedMixer() {}
 
     static long hash64(String value) {
         long hash = 0xcbf29ce484222325L;

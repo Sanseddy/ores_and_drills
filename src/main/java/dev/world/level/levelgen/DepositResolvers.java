@@ -7,8 +7,7 @@ import java.util.Map;
 public final class DepositResolvers {
     private static final Map<OreDepositTier, TierDepositResolver> RESOLVERS = createResolvers();
 
-    private DepositResolvers() {
-    }
+    private DepositResolvers() {}
 
     public static TierDepositResolver forTier(OreDepositTier tier) {
         TierDepositResolver resolver = RESOLVERS.get(tier);
@@ -19,7 +18,8 @@ public final class DepositResolvers {
     }
 
     private static Map<OreDepositTier, TierDepositResolver> createResolvers() {
-        EnumMap<OreDepositTier, TierDepositResolver> resolvers = new EnumMap<>(OreDepositTier.class);
+        EnumMap<OreDepositTier, TierDepositResolver> resolvers =
+                new EnumMap<>(OreDepositTier.class);
         register(resolvers, new TinyDepositResolver());
         register(resolvers, new SmallDepositResolver());
         register(resolvers, new MediumDepositResolver());
@@ -28,9 +28,7 @@ public final class DepositResolvers {
     }
 
     private static void register(
-            EnumMap<OreDepositTier, TierDepositResolver> resolvers,
-            TierDepositResolver resolver
-    ) {
+            EnumMap<OreDepositTier, TierDepositResolver> resolvers, TierDepositResolver resolver) {
         if (resolvers.put(resolver.tier(), resolver) != null) {
             throw new IllegalStateException("Duplicate resolver for " + resolver.tier());
         }

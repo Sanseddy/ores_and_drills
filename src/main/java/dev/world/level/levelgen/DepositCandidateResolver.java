@@ -1,14 +1,6 @@
 package dev.world.level.levelgen;
 
 import dev.registry.ModBlockTags;
-import net.minecraft.core.Holder;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.tags.TagKey;
-import net.minecraft.world.level.block.Block;
-
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -17,16 +9,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import net.minecraft.core.Holder;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.level.block.Block;
 
 /** Ore-catalog helpers for deterministic deposit candidates. */
 public final class DepositCandidateResolver {
     private static final String MATERIAL_ORE_TAG_PREFIX = "ores/";
-    private static final ResourceLocation INTERNAL_DEPOSIT_BLOCK = ResourceLocation.fromNamespaceAndPath(
-            dev.OresAndDrillsMod.MOD_ID, "ore_deposit"
-    );
+    private static final ResourceLocation INTERNAL_DEPOSIT_BLOCK =
+            ResourceLocation.fromNamespaceAndPath(dev.OresAndDrillsMod.MOD_ID, "ore_deposit");
 
-    private DepositCandidateResolver() {
-    }
+    private DepositCandidateResolver() {}
 
     public static boolean isOreCatalogLoaded() {
         return BuiltInRegistries.BLOCK.getTag(ModBlockTags.ORES).isPresent();
@@ -65,9 +62,7 @@ public final class DepositCandidateResolver {
     public static List<ResourceLocation> oreCatalog(ServerLevel level) {
         Set<ResourceLocation> ores = new LinkedHashSet<>(oreCatalog());
         ores.addAll(DataDrivenOreDepositBiomeModifier.configuredOreCatalog(level));
-        return ores.stream()
-                .sorted(Comparator.comparing(ResourceLocation::toString))
-                .toList();
+        return ores.stream().sorted(Comparator.comparing(ResourceLocation::toString)).toList();
     }
 
     /**
@@ -77,15 +72,20 @@ public final class DepositCandidateResolver {
      */
     public static List<ResourceLocation> oreTagCatalog() {
         Map<String, ResourceLocation> preferredByMaterial = new HashMap<>();
-        BuiltInRegistries.BLOCK.getTags().forEach(pair -> {
-            ResourceLocation tagId = pair.getFirst().location();
-            if (!isMaterialOreTag(tagId) || oreForTag(tagId).isEmpty()) {
-                return;
-            }
+        BuiltInRegistries.BLOCK
+                .getTags()
+                .forEach(
+                        pair -> {
+                            ResourceLocation tagId = pair.getFirst().location();
+                            if (!isMaterialOreTag(tagId) || oreForTag(tagId).isEmpty()) {
+                                return;
+                            }
 
-            String material = tagId.getPath().substring(MATERIAL_ORE_TAG_PREFIX.length());
-            preferredByMaterial.merge(material, tagId, DepositCandidateResolver::preferConventionTag);
-        });
+                            String material =
+                                    tagId.getPath().substring(MATERIAL_ORE_TAG_PREFIX.length());
+                            preferredByMaterial.merge(
+                                    material, tagId, DepositCandidateResolver::preferConventionTag);
+                        });
 
         return preferredByMaterial.values().stream()
                 .sorted(Comparator.comparing(ResourceLocation::toString))
@@ -94,7 +94,8 @@ public final class DepositCandidateResolver {
 
     /**
      * Command suggestions prefer material tags. A canonical ore that is not represented by any
-     * usable material tag falls back to its block id, so imperfectly tagged mod ores remain locatable.
+     * usable material tag falls back to its block id, so imperfectly tagged mod ores remain
+     * locatable.
      */
     public static List<String> oreSuggestionCatalog(ServerLevel level) {
         List<ResourceLocation> materialTags = oreTagCatalog();
@@ -114,14 +115,8 @@ public final class DepositCandidateResolver {
         }
 
         List<String> suggestions = new ArrayList<>(materialTags.size() + fallbackOreIds.size());
-        materialTags.stream()
-                .map(tag -> "#" + tag)
-                .sorted()
-                .forEach(suggestions::add);
-        fallbackOreIds.stream()
-                .map(ResourceLocation::toString)
-                .sorted()
-                .forEach(suggestions::add);
+        materialTags.stream().map(tag -> "#" + tag).sorted().forEach(suggestions::add);
+        fallbackOreIds.stream().map(ResourceLocation::toString).sorted().forEach(suggestions::add);
         return List.copyOf(suggestions);
     }
 
@@ -136,7 +131,9 @@ public final class DepositCandidateResolver {
         for (Holder<Block> holder : BuiltInRegistries.BLOCK.getTagOrEmpty(tag)) {
             Block block = holder.value();
             ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(block);
-            if (blockId == null || INTERNAL_DEPOSIT_BLOCK.equals(blockId) || !OreTags.isOre(block.defaultBlockState())) {
+            if (blockId == null
+                    || INTERNAL_DEPOSIT_BLOCK.equals(blockId)
+                    || !OreTags.isOre(block.defaultBlockState())) {
                 continue;
             }
 
@@ -147,8 +144,8 @@ public final class DepositCandidateResolver {
             }
         }
 
-        // A material tag must describe exactly one unified material. Ambiguous aggregate or malformed
-        // tags are deliberately not offered and cannot silently locate an arbitrary ore.
+        // A material tag must describe exactly one unified material. Ambiguous aggregate or
+        // malformed tags are deliberately not offered and cannot silently locate an arbitrary ore.
         return canonicalOres.size() == 1 ? Optional.of(canonicalOres.getFirst()) : Optional.empty();
     }
 
@@ -159,7 +156,8 @@ public final class DepositCandidateResolver {
                 && tagId.getPath().length() > MATERIAL_ORE_TAG_PREFIX.length();
     }
 
-    private static ResourceLocation preferConventionTag(ResourceLocation first, ResourceLocation second) {
+    private static ResourceLocation preferConventionTag(
+            ResourceLocation first, ResourceLocation second) {
         int firstPriority = conventionNamespacePriority(first.getNamespace());
         int secondPriority = conventionNamespacePriority(second.getNamespace());
         if (firstPriority != secondPriority) {

@@ -1,6 +1,6 @@
 {
   "pack": {
     "pack_format": 48,
-    "description": "Example: gold drilling consumes water (ores_and_drills, Minecraft 1.21.1)"
+    "description": "Example drill mining recipes: minimal and all options (ores_and_drills, Minecraft 1.21.1)"
   }
 }

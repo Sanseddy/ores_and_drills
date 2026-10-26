@@ -1,18 +1,16 @@
 package dev.world.level.levelgen;
 
 import dev.registry.ModBlockTags;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-
-import java.util.Comparator;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public final class OreDepositStonePalette {
     public static final int MAX_BASES = 256;
@@ -21,8 +19,7 @@ public final class OreDepositStonePalette {
     private static volatile List<ResourceLocation> clientIds = List.of();
     private static final AtomicInteger CLIENT_REVISION = new AtomicInteger();
 
-    private OreDepositStonePalette() {
-    }
+    private OreDepositStonePalette() {}
 
     static List<ResourceLocation> availableIds() {
         List<ResourceLocation> cached = availableIdsCache;
@@ -34,10 +31,13 @@ public final class OreDepositStonePalette {
         for (var holder : BuiltInRegistries.BLOCK.getTagOrEmpty(STONES)) {
             tagged.add(holder.value());
         }
-        List<Block> stones = tagged.stream()
-                .sorted(Comparator.comparing(block -> BuiltInRegistries.BLOCK.getKey(block).toString()))
-                .limit(MAX_BASES)
-                .toList();
+        List<Block> stones =
+                tagged.stream()
+                        .sorted(
+                                Comparator.comparing(
+                                        block -> BuiltInRegistries.BLOCK.getKey(block).toString()))
+                        .limit(MAX_BASES)
+                        .toList();
         if (stones.isEmpty()) {
             stones = List.of(Blocks.STONE, Blocks.DEEPSLATE, Blocks.NETHERRACK, Blocks.END_STONE);
         }
@@ -66,7 +66,9 @@ public final class OreDepositStonePalette {
         }
 
         ResourceLocation id = ids.get(index);
-        return BuiltInRegistries.BLOCK.containsKey(id) ? BuiltInRegistries.BLOCK.get(id) : Blocks.STONE;
+        return BuiltInRegistries.BLOCK.containsKey(id)
+                ? BuiltInRegistries.BLOCK.get(id)
+                : Blocks.STONE;
     }
 
     public static Block stoneAt(ServerLevel level, int index) {
@@ -76,7 +78,9 @@ public final class OreDepositStonePalette {
         }
 
         ResourceLocation id = ids.get(index);
-        return BuiltInRegistries.BLOCK.containsKey(id) ? BuiltInRegistries.BLOCK.get(id) : Blocks.STONE;
+        return BuiltInRegistries.BLOCK.containsKey(id)
+                ? BuiltInRegistries.BLOCK.get(id)
+                : Blocks.STONE;
     }
 
     public static int nearestByMapColor(ServerLevel level, int color) {

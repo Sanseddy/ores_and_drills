@@ -3,25 +3,26 @@ package dev.client.ore;
 import dev.OresAndDrillsMod;
 import dev.mixin.RenderChunkRegionAccessor;
 import dev.world.level.levelgen.OreDepositData;
+import java.lang.reflect.Field;
 import net.minecraft.client.renderer.chunk.RenderChunkRegion;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
-import java.lang.reflect.Field;
-
 public final class OreDepositClientVisuals {
     /**
-     * Sodium replaces vanilla's {@link RenderChunkRegion} with its own world snapshot for threaded chunk meshing.
-     * We don't compile against Sodium, so its "level" field is read reflectively rather than via a Mixin accessor.
+     * Sodium replaces vanilla's {@link RenderChunkRegion} with its own world snapshot for threaded
+     * chunk meshing. We don't compile against Sodium, so its "level" field is read reflectively
+     * rather than via a Mixin accessor.
      */
-    private static final String SODIUM_LEVEL_SLICE_CLASS = "net.caffeinemc.mods.sodium.client.world.LevelSlice";
+    private static final String SODIUM_LEVEL_SLICE_CLASS =
+            "net.caffeinemc.mods.sodium.client.world.LevelSlice";
+
     private static volatile Field sodiumLevelField;
     private static volatile boolean sodiumFieldUnavailable;
 
-    private OreDepositClientVisuals() {
-    }
+    private OreDepositClientVisuals() {}
 
     @Nullable
     public static OreDepositData.Visual visualAt(BlockAndTintGetter level, BlockPos pos) {
@@ -35,14 +36,15 @@ public final class OreDepositClientVisuals {
             return concreteLevel;
         }
         if (level instanceof RenderChunkRegion renderChunkRegion) {
-            return ((RenderChunkRegionAccessor)renderChunkRegion).oresAndDrills$level();
+            return ((RenderChunkRegionAccessor) renderChunkRegion).oresAndDrills$level();
         }
         return sodiumLevel(level);
     }
 
     @Nullable
     private static Level sodiumLevel(BlockAndTintGetter level) {
-        if (sodiumFieldUnavailable || !SODIUM_LEVEL_SLICE_CLASS.equals(level.getClass().getName())) {
+        if (sodiumFieldUnavailable
+                || !SODIUM_LEVEL_SLICE_CLASS.equals(level.getClass().getName())) {
             return null;
         }
 
@@ -54,7 +56,10 @@ public final class OreDepositClientVisuals {
                 sodiumLevelField = field;
             } catch (ReflectiveOperationException exception) {
                 sodiumFieldUnavailable = true;
-                OresAndDrillsMod.LOGGER.debug("Ore deposit: could not access Sodium's LevelSlice#level field for rendering", exception);
+                OresAndDrillsMod.LOGGER.debug(
+                        "Ore deposit: could not access Sodium's LevelSlice#level field for"
+                                + " rendering",
+                        exception);
                 return null;
             }
         }

@@ -7,13 +7,12 @@ final class DepletionOpacity {
     private static final int MID_VERTEX_ALPHA = 125;
     private static final int LIGHT_VERTEX_ALPHA = 90;
 
-    private DepletionOpacity() {
-    }
+    private DepletionOpacity() {}
 
     /**
-     * Never fully opaque, so the host rock's own color (netherrack red, deepslate blue-grey) shows through
-     * the darkened trace; somewhat denser on dark rock, where the dark trace has less contrast, and gradually
-     * softer on light rock.
+     * Never fully opaque, so the host rock's own color (netherrack red, deepslate blue-grey) shows
+     * through the darkened trace; somewhat denser on dark rock, where the dark trace has less
+     * contrast, and gradually softer on light rock.
      */
     static int vertexAlpha(int averageBrightness) {
         int clampedBrightness = Math.max(0, Math.min(255, averageBrightness));
@@ -26,20 +25,15 @@ final class DepletionOpacity {
                     DARK_BRIGHTNESS_LIMIT,
                     MID_BRIGHTNESS,
                     DARK_VERTEX_ALPHA,
-                    MID_VERTEX_ALPHA
-            );
+                    MID_VERTEX_ALPHA);
         }
         return interpolate(
-                clampedBrightness,
-                MID_BRIGHTNESS,
-                255,
-                MID_VERTEX_ALPHA,
-                LIGHT_VERTEX_ALPHA
-        );
+                clampedBrightness, MID_BRIGHTNESS, 255, MID_VERTEX_ALPHA, LIGHT_VERTEX_ALPHA);
     }
 
-    private static int interpolate(int value, int fromValue, int toValue, int fromAlpha, int toAlpha) {
-        double progress = (double)(value - fromValue) / (toValue - fromValue);
-        return (int)Math.round(fromAlpha + (toAlpha - fromAlpha) * progress);
+    private static int interpolate(
+            int value, int fromValue, int toValue, int fromAlpha, int toAlpha) {
+        double progress = (double) (value - fromValue) / (toValue - fromValue);
+        return (int) Math.round(fromAlpha + (toAlpha - fromAlpha) * progress);
     }
 }

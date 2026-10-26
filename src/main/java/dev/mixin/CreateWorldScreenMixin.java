@@ -8,9 +8,9 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Every world creation starts from default ore settings. The constructor runs once per creation (unlike
- * {@code init}, which repeats after returning from the Ore Settings screen), so edits made during this
- * creation survive while the previous world's settings do not.
+ * Every world creation starts from default ore settings. The constructor runs once per creation
+ * (unlike {@code init}, which repeats after returning from the Ore Settings screen), so edits made
+ * during this creation survive while the previous world's settings do not.
  */
 @Mixin(CreateWorldScreen.class)
 public abstract class CreateWorldScreenMixin {

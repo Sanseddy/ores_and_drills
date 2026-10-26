@@ -3,6 +3,12 @@ package dev.world.level.levelgen;
 import dev.OresAndDrillsMod;
 import dev.config.OreDepositConfig;
 import dev.world.level.storage.FastSavedData;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -14,13 +20,6 @@ import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.saveddata.SavedData;
 import org.jetbrains.annotations.Nullable;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Comparator;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /** Persistent spatial hash shared by MEDIUM and LARGE deposits in one dimension. */
 public final class LargeDepositSpatialIndex extends FastSavedData {
@@ -37,13 +36,21 @@ public final class LargeDepositSpatialIndex extends FastSavedData {
     private static final String TAG_LARGE_MIN_Z = "LargeMinZ";
     private static final String TAG_LARGE_MAX_Z = "LargeMaxZ";
     private static final String TAG_LARGE_REMAINING_BLOCKS = "LargeRemainingBlocks";
+
     /** Current format stores compact arrays and an exact footprint for every spacing record. */
     private static final int CURRENT_DATA_VERSION = 5;
+
     private static final int TIER_BITS = 4;
     private static final int TIER_MASK = (1 << TIER_BITS) - 1;
-    /** Fixed region size; spacing checks search as many regions as the configured maximum spacing needs. */
+
+    /**
+     * Fixed region size; spacing checks search as many regions as the configured maximum spacing
+     * needs.
+     */
     private static final int CELL_SIZE = OreDepositConfig.DEFAULT_MAX_LARGE_DEPOSIT_SPACING;
-    private static final int MAX_RECORD_CENTER_TO_FOOTPRINT_DISTANCE = OreDepositFeature.MAX_DEPOSIT_FOOTPRINT_DIAMETER;
+
+    private static final int MAX_RECORD_CENTER_TO_FOOTPRINT_DISTANCE =
+            OreDepositFeature.MAX_DEPOSIT_FOOTPRINT_DIAMETER;
     private static final int MAX_DEBUG_SPACING_LOGS = 256;
     private static final AtomicInteger DEBUG_SPACING_LOGS = new AtomicInteger();
     private static final SavedData.Factory<LargeDepositSpatialIndex> FACTORY =
@@ -51,8 +58,8 @@ public final class LargeDepositSpatialIndex extends FastSavedData {
 
     /** Only MEDIUM/LARGE records live here, so spacing checks never walk TINY/SMALL locate data. */
     private final Map<Long, List<DepositRecord>> largeDepositsByRegion = new HashMap<>();
-    private LargeDepositSpatialIndex() {
-    }
+
+    private LargeDepositSpatialIndex() {}
 
     public static LargeDepositSpatialIndex get(ServerLevel level) {
         return level.getDataStorage().computeIfAbsent(FACTORY, FILE_ID);
@@ -65,8 +72,7 @@ public final class LargeDepositSpatialIndex extends FastSavedData {
             double normalizedScale,
             String materialKey,
             List<OreDepositFeature.DepositPosition> positions,
-            RandomSource random
-    ) {
+            RandomSource random) {
         int cellX = Math.floorDiv(center.getX(), CELL_SIZE);
         int cellZ = Math.floorDiv(center.getZ(), CELL_SIZE);
         int minimumSpacing = minimumSpacing();
@@ -77,23 +83,33 @@ public final class LargeDepositSpatialIndex extends FastSavedData {
                 if (nearby.tier() < OreDepositFeature.TIER_MEDIUM) {
                     continue;
                 }
-                DepositSpacingMath.SpacingBounds pairBounds = DepositSpacingMath.tierPairBounds(
-                        tier, nearby.tier(), OreDepositFeature.TIER_MEDIUM, OreDepositFeature.TIER_LARGE,
-                        minimumSpacing, maximumSpacing
-                );
-                DepositSpacingMath.SpacingCalculation spacing = DepositSpacingMath.requiredDistance(
-                        normalizedScale,
-                        nearby.normalizedScale(),
-                        pairBounds.minimum(),
-                        pairBounds.maximum(),
-                        OreDepositConfig.LARGE_DEPOSIT_SPACING_CURVE,
-                        OreDepositConfig.LARGE_DEPOSIT_SPACING_VARIATION,
-                        random.nextDouble() * 2.0D - 1.0D
-                );
+                DepositSpacingMath.SpacingBounds pairBounds =
+                        DepositSpacingMath.tierPairBounds(
+                                tier,
+                                nearby.tier(),
+                                OreDepositFeature.TIER_MEDIUM,
+                                OreDepositFeature.TIER_LARGE,
+                                minimumSpacing,
+                                maximumSpacing);
+                DepositSpacingMath.SpacingCalculation spacing =
+                        DepositSpacingMath.requiredDistance(
+                                normalizedScale,
+                                nearby.normalizedScale(),
+                                pairBounds.minimum(),
+                                pairBounds.maximum(),
+                                OreDepositConfig.LARGE_DEPOSIT_SPACING_CURVE,
+                                OreDepositConfig.LARGE_DEPOSIT_SPACING_VARIATION,
+                                random.nextDouble() * 2.0D - 1.0D);
                 double actualDistance = horizontalDistance(center, nearby.center());
                 boolean accepted = actualDistance >= spacing.requiredDistance();
-                logSpacing(tier, normalizedScale, nearby, spacing.combinedScale(),
-                        spacing.requiredDistance(), actualDistance, accepted);
+                logSpacing(
+                        tier,
+                        normalizedScale,
+                        nearby,
+                        spacing.combinedScale(),
+                        spacing.requiredDistance(),
+                        actualDistance,
+                        accepted);
                 if (!accepted) {
                     return false;
                 }
@@ -104,28 +120,35 @@ public final class LargeDepositSpatialIndex extends FastSavedData {
         if (footprint == null) {
             return false;
         }
-        largeDepositsByRegion.computeIfAbsent(regionKey(cellX, cellZ), ignored -> new ArrayList<>())
-                .add(new DepositRecord(
-                        center.immutable(), tier, Mth.clamp(normalizedScale, 0.0D, 1.0D), materialKey,
-                        footprint.minX(), footprint.maxX(), footprint.minZ(), footprint.maxZ(), footprint.blockCount()
-                ));
+        largeDepositsByRegion
+                .computeIfAbsent(regionKey(cellX, cellZ), ignored -> new ArrayList<>())
+                .add(
+                        new DepositRecord(
+                                center.immutable(),
+                                tier,
+                                Mth.clamp(normalizedScale, 0.0D, 1.0D),
+                                materialKey,
+                                footprint.minX(),
+                                footprint.maxX(),
+                                footprint.minZ(),
+                                footprint.maxZ(),
+                                footprint.blockCount()));
         setDirty();
         return true;
     }
 
     /**
-     * Called when a physical MEDIUM/LARGE deposit block disappears. New records carry their exact footprint
-     * and block count, so this is an identity check rather than a proximity heuristic. Old records remain
-     * conservative reservations because their footprint was never persisted.
+     * Called when a physical MEDIUM/LARGE deposit block disappears. New records carry their exact
+     * footprint and block count, so this is an identity check rather than a proximity heuristic.
+     * Old records remain conservative reservations because their footprint was never persisted.
      */
     public synchronized void markBlockDepleted(BlockPos pos, int tier, String materialKey) {
         if (tier < OreDepositFeature.TIER_MEDIUM || materialKey == null || materialKey.isEmpty()) {
             return;
         }
 
-        List<DepositRecord> matches = recordsWithin(
-                pos, MAX_RECORD_CENTER_TO_FOOTPRINT_DISTANCE, tier, materialKey
-        );
+        List<DepositRecord> matches =
+                recordsWithin(pos, MAX_RECORD_CENTER_TO_FOOTPRINT_DISTANCE, tier, materialKey);
         for (DepositRecord record : matches) {
             if (!record.contains(pos)) {
                 continue;
@@ -141,11 +164,16 @@ public final class LargeDepositSpatialIndex extends FastSavedData {
     private void addRecord(DepositRecord record) {
         int cellX = Math.floorDiv(record.center().getX(), CELL_SIZE);
         int cellZ = Math.floorDiv(record.center().getZ(), CELL_SIZE);
-        largeDepositsByRegion.computeIfAbsent(regionKey(cellX, cellZ), ignored -> new ArrayList<>()).add(record);
+        largeDepositsByRegion
+                .computeIfAbsent(regionKey(cellX, cellZ), ignored -> new ArrayList<>())
+                .add(record);
         setDirty();
     }
 
-    /** Removes a persisted locate record after its center and complete footprint were verified as depleted. */
+    /**
+     * Removes a persisted locate record after its center and complete footprint were verified as
+     * depleted.
+     */
     public synchronized boolean remove(DepositRecord record) {
         if (record.tier() < OreDepositFeature.TIER_MEDIUM) {
             return false;
@@ -166,31 +194,40 @@ public final class LargeDepositSpatialIndex extends FastSavedData {
     }
 
     /** Conservative early-out used before any cave blocks are scanned. */
-    public synchronized boolean canPossiblyFit(BlockPos center, int tier, double relocationAllowance) {
+    public synchronized boolean canPossiblyFit(
+            BlockPos center, int tier, double relocationAllowance) {
         int minimumSpacing = minimumSpacing();
         int maximumSpacing = maximumSpacing(minimumSpacing);
 
-        for (List<DepositRecord> records : regionsNear(center, maximumSpacing + Mth.ceil(relocationAllowance))) {
+        for (List<DepositRecord> records :
+                regionsNear(center, maximumSpacing + Mth.ceil(relocationAllowance))) {
             for (DepositRecord nearby : records) {
                 if (nearby.tier() < OreDepositFeature.TIER_MEDIUM) {
                     continue;
                 }
-                DepositSpacingMath.SpacingBounds pairBounds = DepositSpacingMath.tierPairBounds(
-                        tier, nearby.tier(), OreDepositFeature.TIER_MEDIUM, OreDepositFeature.TIER_LARGE,
-                        minimumSpacing, maximumSpacing
-                );
-                // New scale 0 and minimum random variation form the smallest legal distance this pair
-                // could ever request. If even that cannot fit after center relocation, rejection is exact.
-                double minimumRequired = DepositSpacingMath.requiredDistance(
-                        0.0D,
-                        nearby.normalizedScale(),
-                        pairBounds.minimum(),
-                        pairBounds.maximum(),
-                        OreDepositConfig.LARGE_DEPOSIT_SPACING_CURVE,
-                        OreDepositConfig.LARGE_DEPOSIT_SPACING_VARIATION,
-                        -1.0D
-                ).requiredDistance();
-                if (horizontalDistance(center, nearby.center()) + relocationAllowance < minimumRequired) {
+                DepositSpacingMath.SpacingBounds pairBounds =
+                        DepositSpacingMath.tierPairBounds(
+                                tier,
+                                nearby.tier(),
+                                OreDepositFeature.TIER_MEDIUM,
+                                OreDepositFeature.TIER_LARGE,
+                                minimumSpacing,
+                                maximumSpacing);
+                // Scale 0 and the minimum random variation form the smallest legal distance this
+                // pair could ever request. If even that cannot fit after center relocation,
+                // rejection is exact.
+                double minimumRequired =
+                        DepositSpacingMath.requiredDistance(
+                                        0.0D,
+                                        nearby.normalizedScale(),
+                                        pairBounds.minimum(),
+                                        pairBounds.maximum(),
+                                        OreDepositConfig.LARGE_DEPOSIT_SPACING_CURVE,
+                                        OreDepositConfig.LARGE_DEPOSIT_SPACING_VARIATION,
+                                        -1.0D)
+                                .requiredDistance();
+                if (horizontalDistance(center, nearby.center()) + relocationAllowance
+                        < minimumRequired) {
                     return false;
                 }
             }
@@ -199,8 +236,9 @@ public final class LargeDepositSpatialIndex extends FastSavedData {
     }
 
     /**
-     * Record lists of every region within {@code radius} blocks of {@code center}. A large maximum spacing
-     * spans many regions, so past the number of occupied regions the occupied ones are filtered instead.
+     * Record lists of every region within {@code radius} blocks of {@code center}. A large maximum
+     * spacing spans many regions, so past the number of occupied regions the occupied ones are
+     * filtered instead.
      */
     private List<List<DepositRecord>> regionsNear(BlockPos center, int radius) {
         int cellX = Math.floorDiv(center.getX(), CELL_SIZE);
@@ -210,7 +248,8 @@ public final class LargeDepositSpatialIndex extends FastSavedData {
         if ((2 * cells + 1) * (2 * cells + 1) > largeDepositsByRegion.size()) {
             for (Map.Entry<Long, List<DepositRecord>> entry : largeDepositsByRegion.entrySet()) {
                 long key = entry.getKey();
-                if (Math.abs((long) (int) (key >> 32) - cellX) <= cells && Math.abs((long) (int) key - cellZ) <= cells) {
+                if (Math.abs((long) (int) (key >> 32) - cellX) <= cells
+                        && Math.abs((long) (int) key - cellZ) <= cells) {
                     result.add(entry.getValue());
                 }
             }
@@ -218,7 +257,9 @@ public final class LargeDepositSpatialIndex extends FastSavedData {
         }
         for (long offsetX = -cells; offsetX <= cells; offsetX++) {
             for (long offsetZ = -cells; offsetZ <= cells; offsetZ++) {
-                List<DepositRecord> records = largeDepositsByRegion.get(regionKey((int) (cellX + offsetX), (int) (cellZ + offsetZ)));
+                List<DepositRecord> records =
+                        largeDepositsByRegion.get(
+                                regionKey((int) (cellX + offsetX), (int) (cellZ + offsetZ)));
                 if (records != null) {
                     result.add(records);
                 }
@@ -228,17 +269,16 @@ public final class LargeDepositSpatialIndex extends FastSavedData {
     }
 
     /** Returns indexed centers near the query, ordered nearest first for /locate. */
-    public synchronized List<DepositRecord> recordsWithin(BlockPos origin, double radius, int tierFilter) {
+    public synchronized List<DepositRecord> recordsWithin(
+            BlockPos origin, double radius, int tierFilter) {
         return recordsWithin(origin, radius, tierFilter, null);
     }
 
-    /** Material-filtered lookup avoids loading every unrelated large-deposit chunk during /locate. */
+    /**
+     * Material-filtered lookup avoids loading every unrelated large-deposit chunk during /locate.
+     */
     public synchronized List<DepositRecord> recordsWithin(
-            BlockPos origin,
-            double radius,
-            int tierFilter,
-            String materialKey
-    ) {
+            BlockPos origin, double radius, int tierFilter, String materialKey) {
         int minimumCellX = Math.floorDiv(Mth.floor(origin.getX() - radius), CELL_SIZE);
         int maximumCellX = Math.floorDiv(Mth.floor(origin.getX() + radius), CELL_SIZE);
         int minimumCellZ = Math.floorDiv(Mth.floor(origin.getZ() - radius), CELL_SIZE);
@@ -250,12 +290,19 @@ public final class LargeDepositSpatialIndex extends FastSavedData {
             for (int cellZ = minimumCellZ; cellZ <= maximumCellZ; cellZ++) {
                 long regionKey = regionKey(cellX, cellZ);
                 if (includeLarge) {
-                    addMatchingRecords(largeDepositsByRegion.get(regionKey), origin, radiusSqr,
-                            tierFilter, materialKey, result);
+                    addMatchingRecords(
+                            largeDepositsByRegion.get(regionKey),
+                            origin,
+                            radiusSqr,
+                            tierFilter,
+                            materialKey,
+                            result);
                 }
             }
         }
-        result.sort(Comparator.comparingDouble(record -> horizontalDistanceSqr(origin, record.center())));
+        result.sort(
+                Comparator.comparingDouble(
+                        record -> horizontalDistanceSqr(origin, record.center())));
         return List.copyOf(result);
     }
 
@@ -265,8 +312,7 @@ public final class LargeDepositSpatialIndex extends FastSavedData {
             double radiusSqr,
             int tierFilter,
             String materialKey,
-            List<DepositRecord> result
-    ) {
+            List<DepositRecord> result) {
         if (records == null) {
             return;
         }
@@ -279,11 +325,13 @@ public final class LargeDepositSpatialIndex extends FastSavedData {
         }
     }
 
-    private static LargeDepositSpatialIndex load(CompoundTag tag, HolderLookup.Provider registries) {
+    private static LargeDepositSpatialIndex load(
+            CompoundTag tag, HolderLookup.Provider registries) {
         LargeDepositSpatialIndex data = new LargeDepositSpatialIndex();
         int version = tag.getInt(TAG_DATA_VERSION);
         if (version != CURRENT_DATA_VERSION) {
-            throw new IllegalArgumentException("Unsupported large deposit index format; a new world is required");
+            throw new IllegalArgumentException(
+                    "Unsupported large deposit index format; a new world is required");
         }
         loadCompact(data, tag);
         return data;
@@ -296,11 +344,18 @@ public final class LargeDepositSpatialIndex extends FastSavedData {
             materials.add(materialsTag.getString(index));
         }
 
-        loadCompactRecords(data.largeDepositsByRegion, materials,
-                tag.getIntArray(TAG_LARGE_X), tag.getIntArray(TAG_LARGE_Y), tag.getIntArray(TAG_LARGE_Z),
-                tag.getIntArray(TAG_LARGE_TIER_MATERIAL), tag.getLongArray(TAG_LARGE_SCALE),
-                tag.getIntArray(TAG_LARGE_MIN_X), tag.getIntArray(TAG_LARGE_MAX_X),
-                tag.getIntArray(TAG_LARGE_MIN_Z), tag.getIntArray(TAG_LARGE_MAX_Z),
+        loadCompactRecords(
+                data.largeDepositsByRegion,
+                materials,
+                tag.getIntArray(TAG_LARGE_X),
+                tag.getIntArray(TAG_LARGE_Y),
+                tag.getIntArray(TAG_LARGE_Z),
+                tag.getIntArray(TAG_LARGE_TIER_MATERIAL),
+                tag.getLongArray(TAG_LARGE_SCALE),
+                tag.getIntArray(TAG_LARGE_MIN_X),
+                tag.getIntArray(TAG_LARGE_MAX_X),
+                tag.getIntArray(TAG_LARGE_MIN_Z),
+                tag.getIntArray(TAG_LARGE_MAX_Z),
                 tag.getIntArray(TAG_LARGE_REMAINING_BLOCKS));
     }
 
@@ -316,23 +371,26 @@ public final class LargeDepositSpatialIndex extends FastSavedData {
             int[] maxXs,
             int[] minZs,
             int[] maxZs,
-            int[] remainingBlocks
-    ) {
-        int size = Math.min(xs.length, Math.min(ys.length, Math.min(zs.length, tierMaterials.length)));
+            int[] remainingBlocks) {
+        int size =
+                Math.min(xs.length, Math.min(ys.length, Math.min(zs.length, tierMaterials.length)));
         for (int index = 0; index < size; index++) {
             int packed = tierMaterials[index];
             int tier = packed & TIER_MASK;
             int materialIndex = packed >>> TIER_BITS;
-            if (tier < 0 || tier >= OreDepositFeature.TIER_COUNT || materialIndex < 0 || materialIndex >= materials.size()) {
+            if (tier < 0
+                    || tier >= OreDepositFeature.TIER_COUNT
+                    || materialIndex < 0
+                    || materialIndex >= materials.size()) {
                 continue;
             }
             BlockPos center = new BlockPos(xs[index], ys[index], zs[index]);
-            double scale = index < scaleBits.length
-                    ? Mth.clamp(Double.longBitsToDouble(scaleBits[index]), 0.0D, 1.0D)
-                    : 0.0D;
-            int remaining = index < remainingBlocks.length
-                    ? Math.max(0, remainingBlocks[index])
-                    : 0;
+            double scale =
+                    index < scaleBits.length
+                            ? Mth.clamp(Double.longBitsToDouble(scaleBits[index]), 0.0D, 1.0D)
+                            : 0.0D;
+            int remaining =
+                    index < remainingBlocks.length ? Math.max(0, remainingBlocks[index]) : 0;
             int minX = index < minXs.length ? minXs[index] : center.getX();
             int maxX = index < maxXs.length ? maxXs[index] : center.getX();
             int minZ = index < minZs.length ? minZs[index] : center.getZ();
@@ -340,7 +398,17 @@ public final class LargeDepositSpatialIndex extends FastSavedData {
             int cellX = Math.floorDiv(center.getX(), CELL_SIZE);
             int cellZ = Math.floorDiv(center.getZ(), CELL_SIZE);
             target.computeIfAbsent(regionKey(cellX, cellZ), ignored -> new ArrayList<>())
-                    .add(new DepositRecord(center, tier, scale, materials.get(materialIndex), minX, maxX, minZ, maxZ, remaining));
+                    .add(
+                            new DepositRecord(
+                                    center,
+                                    tier,
+                                    scale,
+                                    materials.get(materialIndex),
+                                    minX,
+                                    maxX,
+                                    minZ,
+                                    maxZ,
+                                    remaining));
         }
     }
 
@@ -349,7 +417,8 @@ public final class LargeDepositSpatialIndex extends FastSavedData {
         Map<String, Integer> materialIndices = new HashMap<>();
         List<String> materials = new ArrayList<>();
 
-        RecordArrays largeArrays = packRecords(largeDepositsByRegion, materialIndices, materials, true);
+        RecordArrays largeArrays =
+                packRecords(largeDepositsByRegion, materialIndices, materials, true);
         ListTag materialsTag = new ListTag();
         for (String material : materials) {
             materialsTag.add(StringTag.valueOf(material));
@@ -374,8 +443,7 @@ public final class LargeDepositSpatialIndex extends FastSavedData {
             Map<Long, List<DepositRecord>> recordsByRegion,
             Map<String, Integer> materialIndices,
             List<String> materials,
-            boolean includeScale
-    ) {
+            boolean includeScale) {
         int size = 0;
         for (List<DepositRecord> regionRecords : recordsByRegion.values()) {
             size += regionRecords.size();
@@ -393,10 +461,13 @@ public final class LargeDepositSpatialIndex extends FastSavedData {
         int index = 0;
         for (List<DepositRecord> regionRecords : recordsByRegion.values()) {
             for (DepositRecord record : regionRecords) {
-                int materialIndex = materialIndices.computeIfAbsent(record.materialKey(), key -> {
-                    materials.add(key);
-                    return materials.size() - 1;
-                });
+                int materialIndex =
+                        materialIndices.computeIfAbsent(
+                                record.materialKey(),
+                                key -> {
+                                    materials.add(key);
+                                    return materials.size() - 1;
+                                });
                 xs[index] = record.center().getX();
                 ys[index] = record.center().getY();
                 zs[index] = record.center().getZ();
@@ -412,33 +483,38 @@ public final class LargeDepositSpatialIndex extends FastSavedData {
                 index++;
             }
         }
-        return new RecordArrays(xs, ys, zs, tierMaterials, scaleBits, minXs, maxXs, minZs, maxZs, remainingBlocks);
+        return new RecordArrays(
+                xs, ys, zs, tierMaterials, scaleBits, minXs, maxXs, minZs, maxZs, remainingBlocks);
     }
 
     private record RecordArrays(
-            int[] x, int[] y, int[] z, int[] tierMaterial, long[] scaleBits,
-            int[] minX, int[] maxX, int[] minZ, int[] maxZ, int[] remainingBlocks
-    ) {
-    }
+            int[] x,
+            int[] y,
+            int[] z,
+            int[] tierMaterial,
+            long[] scaleBits,
+            int[] minX,
+            int[] maxX,
+            int[] minZ,
+            int[] maxZ,
+            int[] remainingBlocks) {}
 
     private static long regionKey(int x, int z) {
-        return ((long)x << 32) ^ (z & 0xFFFFFFFFL);
+        return ((long) x << 32) ^ (z & 0xFFFFFFFFL);
     }
 
     private static int minimumSpacing() {
         return Mth.clamp(
                 OreDepositConfig.MIN_LARGE_DEPOSIT_SPACING.get(),
                 OreDepositConfig.MIN_LARGE_DEPOSIT_SPACING_LIMIT,
-                OreDepositConfig.MAX_LARGE_DEPOSIT_SPACING_LIMIT
-        );
+                OreDepositConfig.MAX_LARGE_DEPOSIT_SPACING_LIMIT);
     }
 
     private static int maximumSpacing(int minimumSpacing) {
         return Mth.clamp(
                 OreDepositConfig.MAX_LARGE_DEPOSIT_SPACING.get(),
                 minimumSpacing,
-                OreDepositConfig.MAX_LARGE_DEPOSIT_SPACING_LIMIT
-        );
+                OreDepositConfig.MAX_LARGE_DEPOSIT_SPACING_LIMIT);
     }
 
     private static double horizontalDistance(BlockPos first, BlockPos second) {
@@ -446,9 +522,9 @@ public final class LargeDepositSpatialIndex extends FastSavedData {
     }
 
     private static double horizontalDistanceSqr(BlockPos first, BlockPos second) {
-        long dx = (long)first.getX() - second.getX();
-        long dz = (long)first.getZ() - second.getZ();
-        return (double)dx * dx + (double)dz * dz;
+        long dx = (long) first.getX() - second.getX();
+        long dz = (long) first.getZ() - second.getZ();
+        return (double) dx * dx + (double) dz * dz;
     }
 
     private static String tierName(int tier) {
@@ -466,24 +542,29 @@ public final class LargeDepositSpatialIndex extends FastSavedData {
             double combinedScale,
             double requiredDistance,
             double actualDistance,
-            boolean accepted
-    ) {
+            boolean accepted) {
         if (!OresAndDrillsMod.LOGGER.isDebugEnabled()) {
             return;
         }
         int logIndex = DEBUG_SPACING_LOGS.getAndIncrement();
         if (logIndex >= MAX_DEBUG_SPACING_LOGS) {
             if (logIndex == MAX_DEBUG_SPACING_LOGS) {
-                OresAndDrillsMod.LOGGER.debug("Ore deposit spacing: further diagnostics suppressed for this session");
+                OresAndDrillsMod.LOGGER.debug(
+                        "Ore deposit spacing: further diagnostics suppressed for this session");
             }
             return;
         }
         OresAndDrillsMod.LOGGER.debug(
-                "Ore deposit spacing: new tier={} scale={} nearby tier={} scale={} combined={} required={} actual={} result={}",
-                tierName(tier), format(normalizedScale), tierName(nearby.tier()),
-                format(nearby.normalizedScale()), format(combinedScale), format(requiredDistance),
-                format(actualDistance), accepted ? "accepted" : "rejected"
-        );
+                "Ore deposit spacing: new tier={} scale={} nearby tier={} scale={} combined={}"
+                        + " required={} actual={} result={}",
+                tierName(tier),
+                format(normalizedScale),
+                tierName(nearby.tier()),
+                format(nearby.normalizedScale()),
+                format(combinedScale),
+                format(requiredDistance),
+                format(actualDistance),
+                accepted ? "accepted" : "rejected");
     }
 
     public record DepositRecord(
@@ -495,15 +576,17 @@ public final class LargeDepositSpatialIndex extends FastSavedData {
             int maxX,
             int minZ,
             int maxZ,
-            int remainingBlocks
-    ) {
+            int remainingBlocks) {
         public boolean contains(BlockPos pos) {
-            return pos.getX() >= minX && pos.getX() <= maxX
-                    && pos.getZ() >= minZ && pos.getZ() <= maxZ;
+            return pos.getX() >= minX
+                    && pos.getX() <= maxX
+                    && pos.getZ() >= minZ
+                    && pos.getZ() <= maxZ;
         }
 
         DepositRecord withRemainingBlocks(int remaining) {
-            return new DepositRecord(center, tier, normalizedScale, materialKey, minX, maxX, minZ, maxZ, remaining);
+            return new DepositRecord(
+                    center, tier, normalizedScale, materialKey, minX, maxX, minZ, maxZ, remaining);
         }
     }
 

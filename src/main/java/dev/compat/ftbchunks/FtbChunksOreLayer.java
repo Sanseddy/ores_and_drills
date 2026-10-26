@@ -23,19 +23,20 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * FTB Chunks layer. FTB has no polygon overlays, but its zoom-dependent map icons are positioned and sized in
- * world units, so one icon per deposit, exactly as wide as the patch, can paint every tile at the right place
- * on both the large map and the minimap. Only loaded when FTB Chunks is installed.
+ * FTB Chunks layer. FTB has no polygon overlays, but its zoom-dependent map icons are positioned
+ * and sized in world units, so one icon per deposit, exactly as wide as the patch, can paint every
+ * tile at the right place on both the large map and the minimap. Only loaded when FTB Chunks is
+ * installed.
  */
 public final class FtbChunksOreLayer {
     /** Below every waypoint and entity icon. */
     private static final int PRIORITY = Integer.MIN_VALUE / 2;
+
     private static final long HOVER_TIMEOUT_NANOS = 200_000_000L;
     private static OreMapPatch hoveredPatch;
     private static long hoveredAt;
 
-    private FtbChunksOreLayer() {
-    }
+    private FtbChunksOreLayer() {}
 
     public static void register() {
         MapIconEvent.LARGE_MAP.register(FtbChunksOreLayer::addIcons);
@@ -43,19 +44,22 @@ public final class FtbChunksOreLayer {
     }
 
     public static boolean isLargeMap(Screen screen) {
-        return screen instanceof ScreenWrapper wrapper && wrapper.getGui() instanceof LargeMapScreen;
+        return screen instanceof ScreenWrapper wrapper
+                && wrapper.getGui() instanceof LargeMapScreen;
     }
 
     public static void renderLabel(GuiGraphics graphics, int mouseX, int mouseY) {
-        if (hoveredPatch != null && System.nanoTime() - hoveredAt <= HOVER_TIMEOUT_NANOS
+        if (hoveredPatch != null
+                && System.nanoTime() - hoveredAt <= HOVER_TIMEOUT_NANOS
                 && OreMapMarkers.isEnabled()) {
             OreMapTooltip.renderMapLabel(graphics, hoveredPatch, mouseX, mouseY);
         }
     }
 
     private static void addIcons(MapIconEvent event) {
-        // Icons are only collected when the map refreshes, so they are always added and hide themselves
-        // when the overlay is toggled off; that way the toggle applies instantly without a map refresh.
+        // Icons are only collected when the map refreshes, so they are always added and hide
+        // themselves when the overlay is toggled off; that way the toggle applies instantly without
+        // a map refresh.
         for (OreMapPatch patch : OreMapMarkers.all()) {
             if (patch.dimension().equals(event.getDimension().location()) && !patch.isEmpty()) {
                 event.add(new PatchIcon(patch));
@@ -63,7 +67,10 @@ public final class FtbChunksOreLayer {
         }
     }
 
-    /** FTB's smoothed minimap zoom divided as in its renderer: minimap pixels per block = size * this / 64. */
+    /**
+     * FTB's smoothed minimap zoom divided as in its renderer: minimap pixels per block = size *
+     * this / 64.
+     */
     private static double minimapZoom() {
         return FTBChunksClient.INSTANCE.getZoom() / 3.5D;
     }
@@ -74,11 +81,16 @@ public final class FtbChunksOreLayer {
 
         private PatchIcon(OreMapPatch patch) {
             this.patch = patch;
-            // The icon is a square centred on the corner between the centre blocks, spanning +-extent.
-            this.position = new Vec3(patch.center().getX(), patch.center().getY(), patch.center().getZ());
+            // The icon is a square centred on the corner between the centre blocks, spanning
+            // +-extent.
+            this.position =
+                    new Vec3(patch.center().getX(), patch.center().getY(), patch.center().getZ());
         }
 
-        /** A refreshed discovery replaces the patch; the icon keeps showing whatever is newest (null if hidden). */
+        /**
+         * A refreshed discovery replaces the patch; the icon keeps showing whatever is newest (null
+         * if hidden).
+         */
         private OreMapPatch current() {
             return OreMapMarkers.visible(patch.id());
         }
@@ -89,16 +101,18 @@ public final class FtbChunksOreLayer {
         }
 
         @Override
-        public boolean isVisible(MapType mapType, double distanceToPlayer, boolean outsideVisibleArea) {
+        public boolean isVisible(
+                MapType mapType, double distanceToPlayer, boolean outsideVisibleArea) {
             if (mapType.isWorldIcon()) {
                 return false;
             }
-            // The large map asks only once, when it builds its widgets, so it keeps every patch and draw()
-            // honours the toggle; that lets the toggle button work while the map stays open.
+            // The large map asks only once, when it builds its widgets, so it keeps every patch and
+            // draw() honours the toggle; that lets the toggle button work while the map stays open.
             if (!mapType.isMinimap()) {
                 return true;
             }
-            // On the minimap, keep patches whose tiles can still reach inside the rim even if the centre can't.
+            // On the minimap, keep patches whose tiles can still reach inside the rim even if the
+            // centre can't.
             return OreMapMarkers.isEnabled()
                     && distanceToPlayer - patch.extent() * Math.sqrt(2.0D) <= 32.0D / minimapZoom();
         }
@@ -113,7 +127,8 @@ public final class FtbChunksOreLayer {
             OreMapPatch shown = current();
             double diameter = (shown != null ? shown : patch).extent() * 2.0D;
             // Large map: widget size = tileSize / 128 * scale, with tileSize pixels per 512 blocks.
-            // Minimap: drawn size = minimapSize * scale / 16, with minimapSize * zoom / 64 pixels per block.
+            // Minimap: drawn size = minimapSize * scale / 16, with minimapSize * zoom / 64 pixels
+            // per block.
             return mapType.isMinimap() ? diameter * minimapZoom() / 4.0D : diameter / 4.0D;
         }
 
@@ -124,7 +139,8 @@ public final class FtbChunksOreLayer {
 
         @Override
         public void addTooltip(TooltipList list) {
-            // The Factorio-like label is rendered without FTB's tooltip box in ScreenEvent.Render.Post.
+            // The Factorio-like label is rendered without FTB's tooltip box in
+            // ScreenEvent.Render.Post.
         }
 
         @Override
@@ -138,8 +154,15 @@ public final class FtbChunksOreLayer {
         }
 
         @Override
-        public void draw(MapType mapType, GuiGraphics graphics, int x, int y, int w, int h,
-                         boolean outsideVisibleArea, int iconAlpha) {
+        public void draw(
+                MapType mapType,
+                GuiGraphics graphics,
+                int x,
+                int y,
+                int w,
+                int h,
+                boolean outsideVisibleArea,
+                int iconAlpha) {
             OreMapPatch shown = current();
             if (shown == null) {
                 return;
@@ -148,21 +171,38 @@ public final class FtbChunksOreLayer {
             if (mapType.isMinimap()) {
                 drawOnMinimap(graphics, shown, alpha);
             } else {
-                OreMapPainter.paint(graphics, shown,
-                        OreMapTransform.axisAligned(largeMapPixelsPerBlock(w, shown), x + w / 2.0D, y + h / 2.0D),
-                        alpha, null, isHovered(shown, x, y, w, h));
+                OreMapPainter.paint(
+                        graphics,
+                        shown,
+                        OreMapTransform.axisAligned(
+                                largeMapPixelsPerBlock(w, shown), x + w / 2.0D, y + h / 2.0D),
+                        alpha,
+                        null,
+                        isHovered(shown, x, y, w, h));
             }
         }
 
         private static boolean isHovered(OreMapPatch shown, int x, int y, int w, int h) {
             Minecraft minecraft = Minecraft.getInstance();
-            double mouseX = minecraft.mouseHandler.xpos() * minecraft.getWindow().getGuiScaledWidth()
-                    / minecraft.getWindow().getScreenWidth();
-            double mouseY = minecraft.mouseHandler.ypos() * minecraft.getWindow().getGuiScaledHeight()
-                    / minecraft.getWindow().getScreenHeight();
+            double mouseX =
+                    minecraft.mouseHandler.xpos()
+                            * minecraft.getWindow().getGuiScaledWidth()
+                            / minecraft.getWindow().getScreenWidth();
+            double mouseY =
+                    minecraft.mouseHandler.ypos()
+                            * minecraft.getWindow().getGuiScaledHeight()
+                            / minecraft.getWindow().getScreenHeight();
             double pixelsPerBlock = largeMapPixelsPerBlock(w, shown);
-            int blockX = (int) Math.floor(shown.center().getX() + (mouseX - x - w / 2.0D) / pixelsPerBlock);
-            int blockZ = (int) Math.floor(shown.center().getZ() + (mouseY - y - h / 2.0D) / pixelsPerBlock);
+            int blockX =
+                    (int)
+                            Math.floor(
+                                    shown.center().getX()
+                                            + (mouseX - x - w / 2.0D) / pixelsPerBlock);
+            int blockZ =
+                    (int)
+                            Math.floor(
+                                    shown.center().getZ()
+                                            + (mouseY - y - h / 2.0D) / pixelsPerBlock);
             boolean hovered = shown.cellAt(blockX, blockZ) != null;
             if (hovered) {
                 hoveredPatch = shown;
@@ -171,7 +211,10 @@ public final class FtbChunksOreLayer {
             return hovered;
         }
 
-        /** The widget size is rounded up to whole pixels; the map's region tile size is the exact scale. */
+        /**
+         * The widget size is rounded up to whole pixels; the map's region tile size is the exact
+         * scale.
+         */
         private static double largeMapPixelsPerBlock(int widgetSize, OreMapPatch shown) {
             if (Minecraft.getInstance().screen instanceof ScreenWrapper wrapper
                     && wrapper.getGui() instanceof LargeMapScreen largeMap) {
@@ -181,10 +224,11 @@ public final class FtbChunksOreLayer {
         }
 
         /**
-         * The pose maps the unit square onto the icon. FTB rotates icon positions, not icon images, so the
-         * tiles are rotated here and trimmed to the minimap's circle (or square) in world units. FTB also pins
-         * icons whose centre lies beyond the rim onto the rim; that shift is undone so such a patch still shows
-         * the part of it that reaches into the minimap, exactly where it belongs.
+         * The pose maps the unit square onto the icon. FTB rotates icon positions, not icon images,
+         * so the tiles are rotated here and trimmed to the minimap's circle (or square) in world
+         * units. FTB also pins icons whose centre lies beyond the rim onto the rim; that shift is
+         * undone so such a patch still shows the part of it that reaches into the minimap, exactly
+         * where it belongs.
          */
         private void drawOnMinimap(GuiGraphics graphics, OreMapPatch shown, float alpha) {
             Minecraft minecraft = Minecraft.getInstance();
@@ -212,15 +256,18 @@ public final class FtbChunksOreLayer {
                 centerX += Math.cos(radians) * shiftX - Math.sin(radians) * shiftZ;
                 centerY += Math.sin(radians) * shiftX + Math.cos(radians) * shiftZ;
             }
-            OreMapTransform transform = OreMapTransform.rotated(unitsPerBlock, radians, centerX, centerY);
+            OreMapTransform transform =
+                    OreMapTransform.rotated(unitsPerBlock, radians, centerX, centerY);
 
-            OreMapPainter.TileFilter insideMinimap = (dx, dz, step) -> {
-                double fromPlayerX = offsetX + dx;
-                double fromPlayerZ = offsetZ + dz;
-                return square
-                        ? Math.abs(fromPlayerX) <= radius && Math.abs(fromPlayerZ) <= radius
-                        : fromPlayerX * fromPlayerX + fromPlayerZ * fromPlayerZ <= radius * radius;
-            };
+            OreMapPainter.TileFilter insideMinimap =
+                    (dx, dz, step) -> {
+                        double fromPlayerX = offsetX + dx;
+                        double fromPlayerZ = offsetZ + dz;
+                        return square
+                                ? Math.abs(fromPlayerX) <= radius && Math.abs(fromPlayerZ) <= radius
+                                : fromPlayerX * fromPlayerX + fromPlayerZ * fromPlayerZ
+                                        <= radius * radius;
+                    };
             // levelFor() needs real pixels per block, not the unit-square scale of this pose.
             double pixelsPerBlock = graphics.pose().last().pose().m00() * unitsPerBlock;
             OreMapPainter.paint(graphics, shown, transform, alpha, insideMinimap, pixelsPerBlock);

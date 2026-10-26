@@ -7,7 +7,8 @@ import net.minecraft.core.Direction;
 public record CaveWallAnchor(BlockPos position, Direction exposedFace) {
     public CaveWallAnchor {
         if (position == null || exposedFace == null || exposedFace.getAxis().isVertical()) {
-            throw new IllegalArgumentException("A cave-wall anchor needs a horizontal exposed face");
+            throw new IllegalArgumentException(
+                    "A cave-wall anchor needs a horizontal exposed face");
         }
         position = position.immutable();
     }

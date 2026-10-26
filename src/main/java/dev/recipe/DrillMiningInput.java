@@ -5,7 +5,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeInput;
 import net.minecraft.world.level.block.state.BlockState;
 
-public record DrillMiningInput(BlockState state, BlockPos drillPos, BlockPos orePos, int drillTier) implements RecipeInput {
+public record DrillMiningInput(BlockState state, BlockPos drillPos, BlockPos orePos, int drillTier)
+        implements RecipeInput {
     @Override
     public ItemStack getItem(int slot) {
         if (slot != 0) throw new IllegalArgumentException("No mining input slot " + slot);
@@ -13,8 +14,12 @@ public record DrillMiningInput(BlockState state, BlockPos drillPos, BlockPos ore
     }
 
     @Override
-    public int size() { return 1; }
+    public int size() {
+        return 1;
+    }
 
     @Override
-    public boolean isEmpty() { return false; }
+    public boolean isEmpty() {
+        return false;
+    }
 }

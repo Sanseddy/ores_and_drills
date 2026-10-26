@@ -2,12 +2,12 @@ package dev.world.level.levelgen;
 
 /** Pure dynamic-spacing math shared by world generation and regression tests. */
 final class DepositSpacingMath {
-    private DepositSpacingMath() {
-    }
+    private DepositSpacingMath() {}
 
     /**
-     * Independent 0..1 placement variation for a MEDIUM/LARGE deposit.  It deliberately has no
-     * Size/Richness inputs: those sliders alter the deposit itself, while tier-pair bounds own spacing.
+     * Independent 0..1 placement variation for a MEDIUM/LARGE deposit. It deliberately has no
+     * Size/Richness inputs: those sliders alter the deposit itself, while tier-pair bounds own
+     * spacing.
      */
     static double independentDepositScale(double randomUnit) {
         return clamp(randomUnit, 0.0D, Math.nextDown(1.0D));
@@ -20,12 +20,12 @@ final class DepositSpacingMath {
             double maximumSpacing,
             double curveExponent,
             double randomVariation,
-            double signedRandomUnit
-    ) {
+            double signedRandomUnit) {
         double boundedMinimum = Math.max(0.0D, minimumSpacing);
         double boundedMaximum = Math.max(boundedMinimum, maximumSpacing);
-        double combinedScale = (clamp(newDepositScale, 0.0D, 1.0D)
-                + clamp(existingDepositScale, 0.0D, 1.0D)) * 0.5D;
+        double combinedScale =
+                (clamp(newDepositScale, 0.0D, 1.0D) + clamp(existingDepositScale, 0.0D, 1.0D))
+                        * 0.5D;
         double curvedScale = Math.pow(combinedScale, Math.max(0.0D, curveExponent));
         double baseDistance = boundedMinimum + curvedScale * (boundedMaximum - boundedMinimum);
         double variation = baseDistance * clamp(randomVariation, 0.0D, 1.0D);
@@ -33,8 +33,7 @@ final class DepositSpacingMath {
         return new SpacingCalculation(
                 combinedScale,
                 curvedScale,
-                clamp(randomizedDistance, boundedMinimum, boundedMaximum)
-        );
+                clamp(randomizedDistance, boundedMinimum, boundedMaximum));
     }
 
     /**
@@ -47,8 +46,7 @@ final class DepositSpacingMath {
             int minimumTier,
             int maximumTier,
             double globalMinimum,
-            double globalMaximum
-    ) {
+            double globalMaximum) {
         double boundedMinimum = Math.max(0.0D, globalMinimum);
         double boundedMaximum = Math.max(boundedMinimum, globalMaximum);
         double denominator = Math.max(1.0D, maximumTier - (double) minimumTier);
@@ -65,9 +63,7 @@ final class DepositSpacingMath {
         return Math.max(minimum, Math.min(maximum, value));
     }
 
-    record SpacingCalculation(double combinedScale, double curvedScale, double requiredDistance) {
-    }
+    record SpacingCalculation(double combinedScale, double curvedScale, double requiredDistance) {}
 
-    record SpacingBounds(double minimum, double maximum) {
-    }
+    record SpacingBounds(double minimum, double maximum) {}
 }

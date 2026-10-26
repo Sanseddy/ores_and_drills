@@ -8,6 +8,10 @@ import dev.world.level.levelgen.OreUnifier;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
@@ -18,28 +22,31 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.chunk.LevelChunk;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 /**
- * Keeps discovered patches current every tick from the ore data the client already holds for rendering
- * deposits, so the server is asked only to discover a patch and never to refresh one. Two client-side signals
- * drive the updates, and neither costs the server anything:
+ * Keeps discovered patches current every tick from the ore data the client already holds for
+ * rendering deposits, so the server is asked only to discover a patch and never to refresh one. Two
+ * client-side signals drive the updates, and neither costs the server anything:
+ *
  * <ul>
- *     <li>a synced block amount, which re-sums that one column (a few hash lookups);</li>
- *     <li>a chunk whose ore attachment was replaced by a fresh sync, e.g. when it loads, which re-sums the
- *     patch's slice of that chunk and so also fills in columns that were not loaded at discovery.</li>
+ *   <li>a synced block amount, which re-sums that one column (a few hash lookups);
+ *   <li>a chunk whose ore attachment was replaced by a fresh sync, e.g. when it loads, which
+ *       re-sums the patch's slice of that chunk and so also fills in columns that were not loaded
+ *       at discovery.
  * </ul>
+ *
  * Columns are summed exactly like the server's {@code OreDepositData.mapSnapshot}.
  */
 final class OreMapLiveRefresh {
     private static final int RADIUS = OreDepositFeature.MAX_DEPOSIT_FOOTPRINT_DIAMETER;
     private static final long RADIUS_SQR = (long) RADIUS * RADIUS;
     private static final int VERTICAL_REACH = 12;
-    /** Chunk slices re-summed per tick; the rest wait a tick, so loading a whole area never stalls a frame. */
+
+    /**
+     * Chunk slices re-summed per tick; the rest wait a tick, so loading a whole area never stalls a
+     * frame.
+     */
     private static final int SLICE_BUDGET = 16;
+
     private static final long NEVER_SEEN = 0L;
 
     private final Map<Long, Tracked> tracked = new HashMap<>();
@@ -109,7 +116,11 @@ final class OreMapLiveRefresh {
         }
 
         Map<Long, Long2ObjectOpenHashMap<int[]>> updates = new HashMap<>();
-        resumReplacedSlices(player.chunkPosition(), minecraft.options.getEffectiveRenderDistance() + 2, patches, updates);
+        resumReplacedSlices(
+                player.chunkPosition(),
+                minecraft.options.getEffectiveRenderDistance() + 2,
+                patches,
+                updates);
         // After the slices: a column sum overwrites, while a slice adds onto the columns it zeroed.
         resumDirtyColumns(updates);
 
@@ -128,10 +139,14 @@ final class OreMapLiveRefresh {
         return changed;
     }
 
-    /** Only chunks near the player can be loaded, so only those are checked for a fresh ore sync. */
+    /**
+     * Only chunks near the player can be loaded, so only those are checked for a fresh ore sync.
+     */
     private void resumReplacedSlices(
-            ChunkPos center, int radius, Map<Long, OreMapPatch> patches, Map<Long, Long2ObjectOpenHashMap<int[]>> updates
-    ) {
+            ChunkPos center,
+            int radius,
+            Map<Long, OreMapPatch> patches,
+            Map<Long, Long2ObjectOpenHashMap<int[]>> updates) {
         int budget = SLICE_BUDGET;
         for (int chunkX = center.x - radius; chunkX <= center.x + radius; chunkX++) {
             for (int chunkZ = center.z - radius; chunkZ <= center.z + radius; chunkZ++) {
@@ -153,7 +168,13 @@ final class OreMapLiveRefresh {
                     slot.seen = data.instanceId();
                     OreMapPatch patch = patches.get(slot.owner.id);
                     if (patch != null) {
-                        resumSlice(slot.owner, patch, chunkX, chunkZ, data, columnsFor(updates, slot.owner.id));
+                        resumSlice(
+                                slot.owner,
+                                patch,
+                                chunkX,
+                                chunkZ,
+                                data,
+                                columnsFor(updates, slot.owner.id));
                     }
                 }
             }
@@ -161,29 +182,39 @@ final class OreMapLiveRefresh {
     }
 
     private static void resumSlice(
-            Tracked owner, OreMapPatch patch, int chunkX, int chunkZ, OreDepositChunkData data,
-            Long2ObjectOpenHashMap<int[]> columns
-    ) {
+            Tracked owner,
+            OreMapPatch patch,
+            int chunkX,
+            int chunkZ,
+            OreDepositChunkData data,
+            Long2ObjectOpenHashMap<int[]> columns) {
         int centerX = owner.center.getX();
         int centerZ = owner.center.getZ();
-        // Known cells of this chunk start from zero, so a column whose blocks are gone leaves the map.
+        // Known cells of this chunk start from zero, so a column whose blocks are gone leaves the
+        // map.
         for (DiscoveredOreDeposit.OreMapCell cell : patch.deposit().cells()) {
-            if (centerX + cell.offsetX() >> 4 == chunkX && centerZ + cell.offsetZ() >> 4 == chunkZ) {
+            if (centerX + cell.offsetX() >> 4 == chunkX
+                    && centerZ + cell.offsetZ() >> 4 == chunkZ) {
                 columns.put(OreMapPatch.columnKey(cell.offsetX(), cell.offsetZ()), new int[2]);
             }
         }
-        data.forEach(chunkX, chunkZ, (pos, entry) -> {
-            int dx = pos.getX() - centerX;
-            int dz = pos.getZ() - centerZ;
-            if (Math.abs(pos.getY() - owner.center.getY()) > VERTICAL_REACH
-                    || (long) dx * dx + (long) dz * dz > RADIUS_SQR
-                    || !owner.accepts(entry)) {
-                return;
-            }
-            int[] amounts = columns.computeIfAbsent(OreMapPatch.columnKey(dx, dz), ignored -> new int[2]);
-            amounts[0] += Math.max(0, entry.remainingOre());
-            amounts[1] += Math.max(0, entry.initialOre());
-        });
+        data.forEach(
+                chunkX,
+                chunkZ,
+                (pos, entry) -> {
+                    int dx = pos.getX() - centerX;
+                    int dz = pos.getZ() - centerZ;
+                    if (Math.abs(pos.getY() - owner.center.getY()) > VERTICAL_REACH
+                            || (long) dx * dx + (long) dz * dz > RADIUS_SQR
+                            || !owner.accepts(entry)) {
+                        return;
+                    }
+                    int[] amounts =
+                            columns.computeIfAbsent(
+                                    OreMapPatch.columnKey(dx, dz), ignored -> new int[2]);
+                    amounts[0] += Math.max(0, entry.remainingOre());
+                    amounts[1] += Math.max(0, entry.initialOre());
+                });
     }
 
     private void resumDirtyColumns(Map<Long, Long2ObjectOpenHashMap<int[]>> updates) {
@@ -221,7 +252,8 @@ final class OreMapLiveRefresh {
         dirtyColumns.clear();
     }
 
-    private static Long2ObjectOpenHashMap<int[]> columnsFor(Map<Long, Long2ObjectOpenHashMap<int[]>> updates, long id) {
+    private static Long2ObjectOpenHashMap<int[]> columnsFor(
+            Map<Long, Long2ObjectOpenHashMap<int[]>> updates, long id) {
         return updates.computeIfAbsent(id, ignored -> new Long2ObjectOpenHashMap<>());
     }
 
@@ -242,7 +274,10 @@ final class OreMapLiveRefresh {
             for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
                 Slot slot = new Slot(owner, chunkX, chunkZ);
                 owner.slots.add(slot);
-                slotsByChunk.computeIfAbsent(ChunkPos.asLong(chunkX, chunkZ), ignored -> new ArrayList<>(2)).add(slot);
+                slotsByChunk
+                        .computeIfAbsent(
+                                ChunkPos.asLong(chunkX, chunkZ), ignored -> new ArrayList<>(2))
+                        .add(slot);
             }
         }
         return owner;
@@ -288,8 +323,12 @@ final class OreMapLiveRefresh {
                 for (int index = 0; index < acceptedOres.length; index++) {
                     Block ore = OreDepositOrePalette.oreAt(index);
                     ResourceLocation id = ore == null ? null : BuiltInRegistries.BLOCK.getKey(ore);
-                    acceptedOres[index] = id != null && (id.equals(oreId)
-                            || !material.isEmpty() && material.equals(OreUnifier.materialKeyFor(id)));
+                    acceptedOres[index] =
+                            id != null
+                                    && (id.equals(oreId)
+                                            || !material.isEmpty()
+                                                    && material.equals(
+                                                            OreUnifier.materialKeyFor(id)));
                 }
                 paletteRevision = revision;
             }
@@ -298,7 +337,10 @@ final class OreMapLiveRefresh {
         }
     }
 
-    /** One patch's share of one chunk, remembering which copy of the chunk's ore data it last summed. */
+    /**
+     * One patch's share of one chunk, remembering which copy of the chunk's ore data it last
+     * summed.
+     */
     private static final class Slot {
         private final Tracked owner;
         private final int chunkX;

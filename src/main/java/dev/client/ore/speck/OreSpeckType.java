@@ -1,9 +1,9 @@
 package dev.client.ore.speck;
 
 /**
- * Speck size categories, by number of pixels in one connected fragment, counted on the 16x16 grid. On higher
- * resolution textures an area is converted back to 16x16 pixels first, so a 2x2 block on a 32x32 texture is
- * still one pixel.
+ * Speck size categories, by number of pixels in one connected fragment, counted on the 16x16 grid.
+ * On higher resolution textures an area is converted back to 16x16 pixels first, so a 2x2 block on
+ * a 32x32 texture is still one pixel.
  */
 public enum OreSpeckType {
     TYPE_1(1, 2),
@@ -58,7 +58,9 @@ public enum OreSpeckType {
 
     /** Largest real pixel count of this type on a texture of {@code resolution}. */
     public int maximumPixels(int resolution) {
-        return maximumSize == Integer.MAX_VALUE ? Integer.MAX_VALUE : maximumSize * areaScale(resolution);
+        return maximumSize == Integer.MAX_VALUE
+                ? Integer.MAX_VALUE
+                : maximumSize * areaScale(resolution);
     }
 
     /** Texture pixels per 16x16 pixel. */

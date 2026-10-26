@@ -1,9 +1,8 @@
 package dev.world.level.levelgen;
 
+import java.util.List;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-
-import java.util.List;
 
 /** Resolves candidates from exactly one tier's generation grid and seed space. */
 public interface TierDepositResolver {
@@ -14,11 +13,7 @@ public interface TierDepositResolver {
     long tierSalt();
 
     List<DepositCandidate> getCandidatesForCell(
-            ServerLevel level,
-            int cellX,
-            int cellZ,
-            ResourceLocation requestedOre
-    );
+            ServerLevel level, int cellX, int cellZ, ResourceLocation requestedOre);
 
     DepositCandidate createCandidateForSourceChunk(
             ServerLevel level,
@@ -26,8 +21,7 @@ public interface TierDepositResolver {
             int chunkZ,
             ResourceLocation oreId,
             String materialKey,
-            float sizeMultiplier
-    );
+            float sizeMultiplier);
 
     long sourceChunkKey(int cellX, int cellZ);
 }

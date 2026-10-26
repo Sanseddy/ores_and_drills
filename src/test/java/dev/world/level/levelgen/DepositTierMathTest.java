@@ -1,20 +1,17 @@
 package dev.world.level.levelgen;
 
-import org.junit.jupiter.api.Test;
-
-import java.util.Random;
-import java.util.Arrays;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.Arrays;
+import java.util.Random;
+import org.junit.jupiter.api.Test;
 
 class DepositTierMathTest {
     private static final double EPSILON = 1.0E-9D;
 
-    private static final DepositTierMath.Parameters DEFAULTS = new DepositTierMath.Parameters(
-            1, 720,
-            3.0D, 0.5D, 0.5D
-    );
+    private static final DepositTierMath.Parameters DEFAULTS =
+            new DepositTierMath.Parameters(1, 720, 3.0D, 0.5D, 0.5D);
 
     @Test
     void globalCurvesProduceTheExactRequestedGenerationRangesWithoutTierTables() {
@@ -41,8 +38,9 @@ class DepositTierMathTest {
     void densityAndSpawnFrequencyMoveInOppositeDirections() {
         DepositTierMath.TierDistribution distribution = DepositTierMath.distribution(DEFAULTS);
         for (int index = 1; index < DepositTier.values().length; index++) {
-            assertTrue(distribution.profiles()[index].characteristicOreDensity()
-                    > distribution.profiles()[index - 1].characteristicOreDensity());
+            assertTrue(
+                    distribution.profiles()[index].characteristicOreDensity()
+                            > distribution.profiles()[index - 1].characteristicOreDensity());
             assertTrue(distribution.spawnWeights()[index] < distribution.spawnWeights()[index - 1]);
             assertTrue(distribution.shares()[index] < distribution.shares()[index - 1]);
         }
@@ -65,7 +63,9 @@ class DepositTierMathTest {
     void characteristicSamplerStaysInsideCalculatedRange() {
         Random random = new Random(0xC0FFEE);
         for (int sample = 0; sample < 10_000; sample++) {
-            long value = DepositTierMath.sampleAroundCharacteristicValue(10, 100, 25.0D, random::nextDouble);
+            long value =
+                    DepositTierMath.sampleAroundCharacteristicValue(
+                            10, 100, 25.0D, random::nextDouble);
             assertTrue(value >= 10 && value <= 100);
         }
     }
@@ -102,10 +102,13 @@ class DepositTierMathTest {
     @Test
     void dataDrivenSmallTierRetentionLeavesMediumAndLargeUntouched() {
         for (DepositTier tier : DepositTier.values()) {
-            for (double original : new double[]{0.0D, 0.01D, 0.5D, 1.0D}) {
-                double retained = DepositTierMath.retainedTierCandidateProbability(tier, original, 0.5D);
-                assertEquals(original * (tier.ordinal() < DepositTier.MEDIUM.ordinal() ? 0.5D : 1.0D),
-                        retained, EPSILON);
+            for (double original : new double[] {0.0D, 0.01D, 0.5D, 1.0D}) {
+                double retained =
+                        DepositTierMath.retainedTierCandidateProbability(tier, original, 0.5D);
+                assertEquals(
+                        original * (tier.ordinal() < DepositTier.MEDIUM.ordinal() ? 0.5D : 1.0D),
+                        retained,
+                        EPSILON);
             }
         }
     }
@@ -115,8 +118,7 @@ class DepositTierMathTest {
             int minimumBlocks,
             int maximumBlocks,
             long minimumOre,
-            long maximumOre
-    ) {
+            long maximumOre) {
         assertEquals(minimumBlocks, profile.minimumBlockCount());
         assertEquals(maximumBlocks, profile.maximumBlockCount());
         assertEquals(minimumOre, profile.minimumTotalOre());

@@ -11,6 +11,10 @@ import dev.emi.emi.api.stack.EmiStack;
 import dev.emi.emi.api.widget.WidgetHolder;
 import dev.world.level.levelgen.OreDepositOrePalette;
 import dev.world.level.levelgen.OreGenerationSummary;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
@@ -21,30 +25,28 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.level.biome.Biome;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
-
 /**
- * EMI Ores lists every registered ore feature with the biomes that still carry it. Deposits replace those
- * features with unregistered ones, so it would show veins that no longer generate (and no biomes for them)
- * and none of the deposits. Its pages for replaced features are removed and each ore gets a deposit page in
- * the same "Ore generation" category instead, built from the summary the server syncs.
+ * EMI Ores lists every registered ore feature with the biomes that still carry it. Deposits replace
+ * those features with unregistered ones, so it would show veins that no longer generate (and no
+ * biomes for them) and none of the deposits. Its pages for replaced features are removed and each
+ * ore gets a deposit page in the same "Ore generation" category instead, built from the summary the
+ * server syncs.
  */
 final class EmiOresDeposits {
-    private static final ResourceLocation OREGEN = ResourceLocation.fromNamespaceAndPath("emi_ores", "oregen");
+    private static final ResourceLocation OREGEN =
+            ResourceLocation.fromNamespaceAndPath("emi_ores", "oregen");
     private static final String ORE_RECIPE_PREFIX = "/ore/";
     private static final int WIDTH = 160;
     private static final int TEXT_COLOR = 0x404040;
 
-    private EmiOresDeposits() {
-    }
+    private EmiOresDeposits() {}
 
     static void register(EmiRegistry registry) {
-        Set<ResourceLocation> replaced = new HashSet<>(OreGenerationSummary.clientReplacedFeatures());
+        Set<ResourceLocation> replaced =
+                new HashSet<>(OreGenerationSummary.clientReplacedFeatures());
         if (!replaced.isEmpty()) {
-            registry.removeRecipes(recipe -> isOreGen(recipe) && replaced.contains(featureId(recipe.getId())));
+            registry.removeRecipes(
+                    recipe -> isOreGen(recipe) && replaced.contains(featureId(recipe.getId())));
         }
 
         Registry<Biome> biomes = biomeRegistry();
@@ -61,19 +63,30 @@ final class EmiOresDeposits {
             if (ore.isEmpty()) {
                 continue;
             }
-            EmiIngredient biomeStacks = EmiIngredient.of(entry.biomes().stream()
-                    .map(biomes::get).filter(Objects::nonNull).map(BiomeEmiStack::of).toList());
+            EmiIngredient biomeStacks =
+                    EmiIngredient.of(
+                            entry.biomes().stream()
+                                    .map(biomes::get)
+                                    .filter(Objects::nonNull)
+                                    .map(BiomeEmiStack::of)
+                                    .toList());
             registry.addRecipe(new DepositGenRecipe(entry, ore, biomeStacks, vanillaLike));
             pages++;
         }
-        OresAndDrillsMod.LOGGER.info("EMI Ores: {} ore generation pages, {} replaced ore features hidden",
-                pages, replaced.size());
+        OresAndDrillsMod.LOGGER.info(
+                "EMI Ores: {} ore generation pages, {} replaced ore features hidden",
+                pages,
+                replaced.size());
     }
 
     private static Registry<Biome> biomeRegistry() {
         Minecraft minecraft = Minecraft.getInstance();
-        RegistryAccess access = minecraft.level != null ? minecraft.level.registryAccess()
-                : minecraft.getConnection() != null ? minecraft.getConnection().registryAccess() : null;
+        RegistryAccess access =
+                minecraft.level != null
+                        ? minecraft.level.registryAccess()
+                        : minecraft.getConnection() != null
+                                ? minecraft.getConnection().registryAccess()
+                                : null;
         return access == null ? null : access.registryOrThrow(Registries.BIOME);
     }
 
@@ -82,7 +95,10 @@ final class EmiOresDeposits {
         return category != null && OREGEN.equals(category.getId());
     }
 
-    /** EMI Ores 1.1+ wraps the feature id as {@code emi_ores:/ore/<namespace>/<path>}; 1.0 used it as is. */
+    /**
+     * EMI Ores 1.1+ wraps the feature id as {@code emi_ores:/ore/<namespace>/<path>}; 1.0 used it
+     * as is.
+     */
     private static ResourceLocation featureId(ResourceLocation recipeId) {
         if (recipeId == null || !"emi_ores".equals(recipeId.getNamespace())) {
             return recipeId;
@@ -93,7 +109,10 @@ final class EmiOresDeposits {
         }
         String feature = path.substring(ORE_RECIPE_PREFIX.length());
         int slash = feature.indexOf('/');
-        return slash <= 0 ? null : ResourceLocation.tryBuild(feature.substring(0, slash), feature.substring(slash + 1));
+        return slash <= 0
+                ? null
+                : ResourceLocation.tryBuild(
+                        feature.substring(0, slash), feature.substring(slash + 1));
     }
 
     private static final class DepositGenRecipe implements EmiRecipe {
@@ -104,25 +123,73 @@ final class EmiOresDeposits {
         private final Component height;
         private final List<FormattedCharSequence> description;
 
-        DepositGenRecipe(OreGenerationSummary.Entry entry, EmiStack ore, EmiIngredient biomes, boolean vanillaLike) {
-            this.id = ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID,
-                    "/ore_generation/" + entry.oreId().getNamespace() + "/" + entry.oreId().getPath());
+        DepositGenRecipe(
+                OreGenerationSummary.Entry entry,
+                EmiStack ore,
+                EmiIngredient biomes,
+                boolean vanillaLike) {
+            this.id =
+                    ResourceLocation.fromNamespaceAndPath(
+                            OresAndDrillsMod.MOD_ID,
+                            "/ore_generation/"
+                                    + entry.oreId().getNamespace()
+                                    + "/"
+                                    + entry.oreId().getPath());
             this.ore = ore;
             this.biomes = biomes;
-            String kind = !entry.deposit() ? "ordinary_veins" : vanillaLike ? "vanilla_like" : "deposits";
+            String kind =
+                    !entry.deposit() ? "ordinary_veins" : vanillaLike ? "vanilla_like" : "deposits";
             this.title = Component.translatable("recipe.ores_and_drills.ore_generation." + kind);
-            this.height = Component.translatable("recipe.ores_and_drills.ore_generation.height", entry.minY(), entry.maxY());
-            this.description = Minecraft.getInstance().font.split(
-                    Component.translatable("recipe.ores_and_drills.ore_generation." + kind + ".description"), WIDTH);
+            this.height =
+                    Component.translatable(
+                            "recipe.ores_and_drills.ore_generation.height",
+                            entry.minY(),
+                            entry.maxY());
+            this.description =
+                    Minecraft.getInstance()
+                            .font
+                            .split(
+                                    Component.translatable(
+                                            "recipe.ores_and_drills.ore_generation."
+                                                    + kind
+                                                    + ".description"),
+                                    WIDTH);
         }
 
-        @Override public EmiRecipeCategory getCategory() { return EmiOresRecipeCategories.OREGEN; }
-        @Override public ResourceLocation getId() { return id; }
-        @Override public List<EmiIngredient> getInputs() { return biomes.isEmpty() ? List.of() : List.of(biomes); }
-        @Override public List<EmiStack> getOutputs() { return List.of(ore); }
-        @Override public int getDisplayWidth() { return WIDTH; }
-        @Override public int getDisplayHeight() { return 22 + description.size() * 10; }
-        @Override public boolean supportsRecipeTree() { return false; }
+        @Override
+        public EmiRecipeCategory getCategory() {
+            return EmiOresRecipeCategories.OREGEN;
+        }
+
+        @Override
+        public ResourceLocation getId() {
+            return id;
+        }
+
+        @Override
+        public List<EmiIngredient> getInputs() {
+            return biomes.isEmpty() ? List.of() : List.of(biomes);
+        }
+
+        @Override
+        public List<EmiStack> getOutputs() {
+            return List.of(ore);
+        }
+
+        @Override
+        public int getDisplayWidth() {
+            return WIDTH;
+        }
+
+        @Override
+        public int getDisplayHeight() {
+            return 22 + description.size() * 10;
+        }
+
+        @Override
+        public boolean supportsRecipeTree() {
+            return false;
+        }
 
         @Override
         public void addWidgets(WidgetHolder widgets) {

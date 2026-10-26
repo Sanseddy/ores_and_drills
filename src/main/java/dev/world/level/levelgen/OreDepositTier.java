@@ -5,16 +5,17 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
-/** Public, command-facing deposit size. Its ordinal intentionally matches the internal tier curves. */
+/**
+ * Public, command-facing deposit size. Its ordinal intentionally matches the internal tier curves.
+ */
 public enum OreDepositTier {
     TINY,
     SMALL,
     MEDIUM,
     LARGE;
 
-    private static final List<String> NAMES = Arrays.stream(values())
-            .map(OreDepositTier::serializedName)
-            .toList();
+    private static final List<String> NAMES =
+            Arrays.stream(values()).map(OreDepositTier::serializedName).toList();
 
     public String serializedName() {
         return name().toLowerCase(Locale.ROOT);

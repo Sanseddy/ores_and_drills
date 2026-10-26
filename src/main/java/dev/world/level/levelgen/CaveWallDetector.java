@@ -1,29 +1,27 @@
 package dev.world.level.levelgen;
 
 import dev.registry.ModBlockTags;
+import java.util.Optional;
+import java.util.function.Predicate;
+import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.state.BlockState;
 
-import javax.annotation.Nullable;
-import java.util.Optional;
-import java.util.function.Predicate;
-
 /**
  * Horizontal cave-wall detection shared by world generation and validation.
  *
- * <p>In a decoration region a block outside {@link WorldgenReadArea} is unknown, neither cave space nor host
- * rock: such chunks may not have terrain yet and read as air, which would turn every stone block on the edge of
- * the readable area into a wall facing a cave that does not exist.
+ * <p>In a decoration region a block outside {@link WorldgenReadArea} is unknown, neither cave space
+ * nor host rock: such chunks may not have terrain yet and read as air, which would turn every stone
+ * block on the edge of the readable area into a wall facing a cave that does not exist.
  */
 public final class CaveWallDetector {
     private static final Direction[] HORIZONTAL_DIRECTIONS = {
-            Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST
+        Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST
     };
 
-    private CaveWallDetector() {
-    }
+    private CaveWallDetector() {}
 
     public static boolean isOpenCaveSpace(BlockState state) {
         // Includes vanilla air, cave_air and void_air. Fluids and arbitrary replaceable blocks are
@@ -36,12 +34,12 @@ public final class CaveWallDetector {
     }
 
     public static int measureWallDepth(
-            LevelAccessor level,
-            BlockPos wallPos,
-            Direction inwardDirection,
-            int maximumDepth
-    ) {
-        return measureWallDepth(level, wallPos, inwardDirection, maximumDepth,
+            LevelAccessor level, BlockPos wallPos, Direction inwardDirection, int maximumDepth) {
+        return measureWallDepth(
+                level,
+                wallPos,
+                inwardDirection,
+                maximumDepth,
                 state -> state.is(ModBlockTags.STONES));
     }
 
@@ -50,9 +48,10 @@ public final class CaveWallDetector {
             BlockPos wallPos,
             Direction inwardDirection,
             int maximumDepth,
-            Predicate<BlockState> hostPredicate
-    ) {
-        if (inwardDirection == null || inwardDirection.getAxis().isVertical() || maximumDepth <= 0) {
+            Predicate<BlockState> hostPredicate) {
+        if (inwardDirection == null
+                || inwardDirection.getAxis().isVertical()
+                || maximumDepth <= 0) {
             return 0;
         }
         int depth = 0;
@@ -74,8 +73,7 @@ public final class CaveWallDetector {
             BlockPos pos,
             @Nullable Direction preferredExposedFace,
             int minimumDepth,
-            int maximumDepth
-    ) {
+            int maximumDepth) {
         if (!WorldgenReadArea.contains(level, pos)) {
             return Optional.empty();
         }
@@ -107,12 +105,18 @@ public final class CaveWallDetector {
             int minimumDepth,
             int maximumDepth,
             @Nullable Direction preferredExposedFace,
-            Predicate<BlockPos> positionAllowed
-    ) {
+            Predicate<BlockPos> positionAllowed) {
         return findNearest(
-                level, origin, horizontalRadius, verticalRadius, maximumChecks,
-                minimumDepth, maximumDepth, preferredExposedFace, positionAllowed, null
-        );
+                level,
+                origin,
+                horizontalRadius,
+                verticalRadius,
+                maximumChecks,
+                minimumDepth,
+                maximumDepth,
+                preferredExposedFace,
+                positionAllowed,
+                null);
     }
 
     public static Optional<CaveWallAnchor> findNearest(
@@ -125,8 +129,7 @@ public final class CaveWallDetector {
             int maximumDepth,
             @Nullable Direction preferredExposedFace,
             Predicate<BlockPos> positionAllowed,
-            @Nullable Predicate<BlockState> hostPredicate
-    ) {
+            @Nullable Predicate<BlockState> hostPredicate) {
         int safeHorizontalRadius = Math.max(0, horizontalRadius);
         int safeVerticalRadius = Math.max(0, verticalRadius);
         int safeMaximumChecks = Math.max(1, maximumChecks);
@@ -147,10 +150,17 @@ public final class CaveWallDetector {
                 for (int dx = minDx; dx <= maxDx; dx++) {
                     int dz = horizontalDistance - Math.abs(dx);
                     mutable.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
-                    Optional<CaveWallAnchor> found = checkPosition(
-                            level, mutable, preferredExposedFace, minimumDepth, maximumDepth,
-                            positionAllowed, hostPredicate, checks++, safeMaximumChecks
-                    );
+                    Optional<CaveWallAnchor> found =
+                            checkPosition(
+                                    level,
+                                    mutable,
+                                    preferredExposedFace,
+                                    minimumDepth,
+                                    maximumDepth,
+                                    positionAllowed,
+                                    hostPredicate,
+                                    checks++,
+                                    safeMaximumChecks);
                     if (found.isPresent()) {
                         return found;
                     }
@@ -159,10 +169,17 @@ public final class CaveWallDetector {
                     }
                     if (dz != 0) {
                         mutable.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() - dz);
-                        found = checkPosition(
-                                level, mutable, preferredExposedFace, minimumDepth, maximumDepth,
-                                positionAllowed, hostPredicate, checks++, safeMaximumChecks
-                        );
+                        found =
+                                checkPosition(
+                                        level,
+                                        mutable,
+                                        preferredExposedFace,
+                                        minimumDepth,
+                                        maximumDepth,
+                                        positionAllowed,
+                                        hostPredicate,
+                                        checks++,
+                                        safeMaximumChecks);
                         if (found.isPresent()) {
                             return found;
                         }
@@ -180,7 +197,8 @@ public final class CaveWallDetector {
         for (BlockPos pos : positions) {
             for (Direction direction : HORIZONTAL_DIRECTIONS) {
                 BlockPos neighbor = pos.relative(direction);
-                if (WorldgenReadArea.contains(level, neighbor) && isOpenCaveSpace(level.getBlockState(neighbor))) {
+                if (WorldgenReadArea.contains(level, neighbor)
+                        && isOpenCaveSpace(level.getBlockState(neighbor))) {
                     return true;
                 }
             }
@@ -197,8 +215,7 @@ public final class CaveWallDetector {
             Predicate<BlockPos> positionAllowed,
             @Nullable Predicate<BlockState> hostPredicate,
             int checks,
-            int maximumChecks
-    ) {
+            int maximumChecks) {
         if (checks >= maximumChecks
                 || pos.getY() < level.getMinBuildHeight()
                 || pos.getY() >= level.getMaxBuildHeight()
@@ -216,14 +233,13 @@ public final class CaveWallDetector {
             return Optional.empty();
         }
         if (isUsableExposedFace(
-                level, pos, preferredExposedFace, minimumDepth, maximumDepth, hostPredicate
-        )) {
+                level, pos, preferredExposedFace, minimumDepth, maximumDepth, hostPredicate)) {
             return Optional.of(new CaveWallAnchor(pos, preferredExposedFace));
         }
         for (Direction direction : HORIZONTAL_DIRECTIONS) {
-            if (direction != preferredExposedFace && isUsableExposedFace(
-                    level, pos, direction, minimumDepth, maximumDepth, hostPredicate
-            )) {
+            if (direction != preferredExposedFace
+                    && isUsableExposedFace(
+                            level, pos, direction, minimumDepth, maximumDepth, hostPredicate)) {
                 return Optional.of(new CaveWallAnchor(pos, direction));
             }
         }
@@ -235,12 +251,14 @@ public final class CaveWallDetector {
             BlockPos pos,
             @Nullable Direction exposedFace,
             int minimumDepth,
-            int maximumDepth
-    ) {
+            int maximumDepth) {
         return isUsableExposedFace(
-                level, pos, exposedFace, minimumDepth, maximumDepth,
-                state -> state.is(ModBlockTags.STONES)
-        );
+                level,
+                pos,
+                exposedFace,
+                minimumDepth,
+                maximumDepth,
+                state -> state.is(ModBlockTags.STONES));
     }
 
     private static boolean isUsableExposedFace(
@@ -249,17 +267,21 @@ public final class CaveWallDetector {
             @Nullable Direction exposedFace,
             int minimumDepth,
             int maximumDepth,
-            Predicate<BlockState> hostPredicate
-    ) {
+            Predicate<BlockState> hostPredicate) {
         if (exposedFace == null || exposedFace.getAxis().isVertical()) {
             return false;
         }
         BlockPos front = pos.relative(exposedFace);
-        if (!WorldgenReadArea.contains(level, front) || !isOpenCaveSpace(level.getBlockState(front))) {
+        if (!WorldgenReadArea.contains(level, front)
+                || !isOpenCaveSpace(level.getBlockState(front))) {
             return false;
         }
         return measureWallDepth(
-                level, pos, exposedFace.getOpposite(), Math.max(minimumDepth, maximumDepth), hostPredicate
-        ) >= Math.max(1, minimumDepth);
+                        level,
+                        pos,
+                        exposedFace.getOpposite(),
+                        Math.max(minimumDepth, maximumDepth),
+                        hostPredicate)
+                >= Math.max(1, minimumDepth);
     }
 }

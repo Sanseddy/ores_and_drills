@@ -1,5 +1,10 @@
 package dev.world.level.levelgen;
 
+import java.util.ArrayDeque;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.QuartPos;
 import net.minecraft.core.registries.Registries;
@@ -9,17 +14,11 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.biome.Biome;
 
-import java.util.ArrayDeque;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-
 /**
- * Identifies one instance of a biome (a single cave or biome patch) so forced datapack rules can place an
- * exact number of deposits per instance. Region-based mod biomes use their region; other biomes use the
- * connected patch of the noise biome on a coarse grid, named after its smallest grid node. Patches too large
- * to walk fall back to fixed cells of the deposit layout.
+ * Identifies one instance of a biome (a single cave or biome patch) so forced datapack rules can
+ * place an exact number of deposits per instance. Region-based mod biomes use their region; other
+ * biomes use the connected patch of the noise biome on a coarse grid, named after its smallest grid
+ * node. Patches too large to walk fall back to fixed cells of the deposit layout.
  */
 final class BiomeInstances {
     private static final int GRID = 16;
@@ -28,14 +27,20 @@ final class BiomeInstances {
     private static final int MAX_CACHED_NODES = 262_144;
     private static final Map<String, Instance> NODE_CACHE = new ConcurrentHashMap<>();
 
-    private BiomeInstances() {
-    }
+    private BiomeInstances() {}
 
-    /** One biome instance and the radius of a circle with the same area (unbounded for regions and cells). */
-    record Instance(String key, int approximateRadius) {
-    }
+    /**
+     * One biome instance and the radius of a circle with the same area (unbounded for regions and
+     * cells).
+     */
+    record Instance(String key, int approximateRadius) {}
 
-    static Instance at(ServerLevel level, BlockPos pos, ResourceLocation biome, int minimumY, int maximumY,
+    static Instance at(
+            ServerLevel level,
+            BlockPos pos,
+            ResourceLocation biome,
+            int minimumY,
+            int maximumY,
             int fallbackCellBlocks) {
         String region = OptionalBiomeRegionHints.regionKey(level, pos, biome);
         if (region != null) {
@@ -43,8 +48,18 @@ final class BiomeInstances {
         }
         int startX = Math.floorDiv(pos.getX(), GRID);
         int startZ = Math.floorDiv(pos.getZ(), GRID);
-        String cacheKey = level.dimension().location() + "|" + biome + "|" + minimumY + "|" + maximumY + "|"
-                + startX + "|" + startZ;
+        String cacheKey =
+                level.dimension().location()
+                        + "|"
+                        + biome
+                        + "|"
+                        + minimumY
+                        + "|"
+                        + maximumY
+                        + "|"
+                        + startX
+                        + "|"
+                        + startZ;
         Instance cached = NODE_CACHE.get(cacheKey);
         if (cached != null) {
             return cached;
@@ -71,7 +86,14 @@ final class BiomeInstances {
                 int[][] neighbours = {{x + 1, z}, {x - 1, z}, {x, z + 1}, {x, z - 1}};
                 for (int[] neighbour : neighbours) {
                     long key = ChunkPos.asLong(neighbour[0], neighbour[1]);
-                    if (visited.contains(key) || !inBiome(level, neighbour[0], neighbour[1], biomeKey, minimumY, maximumY)) {
+                    if (visited.contains(key)
+                            || !inBiome(
+                                    level,
+                                    neighbour[0],
+                                    neighbour[1],
+                                    biomeKey,
+                                    minimumY,
+                                    maximumY)) {
                         continue;
                     }
                     if (visited.size() >= MAX_PATCH_NODES) {
@@ -84,24 +106,41 @@ final class BiomeInstances {
                 }
             }
             if (complete) {
-                int radius = (int) Math.ceil(Math.sqrt(visited.size() * (double) GRID * GRID / Math.PI));
-                instance = new Instance("patch:" + biome + ":" + smallestX + ":" + smallestZ, radius);
+                int radius =
+                        (int) Math.ceil(Math.sqrt(visited.size() * (double) GRID * GRID / Math.PI));
+                instance =
+                        new Instance("patch:" + biome + ":" + smallestX + ":" + smallestZ, radius);
                 if (NODE_CACHE.size() + visited.size() > MAX_CACHED_NODES) {
                     NODE_CACHE.clear();
                 }
-                String prefix = level.dimension().location() + "|" + biome + "|" + minimumY + "|" + maximumY + "|";
+                String prefix =
+                        level.dimension().location()
+                                + "|"
+                                + biome
+                                + "|"
+                                + minimumY
+                                + "|"
+                                + maximumY
+                                + "|";
                 for (long node : visited) {
-                    NODE_CACHE.put(prefix + ChunkPos.getX(node) + "|" + ChunkPos.getZ(node), instance);
+                    NODE_CACHE.put(
+                            prefix + ChunkPos.getX(node) + "|" + ChunkPos.getZ(node), instance);
                 }
             }
         }
         if (instance == null) {
-            // The noise source cannot see this patch, or it is a huge biome: count per layout cell instead.
+            // The noise source cannot see this patch, or it is a huge biome: count per layout cell
+            // instead.
             int cellSize = Math.max(16, fallbackCellBlocks);
-            instance = new Instance(
-                    "cell:" + biome + ":" + Math.floorDiv(pos.getX(), cellSize) + ":" + Math.floorDiv(pos.getZ(), cellSize),
-                    Integer.MAX_VALUE
-            );
+            instance =
+                    new Instance(
+                            "cell:"
+                                    + biome
+                                    + ":"
+                                    + Math.floorDiv(pos.getX(), cellSize)
+                                    + ":"
+                                    + Math.floorDiv(pos.getZ(), cellSize),
+                            Integer.MAX_VALUE);
         }
         if (NODE_CACHE.size() > MAX_CACHED_NODES) {
             NODE_CACHE.clear();
@@ -110,12 +149,18 @@ final class BiomeInstances {
         return instance;
     }
 
-    private static boolean inBiome(ServerLevel level, int gridX, int gridZ, ResourceKey<Biome> biome,
-            int minimumY, int maximumY) {
+    private static boolean inBiome(
+            ServerLevel level,
+            int gridX,
+            int gridZ,
+            ResourceKey<Biome> biome,
+            int minimumY,
+            int maximumY) {
         int x = gridX * GRID + GRID / 2;
         int z = gridZ * GRID + GRID / 2;
         for (int y = minimumY; y <= maximumY; y += VERTICAL_STEP) {
-            if (level.getUncachedNoiseBiome(QuartPos.fromBlock(x), QuartPos.fromBlock(y), QuartPos.fromBlock(z))
+            if (level.getUncachedNoiseBiome(
+                            QuartPos.fromBlock(x), QuartPos.fromBlock(y), QuartPos.fromBlock(z))
                     .is(biome)) {
                 return true;
             }

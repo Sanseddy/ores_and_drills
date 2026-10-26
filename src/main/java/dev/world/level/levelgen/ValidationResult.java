@@ -7,8 +7,7 @@ public record ValidationResult(
         int totalSamples,
         double stoneCoverage,
         int validSections,
-        int totalSections
-) {
+        int totalSections) {
     public ValidationResult {
         if (validSamples < 0 || totalSamples < 0 || validSamples > totalSamples) {
             throw new IllegalArgumentException("Invalid deposit validation sample counts");

@@ -20,7 +20,8 @@ final class FlatIconButton extends Button {
     }
 
     @Override
-    protected void renderWidget(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    protected void renderWidget(
+            GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         draw(guiGraphics, getX(), getY(), getMessage(), active && isHoveredOrFocused());
     }
 
@@ -28,7 +29,12 @@ final class FlatIconButton extends Button {
     static void draw(GuiGraphics guiGraphics, int x, int y, Component icon, boolean hovered) {
         guiGraphics.fill(x, y, x + SIZE, y + SIZE, hovered ? BACKGROUND_HOVERED : BACKGROUND);
         var font = Minecraft.getInstance().font;
-        guiGraphics.drawString(font, icon, x + (SIZE - font.width(icon) + 1) / 2, y + (SIZE - font.lineHeight) / 2 + 1,
-                hovered ? ICON_HOVERED : ICON, false);
+        guiGraphics.drawString(
+                font,
+                icon,
+                x + (SIZE - font.width(icon) + 1) / 2,
+                y + (SIZE - font.lineHeight) / 2 + 1,
+                hovered ? ICON_HOVERED : ICON,
+                false);
     }
 }

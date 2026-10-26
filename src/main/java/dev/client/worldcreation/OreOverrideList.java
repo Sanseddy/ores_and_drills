@@ -1,9 +1,18 @@
 package dev.client.worldcreation;
 
-import dev.config.OreOverrides;
 import dev.config.OreDimensionOverrides;
+import dev.config.OreOverrides;
 import dev.world.level.levelgen.OreSpawnDimensions;
 import dev.world.level.levelgen.OreUnifier;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -19,19 +28,10 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
 import net.neoforged.fml.ModList;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-
 /**
- * Scrollable, Excel-style table grouped by mod namespace. Each material row groups stone/deepslate/nether variants
- * via {@link OreUnifier#materialKeyFor(Block)} and exposes one enabled toggle plus 3 generation sliders.
+ * Scrollable, Excel-style table grouped by mod namespace. Each material row groups
+ * stone/deepslate/nether variants via {@link OreUnifier#materialKeyFor(Block)} and exposes one
+ * enabled toggle plus 3 generation sliders.
  */
 public final class OreOverrideList extends ContainerObjectSelectionList<OreOverrideList.Entry> {
     public static final int ROW_HEIGHT = 24;
@@ -71,7 +71,10 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
     private final List<ModGroup> groups = new ArrayList<>();
     private final SquareToggle masterToggle = new SquareToggle(0, 0, true);
     private OreRow openDimensionRow;
-    /** Unsaved "ore|dimension" pairs carried over a screen rebuild; null reads the stored overrides. */
+
+    /**
+     * Unsaved "ore|dimension" pairs carried over a screen rebuild; null reads the stored overrides.
+     */
     private final Set<String> pendingDimensionDisabled;
 
     public OreOverrideList(
@@ -81,8 +84,7 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
             int y,
             List<Block> canonicalOres,
             Map<ResourceLocation, OreOverrides.OreOverride> initial,
-            Set<ResourceLocation> initialDisabled
-    ) {
+            Set<ResourceLocation> initialDisabled) {
         this(minecraft, width, height, y, canonicalOres, initial, initialDisabled, null);
     }
 
@@ -94,16 +96,31 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
             List<Block> canonicalOres,
             Map<ResourceLocation, OreOverrides.OreOverride> initial,
             Set<ResourceLocation> initialDisabled,
-            Set<String> pendingDimensionDisabled
-    ) {
+            Set<String> pendingDimensionDisabled) {
         super(minecraft, width, height, y, rowHeightFor(canonicalOres));
         this.pendingDimensionDisabled = pendingDimensionDisabled;
         setRenderHeader(true, HEADER_HEIGHT);
-        int targetRowWidth = Math.min(MAX_TABLE_WIDTH, Math.max(MIN_TABLE_WIDTH, width - HORIZONTAL_MARGIN));
-        this.labelWidth = Math.min(MAX_LABEL_WIDTH, Math.max(MIN_LABEL_WIDTH, targetRowWidth * 30 / 100));
-        this.dimensionWidth = Math.min(MAX_DIMENSION_WIDTH, Math.max(MIN_DIMENSION_WIDTH, targetRowWidth * 16 / 100));
-        this.sliderWidth = Math.min(MAX_SLIDER_WIDTH, Math.max(45, (targetRowWidth - labelWidth - dimensionWidth - 2 * SLIDER_GAP) / 3));
-        this.rowWidth = CHECKBOX_COLUMN_WIDTH + labelWidth + dimensionWidth + 3 * sliderWidth + 2 * SLIDER_GAP;
+        int targetRowWidth =
+                Math.min(MAX_TABLE_WIDTH, Math.max(MIN_TABLE_WIDTH, width - HORIZONTAL_MARGIN));
+        this.labelWidth =
+                Math.min(MAX_LABEL_WIDTH, Math.max(MIN_LABEL_WIDTH, targetRowWidth * 30 / 100));
+        this.dimensionWidth =
+                Math.min(
+                        MAX_DIMENSION_WIDTH,
+                        Math.max(MIN_DIMENSION_WIDTH, targetRowWidth * 16 / 100));
+        this.sliderWidth =
+                Math.min(
+                        MAX_SLIDER_WIDTH,
+                        Math.max(
+                                45,
+                                (targetRowWidth - labelWidth - dimensionWidth - 2 * SLIDER_GAP)
+                                        / 3));
+        this.rowWidth =
+                CHECKBOX_COLUMN_WIDTH
+                        + labelWidth
+                        + dimensionWidth
+                        + 3 * sliderWidth
+                        + 2 * SLIDER_GAP;
 
         Map<String, List<ResourceLocation>> byMaterial = new LinkedHashMap<>();
         for (Block block : canonicalOres) {
@@ -113,7 +130,11 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
             }
 
             String material = OreUnifier.materialKeyFor(block);
-            byMaterial.computeIfAbsent(material.isEmpty() ? id.getPath() : material, ignored -> new ArrayList<>()).add(id);
+            byMaterial
+                    .computeIfAbsent(
+                            material.isEmpty() ? id.getPath() : material,
+                            ignored -> new ArrayList<>())
+                    .add(id);
         }
 
         List<MaterialRowData> materials = new ArrayList<>();
@@ -124,24 +145,24 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
             ResourceLocation categoryId = preferred != null ? preferred : members.getFirst();
             OreOverrides.OreOverride existing = firstNonDefault(members, initial);
             boolean enabled = members.stream().noneMatch(initialDisabled::contains);
-            materials.add(new MaterialRowData(
-                    material,
-                    categoryId.getNamespace(),
-                    members,
-                    displayName(material, members),
-                    dimensionInfo(members),
-                    existing,
-                    enabled,
-                    bestPriorityRank(members),
-                    rarityRank(material, members)
-            ));
+            materials.add(
+                    new MaterialRowData(
+                            material,
+                            categoryId.getNamespace(),
+                            members,
+                            displayName(material, members),
+                            dimensionInfo(members),
+                            existing,
+                            enabled,
+                            bestPriorityRank(members),
+                            rarityRank(material, members)));
         }
 
-        materials.sort(Comparator
-                .comparingInt(MaterialRowData::modPriorityRank)
-                .thenComparing(MaterialRowData::namespace)
-                .thenComparingInt(MaterialRowData::rarityRank)
-                .thenComparing(MaterialRowData::material));
+        materials.sort(
+                Comparator.comparingInt(MaterialRowData::modPriorityRank)
+                        .thenComparing(MaterialRowData::namespace)
+                        .thenComparingInt(MaterialRowData::rarityRank)
+                        .thenComparing(MaterialRowData::material));
 
         Map<String, ModGroup> byNamespace = new LinkedHashMap<>();
         for (MaterialRowData material : materials) {
@@ -167,7 +188,9 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
         setScrollAmount(scroll);
     }
 
-    /** Sorts material rows by the same mod-priority order OreUnifier uses to pick canonical ores. */
+    /**
+     * Sorts material rows by the same mod-priority order OreUnifier uses to pick canonical ores.
+     */
     private static int bestPriorityRank(List<ResourceLocation> members) {
         int best = Integer.MAX_VALUE;
         for (ResourceLocation member : members) {
@@ -179,7 +202,9 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
         return best;
     }
 
-    private static OreOverrides.OreOverride firstNonDefault(List<ResourceLocation> members, Map<ResourceLocation, OreOverrides.OreOverride> initial) {
+    private static OreOverrides.OreOverride firstNonDefault(
+            List<ResourceLocation> members,
+            Map<ResourceLocation, OreOverrides.OreOverride> initial) {
         for (ResourceLocation member : members) {
             OreOverrides.OreOverride override = initial.get(member);
             if (override != null) {
@@ -194,13 +219,32 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
         if (containsAny(text, "coal", "copper", "iron")) {
             return 0;
         }
-        if (containsAny(text, "tin", "zinc", "lead", "aluminum", "aluminium", "nickel", "sulfur", "fluorite", "apatite")) {
+        if (containsAny(
+                text,
+                "tin",
+                "zinc",
+                "lead",
+                "aluminum",
+                "aluminium",
+                "nickel",
+                "sulfur",
+                "fluorite",
+                "apatite")) {
             return 1;
         }
-        if (containsAny(text, "gold", "redstone", "lapis", "quartz", "osmium", "silver", "cinnabar")) {
+        if (containsAny(
+                text, "gold", "redstone", "lapis", "quartz", "osmium", "silver", "cinnabar")) {
             return 2;
         }
-        if (containsAny(text, "diamond", "emerald", "uranium", "uraninite", "ancient_debris", "platinum", "iridium")) {
+        if (containsAny(
+                text,
+                "diamond",
+                "emerald",
+                "uranium",
+                "uraninite",
+                "ancient_debris",
+                "platinum",
+                "iridium")) {
             return 3;
         }
         return 1;
@@ -224,7 +268,11 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
             }
 
             String material = OreUnifier.materialKeyFor(block);
-            byMaterial.computeIfAbsent(material.isEmpty() ? id.getPath() : material, ignored -> new ArrayList<>()).add(id);
+            byMaterial
+                    .computeIfAbsent(
+                            material.isEmpty() ? id.getPath() : material,
+                            ignored -> new ArrayList<>())
+                    .add(id);
         }
 
         int maxDimensions = 1;
@@ -246,9 +294,9 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
 
     @Override
     protected int getScrollbarPosition() {
-        // Vanilla anchors the scrollbar to the list's un-shifted row bounds, so it doesn't follow our
-        // TABLE_X_OFFSET and can end up past the widget's right edge (invisible) once the table is
-        // forced to MIN_TABLE_WIDTH on a narrow/high-GUI-scale screen. Deriving it from our own
+        // Vanilla anchors the scrollbar to the list's un-shifted row bounds, so it doesn't follow
+        // our TABLE_X_OFFSET and can end up past the widget's right edge (invisible) once the table
+        // is forced to MIN_TABLE_WIDTH on a narrow/high-GUI-scale screen. Deriving it from our own
         // getRowRight() keeps it glued to the table, and clamping keeps it on-screen either way.
         return Math.min(getRowRight() + SCROLLBAR_GAP, getX() + getWidth() - SCROLLBAR_WIDTH);
     }
@@ -317,9 +365,10 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
             return true;
         }
         if (isWithinHeaderBounds(mouseX, mouseY)) {
-            // The sticky header is a render-only overlay: rows scrolled up past it are only hidden by a
-            // scissor in renderListItems, not actually removed, so without this guard a click here would
-            // fall through to whatever row is currently scrolled underneath instead of hitting nothing.
+            // The sticky header is a render-only overlay: rows scrolled up past it are only hidden
+            // by a scissor in renderListItems, not actually removed, so without this guard a click
+            // here would fall through to whatever row is currently scrolled underneath instead of
+            // hitting nothing.
             return true;
         }
         return super.mouseClicked(mouseX, mouseY, button);
@@ -338,24 +387,28 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
         graphics.renderOutline(x, y, width, height, 0xFFE0E0E0);
         for (int i = 0; i < row.dimensionInfo.options().size(); i++) {
             int optionY = y + 2 + i * 18;
-            boolean hovered = mouseX >= x && mouseX < x + width && mouseY >= optionY && mouseY < optionY + 18;
+            boolean hovered =
+                    mouseX >= x && mouseX < x + width && mouseY >= optionY && mouseY < optionY + 18;
             if (hovered) graphics.fill(x + 1, optionY, x + width - 1, optionY + 18, 0x60404040);
             DimensionOption option = row.dimensionInfo.options().get(i);
             boolean enabled = row.dimensionEnabled.get(option.id());
             renderSquareToggle(graphics, x + 3, optionY + 2, enabled, hovered);
-            drawScrollingLabel(graphics, option.label(), x + 21, optionY + 5, width - 25, 0xFFFFFFFF);
+            drawScrollingLabel(
+                    graphics, option.label(), x + 21, optionY + 5, width - 25, 0xFFFFFFFF);
         }
         graphics.pose().popPose();
     }
 
-    private static void renderSquareToggle(GuiGraphics graphics, int x, int y, boolean selected, boolean hovered) {
+    private static void renderSquareToggle(
+            GuiGraphics graphics, int x, int y, boolean selected, boolean hovered) {
         int size = ENABLED_TOGGLE_SIZE;
         int borderWidth = 2;
         int border = hovered ? 0xFFFFFFFF : 0xFFE0E0E0;
         graphics.fill(x, y, x + size, y + borderWidth, border);
         graphics.fill(x, y + size - borderWidth, x + size, y + size, border);
         graphics.fill(x, y + borderWidth, x + borderWidth, y + size - borderWidth, border);
-        graphics.fill(x + size - borderWidth, y + borderWidth, x + size, y + size - borderWidth, border);
+        graphics.fill(
+                x + size - borderWidth, y + borderWidth, x + size, y + size - borderWidth, border);
         if (selected) graphics.fill(x + 4, y + 4, x + size - 4, y + size - 4, 0x80E0E0E0);
     }
 
@@ -364,7 +417,7 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
         int y = dimensionMenuY(row);
         int width = Math.max(dimensionWidth, 120);
         if (mouseX < x || mouseX >= x + width || mouseY < y) return -1;
-        int option = ((int)mouseY - y - 2) / 18;
+        int option = ((int) mouseY - y - 2) / 18;
         return option >= 0 && option < row.dimensionInfo.options().size() ? option : -1;
     }
 
@@ -377,13 +430,19 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
     private boolean isMasterToggleHit(double mouseX, double mouseY) {
         int x = masterToggleX();
         int y = masterToggleY();
-        return mouseX >= x && mouseX < x + ENABLED_TOGGLE_SIZE && mouseY >= y && mouseY < y + ENABLED_TOGGLE_SIZE;
+        return mouseX >= x
+                && mouseX < x + ENABLED_TOGGLE_SIZE
+                && mouseY >= y
+                && mouseY < y + ENABLED_TOGGLE_SIZE;
     }
 
     private boolean isWithinHeaderBounds(double mouseX, double mouseY) {
         int rowLeft = getRowLeft();
         int rowRight = rowLeft + getRowWidth();
-        return mouseX >= rowLeft && mouseX < rowRight && mouseY >= getY() && mouseY < getY() + HEADER_HEIGHT;
+        return mouseX >= rowLeft
+                && mouseX < rowRight
+                && mouseY >= getY()
+                && mouseY < getY() + HEADER_HEIGHT;
     }
 
     private int masterToggleX() {
@@ -403,7 +462,10 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
         }
     }
 
-    /** The header toggle shows "on" whenever at least one ore is enabled, and "off" only when every ore is disabled. */
+    /**
+     * The header toggle shows "on" whenever at least one ore is enabled, and "off" only when every
+     * ore is disabled.
+     */
     private boolean anyRowEnabled() {
         for (ModGroup group : groups) {
             for (OreRow row : group.rows) {
@@ -416,23 +478,27 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
     }
 
     @Override
-    protected void renderListItems(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        // Rows scrolled up past the sticky header are only hidden by the scissor below, not actually
-        // removed — the entry underneath the header still gets a render(..., mouseX, mouseY, ...) call
-        // with the real cursor position, so its hover highlight / slider tooltip would otherwise render
-        // right through the header. Feeding an off-screen position while the cursor is over the header
-        // makes every row (and its child widgets) correctly compute isHovered = false for this pass.
+    protected void renderListItems(
+            GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        // Rows scrolled up past the sticky header are only hidden by the scissor below, not
+        // actually removed — the entry underneath the header still gets a render(..., mouseX,
+        // mouseY, ...) call with the real cursor position, so its hover highlight / slider tooltip
+        // would otherwise render right through the header. Feeding an off-screen position while the
+        // cursor is over the header makes every row (and its child widgets) correctly compute
+        // isHovered = false for this pass.
         if (isWithinHeaderBounds(mouseX, mouseY)) {
             mouseX = -1;
             mouseY = -1;
         }
 
-        guiGraphics.enableScissor(getX(), getY() + HEADER_HEIGHT + 1, getX() + getWidth(), getY() + height);
+        guiGraphics.enableScissor(
+                getX(), getY() + HEADER_HEIGHT + 1, getX() + getWidth(), getY() + height);
         super.renderListItems(guiGraphics, mouseX, mouseY, partialTick);
         guiGraphics.disableScissor();
     }
 
-    private void renderStickyHeader(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    private void renderStickyHeader(
+            GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         int rowLeft = getRowLeft();
         int headerY = getY();
         int headerBottom = headerY + HEADER_HEIGHT;
@@ -460,15 +526,36 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
         masterToggle.render(guiGraphics, mouseX, mouseY, partialTick);
 
         int textY = headerY + 9;
-        guiGraphics.drawString(Minecraft.getInstance().font, Component.translatable("gui.ores_and_drills.ore_settings.column_ore"), labelX + 4, textY, HEADER_TEXT);
-        guiGraphics.drawString(Minecraft.getInstance().font, Component.translatable("gui.ores_and_drills.ore_settings.column_dimension"),
-                dimensionX + 4, textY, HEADER_TEXT);
-        guiGraphics.drawString(Minecraft.getInstance().font, Component.translatable("gui.ores_and_drills.ore_settings.column_frequency"),
-                frequencyX + 4, textY, HEADER_TEXT);
-        guiGraphics.drawString(Minecraft.getInstance().font, Component.translatable("gui.ores_and_drills.ore_settings.column_size"),
-                sizeX + 4, textY, HEADER_TEXT);
-        guiGraphics.drawString(Minecraft.getInstance().font, Component.translatable("gui.ores_and_drills.ore_settings.column_richness"),
-                richnessX + 4, textY, HEADER_TEXT);
+        guiGraphics.drawString(
+                Minecraft.getInstance().font,
+                Component.translatable("gui.ores_and_drills.ore_settings.column_ore"),
+                labelX + 4,
+                textY,
+                HEADER_TEXT);
+        guiGraphics.drawString(
+                Minecraft.getInstance().font,
+                Component.translatable("gui.ores_and_drills.ore_settings.column_dimension"),
+                dimensionX + 4,
+                textY,
+                HEADER_TEXT);
+        guiGraphics.drawString(
+                Minecraft.getInstance().font,
+                Component.translatable("gui.ores_and_drills.ore_settings.column_frequency"),
+                frequencyX + 4,
+                textY,
+                HEADER_TEXT);
+        guiGraphics.drawString(
+                Minecraft.getInstance().font,
+                Component.translatable("gui.ores_and_drills.ore_settings.column_size"),
+                sizeX + 4,
+                textY,
+                HEADER_TEXT);
+        guiGraphics.drawString(
+                Minecraft.getInstance().font,
+                Component.translatable("gui.ores_and_drills.ore_settings.column_richness"),
+                richnessX + 4,
+                textY,
+                HEADER_TEXT);
     }
 
     /** Every member block id of a material row whose toggle got disabled. */
@@ -484,7 +571,9 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
         return result;
     }
 
-    /** Serializes the editable per-material sliders for persistence in the new world's level.dat. */
+    /**
+     * Serializes the editable per-material sliders for persistence in the new world's level.dat.
+     */
     public List<String> collectOverrides() {
         List<String> result = new ArrayList<>();
         for (ModGroup group : groups) {
@@ -508,18 +597,19 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
         List<String> result = new ArrayList<>();
         for (ModGroup group : groups) {
             for (OreRow row : group.rows) {
-                row.dimensionEnabled.forEach((dimension, enabled) -> {
-                    if (!enabled) {
-                        for (ResourceLocation member : row.members) result.add(member + "|" + dimension);
-                    }
-                });
+                row.dimensionEnabled.forEach(
+                        (dimension, enabled) -> {
+                            if (!enabled) {
+                                for (ResourceLocation member : row.members)
+                                    result.add(member + "|" + dimension);
+                            }
+                        });
             }
         }
         return result;
     }
 
-    public abstract static class Entry extends ContainerObjectSelectionList.Entry<Entry> {
-    }
+    public abstract static class Entry extends ContainerObjectSelectionList.Entry<Entry> {}
 
     private final class CategoryRow extends Entry {
         private final ModGroup group;
@@ -539,13 +629,22 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
                 int mouseX,
                 int mouseY,
                 boolean hovering,
-                float partialTick
-        ) {
+                float partialTick) {
             int rowWidth = getRowWidth();
-            guiGraphics.fill(left, top, left + rowWidth, top + height, hovering ? CATEGORY_BACKGROUND_HOVERED : CATEGORY_BACKGROUND);
+            guiGraphics.fill(
+                    left,
+                    top,
+                    left + rowWidth,
+                    top + height,
+                    hovering ? CATEGORY_BACKGROUND_HOVERED : CATEGORY_BACKGROUND);
             guiGraphics.hLine(left, left + rowWidth, top + height - 1, ROW_BORDER);
             String arrow = group.expanded ? " \u25be" : " \u25b8";
-            guiGraphics.drawString(Minecraft.getInstance().font, group.displayName.copy().append(arrow), left + 6, centeredTextY(top, height), CATEGORY_TEXT);
+            guiGraphics.drawString(
+                    Minecraft.getInstance().font,
+                    group.displayName.copy().append(arrow),
+                    left + 6,
+                    centeredTextY(top, height),
+                    CATEGORY_TEXT);
         }
 
         @Override
@@ -588,16 +687,49 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
             this.dimensionInfo = data.dimensionInfo();
             this.members = data.members();
             for (DimensionOption option : dimensionInfo.options()) {
-                boolean enabled = members.stream().noneMatch(member -> pendingDimensionDisabled != null
-                        ? pendingDimensionDisabled.contains(member + "|" + option.id())
-                        : OreDimensionOverrides.isDisabled(member, option.id()));
+                boolean enabled =
+                        members.stream()
+                                .noneMatch(
+                                        member ->
+                                                pendingDimensionDisabled != null
+                                                        ? pendingDimensionDisabled.contains(
+                                                                member + "|" + option.id())
+                                                        : OreDimensionOverrides.isDisabled(
+                                                                member, option.id()));
                 dimensionEnabled.put(option.id(), enabled);
             }
             this.enabledToggle = new SquareToggle(0, 0, data.enabled());
             int widgetWidth = sliderWidth - SLIDER_INSET * 2 - 1;
-            this.frequencySlider = new MultiplierSlider(0, 0, widgetWidth, 20, null, MULTIPLIER_MIN, MULTIPLIER_MAX, data.override().frequency());
-            this.sizeSlider = new MultiplierSlider(0, 0, widgetWidth, 20, null, MULTIPLIER_MIN, MULTIPLIER_MAX, data.override().size());
-            this.richnessSlider = new MultiplierSlider(0, 0, widgetWidth, 20, null, MULTIPLIER_MIN, MULTIPLIER_MAX, data.override().richness());
+            this.frequencySlider =
+                    new MultiplierSlider(
+                            0,
+                            0,
+                            widgetWidth,
+                            20,
+                            null,
+                            MULTIPLIER_MIN,
+                            MULTIPLIER_MAX,
+                            data.override().frequency());
+            this.sizeSlider =
+                    new MultiplierSlider(
+                            0,
+                            0,
+                            widgetWidth,
+                            20,
+                            null,
+                            MULTIPLIER_MIN,
+                            MULTIPLIER_MAX,
+                            data.override().size());
+            this.richnessSlider =
+                    new MultiplierSlider(
+                            0,
+                            0,
+                            widgetWidth,
+                            20,
+                            null,
+                            MULTIPLIER_MIN,
+                            MULTIPLIER_MAX,
+                            data.override().richness());
         }
 
         @Override
@@ -611,27 +743,39 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
                 int mouseX,
                 int mouseY,
                 boolean hovering,
-                float partialTick
-        ) {
+                float partialTick) {
             this.lastLeft = left;
             this.lastTop = top;
             this.lastHeight = height;
             int rowWidth = getRowWidth();
             int labelColumnLeft = labelColumnX(left);
-            guiGraphics.fill(left, top, left + rowWidth, top + height, index % 2 == 0 ? ROW_BACKGROUND_EVEN : ROW_BACKGROUND_ODD);
+            guiGraphics.fill(
+                    left,
+                    top,
+                    left + rowWidth,
+                    top + height,
+                    index % 2 == 0 ? ROW_BACKGROUND_EVEN : ROW_BACKGROUND_ODD);
             guiGraphics.hLine(left, left + rowWidth, top + height - 1, ROW_BORDER);
             guiGraphics.vLine(labelColumnLeft, top, top + height - 1, ROW_BORDER);
             guiGraphics.vLine(dimensionColumnX(left), top, top + height - 1, ROW_BORDER);
             guiGraphics.vLine(frequencyColumnX(left), top, top + height - 1, ROW_BORDER);
-            guiGraphics.vLine(sizeColumnX(left) - SLIDER_GAP / 2, top, top + height - 1, ROW_BORDER);
-            guiGraphics.vLine(richnessColumnX(left) - SLIDER_GAP / 2, top, top + height - 1, ROW_BORDER);
+            guiGraphics.vLine(
+                    sizeColumnX(left) - SLIDER_GAP / 2, top, top + height - 1, ROW_BORDER);
+            guiGraphics.vLine(
+                    richnessColumnX(left) - SLIDER_GAP / 2, top, top + height - 1, ROW_BORDER);
 
-            enabledToggle.setX(checkboxColumnX(left) + (CHECKBOX_COLUMN_WIDTH - ENABLED_TOGGLE_SIZE) / 2);
+            enabledToggle.setX(
+                    checkboxColumnX(left) + (CHECKBOX_COLUMN_WIDTH - ENABLED_TOGGLE_SIZE) / 2);
             enabledToggle.setY(top + (height - enabledToggle.getHeight()) / 2);
             enabledToggle.render(guiGraphics, mouseX, mouseY, partialTick);
 
             int labelX = labelColumnLeft + 4;
-            guiGraphics.drawString(Minecraft.getInstance().font, fit(label, dimensionColumnX(left) - labelX - 4), labelX, centeredTextY(top, height), 0xFFFFFF);
+            guiGraphics.drawString(
+                    Minecraft.getInstance().font,
+                    fit(label, dimensionColumnX(left) - labelX - 4),
+                    labelX,
+                    centeredTextY(top, height),
+                    0xFFFFFF);
             renderDimensionLabels(guiGraphics, dimensionColumnX(left) + 4, top, height);
 
             int sliderY = top + (height - 20) / 2;
@@ -649,7 +793,9 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
 
         @Override
         public boolean mouseClicked(double mouseX, double mouseY, int button) {
-            if (button == 0 && dimensionInfo.options().size() > 1 && isDimensionCell(mouseX, mouseY)) {
+            if (button == 0
+                    && dimensionInfo.options().size() > 1
+                    && isDimensionCell(mouseX, mouseY)) {
                 openDimensionRow = openDimensionRow == this ? null : this;
                 return true;
             }
@@ -658,8 +804,10 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
 
         private boolean isDimensionCell(double mouseX, double mouseY) {
             int x = dimensionColumnX(lastLeft);
-            return mouseX >= x && mouseX < x + dimensionWidth
-                    && mouseY >= lastTop && mouseY < lastTop + lastHeight;
+            return mouseX >= x
+                    && mouseX < x + dimensionWidth
+                    && mouseY >= lastTop
+                    && mouseY < lastTop + lastHeight;
         }
 
         private void toggleDimension(int index) {
@@ -682,7 +830,8 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
             int totalHeight = options.size() * DIMENSION_LINE_HEIGHT;
             int y = top + Math.max(2, (height - totalHeight) / 2);
             for (DimensionOption option : options) {
-                int color = dimensionEnabled.getOrDefault(option.id(), true) ? 0xD0D0D0 : 0xFF777777;
+                int color =
+                        dimensionEnabled.getOrDefault(option.id(), true) ? 0xD0D0D0 : 0xFF777777;
                 int labelWidth = options.size() > 1 ? dimensionWidth - 25 : dimensionWidth - 8;
                 drawScrollingLabel(guiGraphics, option.label(), x, y, labelWidth, color);
                 y += DIMENSION_LINE_HEIGHT;
@@ -692,11 +841,15 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
                 float scale = 1.5F;
                 int arrowWidth = Minecraft.getInstance().font.width(arrow);
                 float arrowX = x + dimensionWidth - 10.0F - arrowWidth * scale / 2.0F;
-                float arrowY = top + height / 2.0F - Minecraft.getInstance().font.lineHeight * scale / 2.0F;
+                float arrowY =
+                        top
+                                + height / 2.0F
+                                - Minecraft.getInstance().font.lineHeight * scale / 2.0F;
                 guiGraphics.pose().pushPose();
                 guiGraphics.pose().translate(arrowX, arrowY, 0.0F);
                 guiGraphics.pose().scale(scale, scale, 1.0F);
-                guiGraphics.drawString(Minecraft.getInstance().font, arrow, 0, 0, 0xFFFFFFFF, false);
+                guiGraphics.drawString(
+                        Minecraft.getInstance().font, arrow, 0, 0, 0xFFFFFFFF, false);
                 guiGraphics.pose().popPose();
             }
         }
@@ -724,7 +877,8 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
         }
 
         @Override
-        protected void renderWidget(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        protected void renderWidget(
+                GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
             int x = getX();
             int y = getY();
             int border = 0xFFE0E0E0;
@@ -736,7 +890,12 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
             guiGraphics.fill(x, y, x + width, y + borderWidth, color);
             guiGraphics.fill(x, y + height - borderWidth, x + width, y + height, color);
             guiGraphics.fill(x, y + borderWidth, x + borderWidth, y + height - borderWidth, color);
-            guiGraphics.fill(x + width - borderWidth, y + borderWidth, x + width, y + height - borderWidth, color);
+            guiGraphics.fill(
+                    x + width - borderWidth,
+                    y + borderWidth,
+                    x + width,
+                    y + height - borderWidth,
+                    color);
             if (selected) {
                 guiGraphics.fill(x + 4, y + 4, x + width - 4, y + height - 4, fill);
             }
@@ -753,7 +912,8 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
         if (preferred != null) {
             Block block = BuiltInRegistries.BLOCK.get(preferred);
             String fallback = humanizeOrePath(preferred.getPath());
-            String resolved = Language.getInstance().getOrDefault(block.getDescriptionId(), fallback);
+            String resolved =
+                    Language.getInstance().getOrDefault(block.getDescriptionId(), fallback);
             return Component.literal(stripBaseVariantName(resolved));
         }
         return Component.literal(humanizeMaterial(material) + " Ore");
@@ -763,12 +923,16 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
         Set<ResourceLocation> keys = dimensionKeys(members);
         List<DimensionOption> parts = new ArrayList<>();
         keys.stream()
-                .sorted(Comparator.comparingInt(OreOverrideList::dimensionSortRank)
-                        .thenComparing(ResourceLocation::toString))
+                .sorted(
+                        Comparator.comparingInt(OreOverrideList::dimensionSortRank)
+                                .thenComparing(ResourceLocation::toString))
                 .map(id -> new DimensionOption(id, dimensionName(id)))
                 .forEach(parts::add);
         if (parts.isEmpty()) {
-            parts.add(new DimensionOption(ResourceLocation.fromNamespaceAndPath("ores_and_drills", "unknown"), Component.literal("-")));
+            parts.add(
+                    new DimensionOption(
+                            ResourceLocation.fromNamespaceAndPath("ores_and_drills", "unknown"),
+                            Component.literal("-")));
         }
         return new DimensionInfo(List.copyOf(parts));
     }
@@ -782,8 +946,9 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
         Set<ResourceLocation> tagged = new LinkedHashSet<>();
         for (ResourceLocation member : members) {
             Block block = BuiltInRegistries.BLOCK.get(member);
-            block.builtInRegistryHolder().tags().forEach(tag ->
-                    dimensionFromGroundTag(tag.location()).ifPresent(tagged::add));
+            block.builtInRegistryHolder()
+                    .tags()
+                    .forEach(tag -> dimensionFromGroundTag(tag.location()).ifPresent(tagged::add));
         }
         return Set.copyOf(tagged);
     }
@@ -797,7 +962,8 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
 
         String ground = tagId.getPath().substring("ores_in_ground/".length());
         return switch (ground) {
-            case "stone", "deepslate" -> Optional.of(ResourceLocation.withDefaultNamespace("overworld"));
+            case "stone", "deepslate" ->
+                    Optional.of(ResourceLocation.withDefaultNamespace("overworld"));
             case "netherrack" -> Optional.of(ResourceLocation.withDefaultNamespace("the_nether"));
             case "end_stone" -> Optional.of(ResourceLocation.withDefaultNamespace("the_end"));
             default -> Optional.empty();
@@ -805,8 +971,11 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
     }
 
     private static Component dimensionName(ResourceLocation dimensionId) {
-        String translationKey = "dimension." + dimensionId.getNamespace() + "."
-                + dimensionId.getPath().replace('/', '.');
+        String translationKey =
+                "dimension."
+                        + dimensionId.getNamespace()
+                        + "."
+                        + dimensionId.getPath().replace('/', '.');
         return Component.translatableWithFallback(translationKey, dimensionId.toString());
     }
 
@@ -823,18 +992,21 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
     }
 
     /**
-     * Draws a left-aligned label at {@code (x, y)}. A label wider than {@code maxWidth} scrolls back and forth
-     * inside that width, like vanilla button captions, so the full name can be read instead of an ellipsis.
+     * Draws a left-aligned label at {@code (x, y)}. A label wider than {@code maxWidth} scrolls
+     * back and forth inside that width, like vanilla button captions, so the full name can be read
+     * instead of an ellipsis.
      */
-    private static void drawScrollingLabel(GuiGraphics graphics, Component text, int x, int y, int maxWidth, int color) {
+    private static void drawScrollingLabel(
+            GuiGraphics graphics, Component text, int x, int y, int maxWidth, int color) {
         Font font = Minecraft.getInstance().font;
         if (font.width(text) <= maxWidth) {
             graphics.drawString(font, text, x, y, color);
             return;
         }
-        // Vanilla places the text at (minY + maxY - 9) / 2 + 1; these bounds put it exactly on y and keep the
-        // shadow inside the scissor.
-        AbstractWidget.renderScrollingString(graphics, font, text, x, y - 2, x + Math.max(0, maxWidth), y + 9, color);
+        // Vanilla places the text at (minY + maxY - 9) / 2 + 1; these bounds put it exactly on y
+        // and keep the shadow inside the scissor.
+        AbstractWidget.renderScrollingString(
+                graphics, font, text, x, y - 2, x + Math.max(0, maxWidth), y + 9, color);
     }
 
     private static Component fit(Component component, int maxWidth) {
@@ -843,7 +1015,10 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
         if (minecraft.font.width(text) <= maxWidth) {
             return component;
         }
-        return Component.literal(minecraft.font.plainSubstrByWidth(text, Math.max(0, maxWidth - minecraft.font.width("..."))) + "...");
+        return Component.literal(
+                minecraft.font.plainSubstrByWidth(
+                                text, Math.max(0, maxWidth - minecraft.font.width("...")))
+                        + "...");
     }
 
     private static int centeredTextY(int top, int height) {
@@ -889,7 +1064,8 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
         return Character.toUpperCase(result.charAt(0)) + result.substring(1);
     }
 
-    private static ResourceLocation preferredDisplayMember(String material, List<ResourceLocation> members) {
+    private static ResourceLocation preferredDisplayMember(
+            String material, List<ResourceLocation> members) {
         ResourceLocation fallback = null;
         for (ResourceLocation member : members) {
             String path = member.getPath();
@@ -962,13 +1138,9 @@ public final class OreOverrideList extends ContainerObjectSelectionList<OreOverr
             OreOverrides.OreOverride override,
             boolean enabled,
             int modPriorityRank,
-            int rarityRank
-    ) {
-    }
+            int rarityRank) {}
 
-    private record DimensionOption(ResourceLocation id, Component label) {
-    }
+    private record DimensionOption(ResourceLocation id, Component label) {}
 
-    private record DimensionInfo(List<DimensionOption> options) {
-    }
+    private record DimensionInfo(List<DimensionOption> options) {}
 }

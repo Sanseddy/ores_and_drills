@@ -1,9 +1,9 @@
 package dev.world.inventory;
 
-import dev.world.block.entity.AbstractEnergyDrillBlockEntity;
-import dev.world.block.DrillStructure;
-import dev.world.block.entity.drill.ProductivityBonus;
 import dev.util.ProgressMath;
+import dev.world.block.DrillStructure;
+import dev.world.block.entity.AbstractEnergyDrillBlockEntity;
+import dev.world.block.entity.drill.ProductivityBonus;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
@@ -35,85 +35,280 @@ public abstract class AbstractEnergyDrillMenu extends AbstractContainerMenu {
     private final int hotbarEnd;
     private final int[] clientData = new int[13];
 
-    protected AbstractEnergyDrillMenu(MenuType<?> type, int containerId, Inventory playerInventory, int gridSize,
-                                       int outputSlotX, int outputSlotY, int previewOriginX, int previewOriginY,
-                                       int playerInventoryY) {
-        this(type, containerId, playerInventory, gridSize, gridSize, gridSize,
-                outputSlotX, outputSlotY, previewOriginX, previewOriginY, playerInventoryY, playerInventoryY + 58);
+    protected AbstractEnergyDrillMenu(
+            MenuType<?> type,
+            int containerId,
+            Inventory playerInventory,
+            int gridSize,
+            int outputSlotX,
+            int outputSlotY,
+            int previewOriginX,
+            int previewOriginY,
+            int playerInventoryY) {
+        this(
+                type,
+                containerId,
+                playerInventory,
+                gridSize,
+                gridSize,
+                gridSize,
+                outputSlotX,
+                outputSlotY,
+                previewOriginX,
+                previewOriginY,
+                playerInventoryY,
+                playerInventoryY + 58);
     }
 
-    protected AbstractEnergyDrillMenu(MenuType<?> type, int containerId, Inventory playerInventory, int scanGridSize,
-                                       int previewColumns, int previewRows,
-                                       int outputSlotX, int outputSlotY, int previewOriginX, int previewOriginY,
-                                       int playerInventoryY, int hotbarY) {
-        this(type, containerId, playerInventory, scanGridSize, previewColumns, previewRows,
-                outputSlotX, outputSlotY, previewOriginX, previewOriginY, 18, 18, false, playerInventoryY, hotbarY);
+    protected AbstractEnergyDrillMenu(
+            MenuType<?> type,
+            int containerId,
+            Inventory playerInventory,
+            int scanGridSize,
+            int previewColumns,
+            int previewRows,
+            int outputSlotX,
+            int outputSlotY,
+            int previewOriginX,
+            int previewOriginY,
+            int playerInventoryY,
+            int hotbarY) {
+        this(
+                type,
+                containerId,
+                playerInventory,
+                scanGridSize,
+                previewColumns,
+                previewRows,
+                outputSlotX,
+                outputSlotY,
+                previewOriginX,
+                previewOriginY,
+                18,
+                18,
+                false,
+                playerInventoryY,
+                hotbarY);
     }
 
-    protected AbstractEnergyDrillMenu(MenuType<?> type, int containerId, Inventory playerInventory, int scanGridSize,
-                                       int previewColumns, int previewRows,
-                                       int outputSlotX, int outputSlotY, int previewOriginX, int previewOriginY,
-                                       int previewStepX, int previewStepY, boolean previewColumnMajor,
-                                       int playerInventoryY, int hotbarY) {
-        this(type, containerId, playerInventory, scanGridSize, previewColumns, previewRows,
-                outputSlotX, outputSlotY, previewOriginX, previewOriginY, previewStepX, previewStepY,
-                previewColumnMajor, -1, -1, playerInventoryY, hotbarY);
+    protected AbstractEnergyDrillMenu(
+            MenuType<?> type,
+            int containerId,
+            Inventory playerInventory,
+            int scanGridSize,
+            int previewColumns,
+            int previewRows,
+            int outputSlotX,
+            int outputSlotY,
+            int previewOriginX,
+            int previewOriginY,
+            int previewStepX,
+            int previewStepY,
+            boolean previewColumnMajor,
+            int playerInventoryY,
+            int hotbarY) {
+        this(
+                type,
+                containerId,
+                playerInventory,
+                scanGridSize,
+                previewColumns,
+                previewRows,
+                outputSlotX,
+                outputSlotY,
+                previewOriginX,
+                previewOriginY,
+                previewStepX,
+                previewStepY,
+                previewColumnMajor,
+                -1,
+                -1,
+                playerInventoryY,
+                hotbarY);
     }
 
-    protected AbstractEnergyDrillMenu(MenuType<?> type, int containerId, Inventory playerInventory, int scanGridSize,
-                                       int previewColumns, int previewRows,
-                                       int outputSlotX, int outputSlotY, int previewOriginX, int previewOriginY,
-                                       int previewStepX, int previewStepY, boolean previewColumnMajor,
-                                       int energySlotX, int energySlotY, int playerInventoryY, int hotbarY) {
-        this(type, containerId, playerInventory, ContainerLevelAccess.NULL, new SimpleContainer(2),
-                new SimpleContainer(scanGridSize * scanGridSize), null, previewColumns, previewRows,
-                outputSlotX, outputSlotY, previewOriginX, previewOriginY, previewStepX, previewStepY,
-                previewColumnMajor, energySlotX, energySlotY, playerInventoryY, hotbarY);
+    protected AbstractEnergyDrillMenu(
+            MenuType<?> type,
+            int containerId,
+            Inventory playerInventory,
+            int scanGridSize,
+            int previewColumns,
+            int previewRows,
+            int outputSlotX,
+            int outputSlotY,
+            int previewOriginX,
+            int previewOriginY,
+            int previewStepX,
+            int previewStepY,
+            boolean previewColumnMajor,
+            int energySlotX,
+            int energySlotY,
+            int playerInventoryY,
+            int hotbarY) {
+        this(
+                type,
+                containerId,
+                playerInventory,
+                ContainerLevelAccess.NULL,
+                new SimpleContainer(2),
+                new SimpleContainer(scanGridSize * scanGridSize),
+                null,
+                previewColumns,
+                previewRows,
+                outputSlotX,
+                outputSlotY,
+                previewOriginX,
+                previewOriginY,
+                previewStepX,
+                previewStepY,
+                previewColumnMajor,
+                energySlotX,
+                energySlotY,
+                playerInventoryY,
+                hotbarY);
     }
 
-    protected AbstractEnergyDrillMenu(MenuType<?> type, int containerId, Inventory playerInventory, ContainerLevelAccess access,
-                                       Container outputContainer, Container previewContainer, AbstractEnergyDrillBlockEntity blockEntity,
-                                       int gridSize, int outputSlotX, int outputSlotY, int previewOriginX, int previewOriginY,
-                                       int playerInventoryY) {
-        this(type, containerId, playerInventory, access, outputContainer, previewContainer, blockEntity,
-                gridSize, gridSize, outputSlotX, outputSlotY, previewOriginX, previewOriginY,
-                playerInventoryY, playerInventoryY + 58);
+    protected AbstractEnergyDrillMenu(
+            MenuType<?> type,
+            int containerId,
+            Inventory playerInventory,
+            ContainerLevelAccess access,
+            Container outputContainer,
+            Container previewContainer,
+            AbstractEnergyDrillBlockEntity blockEntity,
+            int gridSize,
+            int outputSlotX,
+            int outputSlotY,
+            int previewOriginX,
+            int previewOriginY,
+            int playerInventoryY) {
+        this(
+                type,
+                containerId,
+                playerInventory,
+                access,
+                outputContainer,
+                previewContainer,
+                blockEntity,
+                gridSize,
+                gridSize,
+                outputSlotX,
+                outputSlotY,
+                previewOriginX,
+                previewOriginY,
+                playerInventoryY,
+                playerInventoryY + 58);
     }
 
-    protected AbstractEnergyDrillMenu(MenuType<?> type, int containerId, Inventory playerInventory, ContainerLevelAccess access,
-                                       Container outputContainer, Container previewContainer, AbstractEnergyDrillBlockEntity blockEntity,
-                                       int previewColumns, int previewRows,
-                                       int outputSlotX, int outputSlotY, int previewOriginX, int previewOriginY,
-                                       int playerInventoryY, int hotbarY) {
-        this(type, containerId, playerInventory, access, outputContainer, previewContainer, blockEntity,
-                previewColumns, previewRows, outputSlotX, outputSlotY, previewOriginX, previewOriginY,
-                18, 18, false, playerInventoryY, hotbarY);
+    protected AbstractEnergyDrillMenu(
+            MenuType<?> type,
+            int containerId,
+            Inventory playerInventory,
+            ContainerLevelAccess access,
+            Container outputContainer,
+            Container previewContainer,
+            AbstractEnergyDrillBlockEntity blockEntity,
+            int previewColumns,
+            int previewRows,
+            int outputSlotX,
+            int outputSlotY,
+            int previewOriginX,
+            int previewOriginY,
+            int playerInventoryY,
+            int hotbarY) {
+        this(
+                type,
+                containerId,
+                playerInventory,
+                access,
+                outputContainer,
+                previewContainer,
+                blockEntity,
+                previewColumns,
+                previewRows,
+                outputSlotX,
+                outputSlotY,
+                previewOriginX,
+                previewOriginY,
+                18,
+                18,
+                false,
+                playerInventoryY,
+                hotbarY);
     }
 
-    protected AbstractEnergyDrillMenu(MenuType<?> type, int containerId, Inventory playerInventory, ContainerLevelAccess access,
-                                       Container outputContainer, Container previewContainer, AbstractEnergyDrillBlockEntity blockEntity,
-                                       int previewColumns, int previewRows,
-                                       int outputSlotX, int outputSlotY, int previewOriginX, int previewOriginY,
-                                       int previewStepX, int previewStepY, boolean previewColumnMajor,
-                                       int playerInventoryY, int hotbarY) {
-        this(type, containerId, playerInventory, access, outputContainer, previewContainer, blockEntity,
-                previewColumns, previewRows, outputSlotX, outputSlotY, previewOriginX, previewOriginY,
-                previewStepX, previewStepY, previewColumnMajor, -1, -1, playerInventoryY, hotbarY);
+    protected AbstractEnergyDrillMenu(
+            MenuType<?> type,
+            int containerId,
+            Inventory playerInventory,
+            ContainerLevelAccess access,
+            Container outputContainer,
+            Container previewContainer,
+            AbstractEnergyDrillBlockEntity blockEntity,
+            int previewColumns,
+            int previewRows,
+            int outputSlotX,
+            int outputSlotY,
+            int previewOriginX,
+            int previewOriginY,
+            int previewStepX,
+            int previewStepY,
+            boolean previewColumnMajor,
+            int playerInventoryY,
+            int hotbarY) {
+        this(
+                type,
+                containerId,
+                playerInventory,
+                access,
+                outputContainer,
+                previewContainer,
+                blockEntity,
+                previewColumns,
+                previewRows,
+                outputSlotX,
+                outputSlotY,
+                previewOriginX,
+                previewOriginY,
+                previewStepX,
+                previewStepY,
+                previewColumnMajor,
+                -1,
+                -1,
+                playerInventoryY,
+                hotbarY);
     }
 
-    protected AbstractEnergyDrillMenu(MenuType<?> type, int containerId, Inventory playerInventory, ContainerLevelAccess access,
-                                       Container outputContainer, Container previewContainer, AbstractEnergyDrillBlockEntity blockEntity,
-                                       int previewColumns, int previewRows,
-                                       int outputSlotX, int outputSlotY, int previewOriginX, int previewOriginY,
-                                       int previewStepX, int previewStepY, boolean previewColumnMajor,
-                                       int energySlotX, int energySlotY, int playerInventoryY, int hotbarY) {
+    protected AbstractEnergyDrillMenu(
+            MenuType<?> type,
+            int containerId,
+            Inventory playerInventory,
+            ContainerLevelAccess access,
+            Container outputContainer,
+            Container previewContainer,
+            AbstractEnergyDrillBlockEntity blockEntity,
+            int previewColumns,
+            int previewRows,
+            int outputSlotX,
+            int outputSlotY,
+            int previewOriginX,
+            int previewOriginY,
+            int previewStepX,
+            int previewStepY,
+            boolean previewColumnMajor,
+            int energySlotX,
+            int energySlotY,
+            int playerInventoryY,
+            int hotbarY) {
         super(type, containerId);
         this.access = access;
         this.previewSlotCount = previewColumns * previewRows;
 
         this.energyMenuSlot = energySlotX >= 0 && energySlotY >= 0 ? slots.size() : -1;
         if (energyMenuSlot >= 0) {
-            addSlot(new EnergyItemSlot(outputContainer, ENERGY_ITEM_SLOT, energySlotX, energySlotY));
+            addSlot(
+                    new EnergyItemSlot(
+                            outputContainer, ENERGY_ITEM_SLOT, energySlotX, energySlotY));
         }
 
         this.outputMenuSlot = slots.size();
@@ -121,9 +316,16 @@ public abstract class AbstractEnergyDrillMenu extends AbstractContainerMenu {
 
         for (int row = 0; row < previewRows; row++) {
             for (int column = 0; column < previewColumns; column++) {
-                int slot = previewColumnMajor ? column * previewRows + row : row * previewColumns + column;
-                addSlot(new PreviewSlot(previewContainer, slot,
-                        previewOriginX + column * previewStepX, previewOriginY + row * previewStepY));
+                int slot =
+                        previewColumnMajor
+                                ? column * previewRows + row
+                                : row * previewColumns + column;
+                addSlot(
+                        new PreviewSlot(
+                                previewContainer,
+                                slot,
+                                previewOriginX + column * previewStepX,
+                                previewOriginY + row * previewStepY));
             }
         }
 
@@ -132,7 +334,12 @@ public abstract class AbstractEnergyDrillMenu extends AbstractContainerMenu {
         this.playerInventoryStart = slots.size();
         for (int row = 0; row < 3; row++) {
             for (int column = 0; column < 9; column++) {
-                addSlot(new Slot(playerInventory, column + row * 9 + 9, 8 + column * 18, playerInventoryY + row * 18));
+                addSlot(
+                        new Slot(
+                                playerInventory,
+                                column + row * 9 + 9,
+                                8 + column * 18,
+                                playerInventoryY + row * 18));
             }
         }
 
@@ -191,7 +398,8 @@ public abstract class AbstractEnergyDrillMenu extends AbstractContainerMenu {
 
     @Override
     public boolean stillValid(Player player) {
-        return DrillMenuValidity.stillValid(access, player, blockForValidation(), structureForValidation());
+        return DrillMenuValidity.stillValid(
+                access, player, blockForValidation(), structureForValidation());
     }
 
     public void handleFluidTankClick(ServerPlayer player) {
@@ -200,14 +408,17 @@ public abstract class AbstractEnergyDrillMenu extends AbstractContainerMenu {
             return;
         }
 
-        access.execute((level, pos) -> {
-            if (level.getBlockEntity(pos) instanceof AbstractEnergyDrillBlockEntity energyDrill) {
-                ItemStack result = energyDrill.interactWithFluidContainerItem(carried, player);
-                if (!ItemStack.matches(result, carried)) {
-                    setCarried(result);
-                }
-            }
-        });
+        access.execute(
+                (level, pos) -> {
+                    if (level.getBlockEntity(pos)
+                            instanceof AbstractEnergyDrillBlockEntity energyDrill) {
+                        ItemStack result =
+                                energyDrill.interactWithFluidContainerItem(carried, player);
+                        if (!ItemStack.matches(result, carried)) {
+                            setCarried(result);
+                        }
+                    }
+                });
     }
 
     protected abstract net.minecraft.world.level.block.Block blockForValidation();
@@ -252,12 +463,15 @@ public abstract class AbstractEnergyDrillMenu extends AbstractContainerMenu {
     }
 
     public int getProductivityProgressWidth(int barSize) {
-        int visible = ProductivityBonus.visibleProgress(clientData[8], clientData[9], clientData[2], clientData[3]);
+        int visible =
+                ProductivityBonus.visibleProgress(
+                        clientData[8], clientData[9], clientData[2], clientData[3]);
         return ProgressMath.scaled(visible, ProductivityBonus.FULL_BAR, barSize);
     }
 
     public int getProductivityProgressPercent() {
-        return ProductivityBonus.visiblePercent(clientData[8], clientData[9], clientData[2], clientData[3]);
+        return ProductivityBonus.visiblePercent(
+                clientData[8], clientData[9], clientData[2], clientData[3]);
     }
 
     public int getProductivityPercent() {
@@ -303,150 +517,163 @@ public abstract class AbstractEnergyDrillMenu extends AbstractContainerMenu {
             return;
         }
 
-        addDataSlot(new DataSlot() {
-            @Override
-            public int get() {
-                return blockEntity.getEnergyStored();
-            }
+        addDataSlot(
+                new DataSlot() {
+                    @Override
+                    public int get() {
+                        return blockEntity.getEnergyStored();
+                    }
 
-            @Override
-            public void set(int value) {
-                clientData[0] = value;
-            }
-        });
-        addDataSlot(new DataSlot() {
-            @Override
-            public int get() {
-                return blockEntity.getEnergyCapacity();
-            }
+                    @Override
+                    public void set(int value) {
+                        clientData[0] = value;
+                    }
+                });
+        addDataSlot(
+                new DataSlot() {
+                    @Override
+                    public int get() {
+                        return blockEntity.getEnergyCapacity();
+                    }
 
-            @Override
-            public void set(int value) {
-                clientData[1] = value;
-            }
-        });
-        addDataSlot(new DataSlot() {
-            @Override
-            public int get() {
-                return blockEntity.getMiningProgress();
-            }
+                    @Override
+                    public void set(int value) {
+                        clientData[1] = value;
+                    }
+                });
+        addDataSlot(
+                new DataSlot() {
+                    @Override
+                    public int get() {
+                        return blockEntity.getMiningProgress();
+                    }
 
-            @Override
-            public void set(int value) {
-                blockEntity.setMiningProgress(value);
-                clientData[2] = value;
-            }
-        });
-        addDataSlot(new DataSlot() {
-            @Override
-            public int get() {
-                return blockEntity.getMiningDuration();
-            }
+                    @Override
+                    public void set(int value) {
+                        blockEntity.setMiningProgress(value);
+                        clientData[2] = value;
+                    }
+                });
+        addDataSlot(
+                new DataSlot() {
+                    @Override
+                    public int get() {
+                        return blockEntity.getMiningDuration();
+                    }
 
-            @Override
-            public void set(int value) {
-                clientData[3] = value;
-            }
-        });
-        addDataSlot(new DataSlot() {
-            @Override
-            public int get() {
-                return blockEntity.getFluidAmount(0);
-            }
+                    @Override
+                    public void set(int value) {
+                        clientData[3] = value;
+                    }
+                });
+        addDataSlot(
+                new DataSlot() {
+                    @Override
+                    public int get() {
+                        return blockEntity.getFluidAmount(0);
+                    }
 
-            @Override
-            public void set(int value) {
-                clientData[4] = value;
-            }
-        });
-        addDataSlot(new DataSlot() {
-            @Override
-            public int get() {
-                return blockEntity.getFluidCapacity(0);
-            }
+                    @Override
+                    public void set(int value) {
+                        clientData[4] = value;
+                    }
+                });
+        addDataSlot(
+                new DataSlot() {
+                    @Override
+                    public int get() {
+                        return blockEntity.getFluidCapacity(0);
+                    }
 
-            @Override
-            public void set(int value) {
-                clientData[5] = value;
-            }
-        });
-        addDataSlot(new DataSlot() {
-            @Override
-            public int get() {
-                return blockEntity.getFluidAmount(1);
-            }
+                    @Override
+                    public void set(int value) {
+                        clientData[5] = value;
+                    }
+                });
+        addDataSlot(
+                new DataSlot() {
+                    @Override
+                    public int get() {
+                        return blockEntity.getFluidAmount(1);
+                    }
 
-            @Override
-            public void set(int value) {
-                clientData[6] = value;
-            }
-        });
-        addDataSlot(new DataSlot() {
-            @Override
-            public int get() {
-                return blockEntity.getFluidCapacity(1);
-            }
+                    @Override
+                    public void set(int value) {
+                        clientData[6] = value;
+                    }
+                });
+        addDataSlot(
+                new DataSlot() {
+                    @Override
+                    public int get() {
+                        return blockEntity.getFluidCapacity(1);
+                    }
 
-            @Override
-            public void set(int value) {
-                clientData[7] = value;
-            }
-        });
-        addDataSlot(new DataSlot() {
-            @Override
-            public int get() {
-                return blockEntity.getProductivityProgress();
-            }
+                    @Override
+                    public void set(int value) {
+                        clientData[7] = value;
+                    }
+                });
+        addDataSlot(
+                new DataSlot() {
+                    @Override
+                    public int get() {
+                        return blockEntity.getProductivityProgress();
+                    }
 
-            @Override
-            public void set(int value) {
-                clientData[8] = value;
-            }
-        });
-        addDataSlot(new DataSlot() {
-            @Override
-            public int get() {
-                return blockEntity.getProductivityPercent();
-            }
+                    @Override
+                    public void set(int value) {
+                        clientData[8] = value;
+                    }
+                });
+        addDataSlot(
+                new DataSlot() {
+                    @Override
+                    public int get() {
+                        return blockEntity.getProductivityPercent();
+                    }
 
-            @Override
-            public void set(int value) {
-                clientData[9] = value;
-            }
-        });
-        addDataSlot(new DataSlot() {
-            @Override
-            public int get() {
-                return fluidId(blockEntity, 0);
-            }
+                    @Override
+                    public void set(int value) {
+                        clientData[9] = value;
+                    }
+                });
+        addDataSlot(
+                new DataSlot() {
+                    @Override
+                    public int get() {
+                        return fluidId(blockEntity, 0);
+                    }
 
-            @Override
-            public void set(int value) {
-                clientData[10] = value;
-            }
-        });
-        addDataSlot(new DataSlot() {
-            @Override
-            public int get() {
-                return fluidId(blockEntity, 1);
-            }
+                    @Override
+                    public void set(int value) {
+                        clientData[10] = value;
+                    }
+                });
+        addDataSlot(
+                new DataSlot() {
+                    @Override
+                    public int get() {
+                        return fluidId(blockEntity, 1);
+                    }
 
-            @Override
-            public void set(int value) {
-                clientData[11] = value;
-            }
-        });
-        addDataSlot(new DataSlot() {
-            @Override
-            public int get() {
-                return blockEntity.getGuiAnimationFrame();
-            }
+                    @Override
+                    public void set(int value) {
+                        clientData[11] = value;
+                    }
+                });
+        addDataSlot(
+                new DataSlot() {
+                    @Override
+                    public int get() {
+                        return blockEntity.getGuiAnimationFrame();
+                    }
 
-            @Override
-            public void set(int value) {
-                clientData[12] = value;
-            }
-        });
+                    @Override
+                    public void set(int value) {
+                        clientData[12] = value;
+                    }
+                });
     }
 
     private static int fluidId(AbstractEnergyDrillBlockEntity blockEntity, int tank) {

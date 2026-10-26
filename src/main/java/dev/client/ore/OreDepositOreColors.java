@@ -1,20 +1,12 @@
 package dev.client.ore;
 
-import dev.OresAndDrillsMod;
-import dev.client.ore.speck.ArgbImage;
-import dev.world.level.levelgen.OreDepositOrePalette;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.blaze3d.platform.NativeImage;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.packs.resources.Resource;
-import net.minecraft.server.packs.resources.ResourceManager;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.Items;
-import net.minecraft.world.level.block.Block;
-
+import dev.OresAndDrillsMod;
+import dev.client.ore.speck.ArgbImage;
+import dev.world.level.levelgen.OreDepositOrePalette;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
@@ -28,31 +20,45 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.packs.resources.Resource;
+import net.minecraft.server.packs.resources.ResourceManager;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Block;
 
 /**
- * Resolves the color palette of the item most likely dropped by an original ore block. The palette is not
- * painted onto anything: {@link OreSpeckLibrary} uses it to recognize which pixels of the original ore
- * texture are ore specks. Only depends on {@link ResourceManager} (no {@code ItemRenderer}/baked-model
- * access) since this is resolved during atlas stitching, which runs before model baking in the reload order.
- * <p>
- * Keyed by the ore block's own {@link ResourceLocation}, not a per-world {@code oreIndex}: block-tag data
- * (which {@link OreDepositOrePalette#availableIds()} partly depends on) isn't bound yet at atlas-stitch time
- * (title screen, before any world/server has loaded its data packs), so that list can differ in content and
- * order from the one a world later persists — an index-keyed bake would silently show one ore's texture on
- * a completely different ore once that mismatch shifts anything's position.
+ * Resolves the color palette of the item most likely dropped by an original ore block. The palette
+ * is not painted onto anything: {@link OreSpeckLibrary} uses it to recognize which pixels of the
+ * original ore texture are ore specks. Only depends on {@link ResourceManager} (no {@code
+ * ItemRenderer}/baked-model access) since this is resolved during atlas stitching, which runs
+ * before model baking in the reload order.
+ *
+ * <p>Keyed by the ore block's own {@link ResourceLocation}, not a per-world {@code oreIndex}:
+ * block-tag data (which {@link OreDepositOrePalette#availableIds()} partly depends on) isn't bound
+ * yet at atlas-stitch time (title screen, before any world/server has loaded its data packs), so
+ * that list can differ in content and order from the one a world later persists — an index-keyed
+ * bake would silently show one ore's texture on a completely different ore once that mismatch
+ * shifts anything's position.
  */
 public final class OreDepositOreColors {
     private static final int[] NO_PALETTE = new int[0];
-    /** Enough distinct tones to cover an item's shading, highlights and outline without matching everything. */
+
+    /**
+     * Enough distinct tones to cover an item's shading, highlights and outline without matching
+     * everything.
+     */
     private static final int MAX_PALETTE_COLORS = 16;
+
     private static final int MINIMUM_BRIGHTNESS = 20;
     private static final Map<ResourceLocation, int[]> CACHE = new ConcurrentHashMap<>();
     private static final Map<ResourceLocation, int[]> DROP_CACHE = new ConcurrentHashMap<>();
 
-    private OreDepositOreColors() {
-    }
+    private OreDepositOreColors() {}
 
-    public static int[] paletteForOre(ResourceManager resourceManager, ResourceLocation oreBlockId) {
+    public static int[] paletteForOre(
+            ResourceManager resourceManager, ResourceLocation oreBlockId) {
         return CACHE.computeIfAbsent(oreBlockId, id -> resolvePalette(resourceManager, id));
     }
 
@@ -66,20 +72,23 @@ public final class OreDepositOreColors {
         if (dropId == null) {
             return NO_PALETTE;
         }
-        return DROP_CACHE.computeIfAbsent(dropId, id -> {
-            int[] palette = paletteForItem(resourceManager, id);
-            if (palette == null) {
-                OresAndDrillsMod.LOGGER.debug(
-                        "Ore deposit: no texture found for synchronized drop {} - specks are detected without a palette",
-                        id
-                );
-                return NO_PALETTE;
-            }
-            return palette;
-        });
+        return DROP_CACHE.computeIfAbsent(
+                dropId,
+                id -> {
+                    int[] palette = paletteForItem(resourceManager, id);
+                    if (palette == null) {
+                        OresAndDrillsMod.LOGGER.debug(
+                                "Ore deposit: no texture found for synchronized drop {} - specks"
+                                        + " are detected without a palette",
+                                id);
+                        return NO_PALETTE;
+                    }
+                    return palette;
+                });
     }
 
-    private static int[] resolvePalette(ResourceManager resourceManager, ResourceLocation oreBlockId) {
+    private static int[] resolvePalette(
+            ResourceManager resourceManager, ResourceLocation oreBlockId) {
         if (!BuiltInRegistries.BLOCK.containsKey(oreBlockId)) {
             return NO_PALETTE;
         }
@@ -88,16 +97,18 @@ public final class OreDepositOreColors {
         ResourceLocation displayDropId = OreDepositOrePalette.dropIdForOre(oreBlockId);
         ResourceLocation airId = BuiltInRegistries.ITEM.getKey(Items.AIR);
         if (displayDropId == null || displayDropId.equals(airId)) {
-            // Used only before a world palette arrives. Loot tables are server data and are not normally
-            // visible through the client asset ResourceManager used during atlas stitching.
+            // Used only before a world palette arrives. Loot tables are server data and are not
+            // normally visible through the client asset ResourceManager used during atlas
+            // stitching.
             displayDropId = mostLikelyDropId(resourceManager, ore);
         }
         int[] palette = paletteForItem(resourceManager, displayDropId);
         if (palette == null) {
             OresAndDrillsMod.LOGGER.debug(
-                    "Ore deposit: no texture found for {} (resolved drop {}) - specks are detected without a palette",
-                    oreBlockId, displayDropId
-            );
+                    "Ore deposit: no texture found for {} (resolved drop {}) - specks are detected"
+                            + " without a palette",
+                    oreBlockId,
+                    displayDropId);
             return NO_PALETTE;
         }
         return palette;
@@ -108,53 +119,68 @@ public final class OreDepositOreColors {
             return null;
         }
 
-        // Material-based items are grey textures colored per layer by an ItemColor; read them in that color.
+        // Material-based items are grey textures colored per layer by an ItemColor; read them in
+        // that color.
         Item item = itemById(itemId);
-        Map<ResourceLocation, Integer> tintIndices = OreModelLayers.tintIndices(OreModelLayers.layers(
-                resourceManager, ResourceLocation.fromNamespaceAndPath(itemId.getNamespace(), "item/" + itemId.getPath())));
+        Map<ResourceLocation, Integer> tintIndices =
+                OreModelLayers.tintIndices(
+                        OreModelLayers.layers(
+                                resourceManager,
+                                ResourceLocation.fromNamespaceAndPath(
+                                        itemId.getNamespace(), "item/" + itemId.getPath())));
         for (ResourceLocation textureId : texturesFromItemModel(resourceManager, itemId)) {
-            ResourceLocation texturePath = ResourceLocation.fromNamespaceAndPath(
-                    textureId.getNamespace(), "textures/" + textureId.getPath() + ".png"
-            );
-            int tint = item == Items.AIR ? 0xFFFFFF : OreModelLayers.itemTint(item, tintIndices.getOrDefault(textureId, -1));
+            ResourceLocation texturePath =
+                    ResourceLocation.fromNamespaceAndPath(
+                            textureId.getNamespace(), "textures/" + textureId.getPath() + ".png");
+            int tint =
+                    item == Items.AIR
+                            ? 0xFFFFFF
+                            : OreModelLayers.itemTint(
+                                    item, tintIndices.getOrDefault(textureId, -1));
             int[] palette = paletteFromTexture(resourceManager, texturePath, tint);
             if (palette != null) {
                 return palette;
             }
         }
 
-        // Compatibility fallback for resource packs/items that provide a conventional texture but no model.
-        ResourceLocation itemTexture = ResourceLocation.fromNamespaceAndPath(itemId.getNamespace(), "textures/item/" + itemId.getPath() + ".png");
+        // Compatibility fallback for resource packs/items that provide a conventional texture but
+        // no model.
+        ResourceLocation itemTexture =
+                ResourceLocation.fromNamespaceAndPath(
+                        itemId.getNamespace(), "textures/item/" + itemId.getPath() + ".png");
         int[] palette = paletteFromTexture(resourceManager, itemTexture, 0xFFFFFF);
         if (palette != null) {
             return palette;
         }
 
-        ResourceLocation blockTexture = ResourceLocation.fromNamespaceAndPath(itemId.getNamespace(), "textures/block/" + itemId.getPath() + ".png");
+        ResourceLocation blockTexture =
+                ResourceLocation.fromNamespaceAndPath(
+                        itemId.getNamespace(), "textures/block/" + itemId.getPath() + ".png");
         return paletteFromTexture(resourceManager, blockTexture, 0xFFFFFF);
     }
 
-    private static List<ResourceLocation> texturesFromItemModel(ResourceManager resourceManager, ResourceLocation itemId) {
-        ResourceLocation modelId = ResourceLocation.fromNamespaceAndPath(itemId.getNamespace(), "item/" + itemId.getPath());
+    private static List<ResourceLocation> texturesFromItemModel(
+            ResourceManager resourceManager, ResourceLocation itemId) {
+        ResourceLocation modelId =
+                ResourceLocation.fromNamespaceAndPath(
+                        itemId.getNamespace(), "item/" + itemId.getPath());
         return texturesFromModel(resourceManager, modelId, List.of("layer0", "all", "particle"));
     }
 
     /**
-     * Resolves texture references through a model and its parent chain, with child overrides; textures for
-     * {@code preferredKeys} come first, then every other texture the model chain declares.
+     * Resolves texture references through a model and its parent chain, with child overrides;
+     * textures for {@code preferredKeys} come first, then every other texture the model chain
+     * declares.
      */
     static List<ResourceLocation> texturesFromModel(
-            ResourceManager resourceManager,
-            ResourceLocation modelId,
-            List<String> preferredKeys
-    ) {
+            ResourceManager resourceManager, ResourceLocation modelId, List<String> preferredKeys) {
         Map<String, TextureReference> textures = new LinkedHashMap<>();
         Set<ResourceLocation> visited = new HashSet<>();
 
         for (int depth = 0; depth < 32 && modelId != null && visited.add(modelId); depth++) {
-            ResourceLocation modelPath = ResourceLocation.fromNamespaceAndPath(
-                    modelId.getNamespace(), "models/" + modelId.getPath() + ".json"
-            );
+            ResourceLocation modelPath =
+                    ResourceLocation.fromNamespaceAndPath(
+                            modelId.getNamespace(), "models/" + modelId.getPath() + ".json");
             Optional<Resource> modelResource = resourceManager.getResource(modelPath);
             if (modelResource.isEmpty()) {
                 break;
@@ -163,17 +189,22 @@ public final class OreDepositOreColors {
             try (Reader reader = modelResource.get().openAsReader()) {
                 JsonObject model = JsonParser.parseReader(reader).getAsJsonObject();
                 if (model.has("textures") && model.get("textures").isJsonObject()) {
-                    for (Map.Entry<String, JsonElement> entry : model.getAsJsonObject("textures").entrySet()) {
+                    for (Map.Entry<String, JsonElement> entry :
+                            model.getAsJsonObject("textures").entrySet()) {
                         if (entry.getValue().isJsonPrimitive()) {
-                            textures.putIfAbsent(entry.getKey(),
-                                    new TextureReference(entry.getValue().getAsString(), modelId.getNamespace()));
+                            textures.putIfAbsent(
+                                    entry.getKey(),
+                                    new TextureReference(
+                                            entry.getValue().getAsString(),
+                                            modelId.getNamespace()));
                         }
                     }
                 }
                 String parent = stringProperty(model, "parent");
                 modelId = parent == null ? null : parseLocation(parent, modelId.getNamespace());
             } catch (IOException | RuntimeException exception) {
-                OresAndDrillsMod.LOGGER.debug("Ore deposit: failed to resolve model {}", modelPath, exception);
+                OresAndDrillsMod.LOGGER.debug(
+                        "Ore deposit: failed to resolve model {}", modelPath, exception);
                 break;
             }
         }
@@ -193,11 +224,12 @@ public final class OreDepositOreColors {
             String key,
             Map<String, TextureReference> textures,
             List<ResourceLocation> result,
-            Set<ResourceLocation> unique
-    ) {
+            Set<ResourceLocation> unique) {
         TextureReference reference = textures.get(key);
         Set<String> visitedKeys = new HashSet<>();
-        while (reference != null && reference.value().startsWith("#") && visitedKeys.add(reference.value())) {
+        while (reference != null
+                && reference.value().startsWith("#")
+                && visitedKeys.add(reference.value())) {
             reference = textures.get(reference.value().substring(1));
         }
         if (reference == null || reference.value().startsWith("#")) {
@@ -236,10 +268,11 @@ public final class OreDepositOreColors {
             return Items.AIR;
         }
 
-        String material = oreId.getPath()
-                .replace("deepslate_", "")
-                .replace("nether_", "")
-                .replace("end_", "");
+        String material =
+                oreId.getPath()
+                        .replace("deepslate_", "")
+                        .replace("nether_", "")
+                        .replace("end_", "");
         if (material.startsWith("ore_")) {
             material = material.substring("ore_".length());
         }
@@ -247,7 +280,10 @@ public final class OreDepositOreColors {
             material = material.substring(0, material.length() - "_ore".length());
         }
 
-        Item raw = itemById(ResourceLocation.fromNamespaceAndPath(oreId.getNamespace(), "raw_" + material));
+        Item raw =
+                itemById(
+                        ResourceLocation.fromNamespaceAndPath(
+                                oreId.getNamespace(), "raw_" + material));
         if (raw != Items.AIR) {
             return raw;
         }
@@ -276,7 +312,8 @@ public final class OreDepositOreColors {
             JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
             collectWeightedItems(root, 1, false, weights);
         } catch (RuntimeException | IOException exception) {
-            OresAndDrillsMod.LOGGER.debug("Ore deposit: failed to parse loot table for {}", oreId, exception);
+            OresAndDrillsMod.LOGGER.debug(
+                    "Ore deposit: failed to parse loot table for {}", oreId, exception);
             return Items.AIR;
         }
 
@@ -292,24 +329,27 @@ public final class OreDepositOreColors {
                 .orElse(Items.AIR);
     }
 
-    private static Optional<Resource> lootTableResource(ResourceManager resourceManager, ResourceLocation oreId) {
-        ResourceLocation modernPath = ResourceLocation.fromNamespaceAndPath(
-                oreId.getNamespace(),
-                "loot_table/blocks/" + oreId.getPath() + ".json"
-        );
+    private static Optional<Resource> lootTableResource(
+            ResourceManager resourceManager, ResourceLocation oreId) {
+        ResourceLocation modernPath =
+                ResourceLocation.fromNamespaceAndPath(
+                        oreId.getNamespace(), "loot_table/blocks/" + oreId.getPath() + ".json");
         Optional<Resource> modern = resourceManager.getResource(modernPath);
         if (modern.isPresent()) {
             return modern;
         }
 
-        ResourceLocation legacyPath = ResourceLocation.fromNamespaceAndPath(
-                oreId.getNamespace(),
-                "loot_tables/blocks/" + oreId.getPath() + ".json"
-        );
+        ResourceLocation legacyPath =
+                ResourceLocation.fromNamespaceAndPath(
+                        oreId.getNamespace(), "loot_tables/blocks/" + oreId.getPath() + ".json");
         return resourceManager.getResource(legacyPath);
     }
 
-    private static void collectWeightedItems(JsonElement element, int inheritedWeight, boolean skipEntry, Map<Item, Integer> weights) {
+    private static void collectWeightedItems(
+            JsonElement element,
+            int inheritedWeight,
+            boolean skipEntry,
+            Map<Item, Integer> weights) {
         if (element == null || element.isJsonNull()) {
             return;
         }
@@ -376,26 +416,32 @@ public final class OreDepositOreColors {
     }
 
     /**
-     * The real colors of the drop texture: pixels grouped into similar-color buckets, most common first, up
-     * to {@link #MAX_PALETTE_COLORS} bucket averages. Near-black and transparent pixels are ignored so the
-     * palette does not match every dark crack of the host rock. {@code tintRgb} is multiplied into every
-     * pixel first, as the game does for a tinted layer (white for none).
+     * The real colors of the drop texture: pixels grouped into similar-color buckets, most common
+     * first, up to {@link #MAX_PALETTE_COLORS} bucket averages. Near-black and transparent pixels
+     * are ignored so the palette does not match every dark crack of the host rock. {@code tintRgb}
+     * is multiplied into every pixel first, as the game does for a tinted layer (white for none).
      */
-    private static int[] paletteFromTexture(ResourceManager resourceManager, ResourceLocation texturePath, int tintRgb) {
+    private static int[] paletteFromTexture(
+            ResourceManager resourceManager, ResourceLocation texturePath, int tintRgb) {
         Optional<Resource> resource = resourceManager.getResource(texturePath);
         if (resource.isEmpty()) {
             return null;
         }
 
         try (InputStream stream = resource.get().open();
-             NativeImage image = NativeImage.read(stream)) {
+                NativeImage image = NativeImage.read(stream)) {
             Map<Integer, long[]> buckets = new HashMap<>();
             for (int y = 0; y < image.getHeight(); y++) {
                 for (int x = 0; x < image.getWidth(); x++) {
                     int abgr = image.getPixelRGBA(x, y);
                     int alpha = (abgr >> 24) & 0xFF;
-                    int argb = ArgbImage.multiply(alpha << 24 | (abgr & 0xFF) << 16 | abgr & 0xFF00 | (abgr >> 16) & 0xFF,
-                            tintRgb);
+                    int argb =
+                            ArgbImage.multiply(
+                                    alpha << 24
+                                            | (abgr & 0xFF) << 16
+                                            | abgr & 0xFF00
+                                            | (abgr >> 16) & 0xFF,
+                                    tintRgb);
                     int red = ArgbImage.red(argb);
                     int green = ArgbImage.green(argb);
                     int blue = ArgbImage.blue(argb);
@@ -419,16 +465,20 @@ public final class OreDepositOreColors {
             return buckets.values().stream()
                     .sorted(Comparator.comparingLong((long[] bucket) -> bucket[3]).reversed())
                     .limit(MAX_PALETTE_COLORS)
-                    .mapToInt(bucket -> (int) (bucket[0] / bucket[3]) << 16
-                            | (int) (bucket[1] / bucket[3]) << 8
-                            | (int) (bucket[2] / bucket[3]))
+                    .mapToInt(
+                            bucket ->
+                                    (int) (bucket[0] / bucket[3]) << 16
+                                            | (int) (bucket[1] / bucket[3]) << 8
+                                            | (int) (bucket[2] / bucket[3]))
                     .toArray();
         } catch (IOException exception) {
-            OresAndDrillsMod.LOGGER.debug("Ore deposit: failed to read texture {} for the drop palette", texturePath, exception);
+            OresAndDrillsMod.LOGGER.debug(
+                    "Ore deposit: failed to read texture {} for the drop palette",
+                    texturePath,
+                    exception);
             return null;
         }
     }
 
-    private record TextureReference(String value, String defaultNamespace) {
-    }
+    private record TextureReference(String value, String defaultNamespace) {}
 }

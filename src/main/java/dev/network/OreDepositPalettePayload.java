@@ -1,37 +1,44 @@
 package dev.network;
 
 import dev.OresAndDrillsMod;
+import java.util.ArrayList;
+import java.util.List;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
-import java.util.ArrayList;
-import java.util.List;
-
 public record OreDepositPalettePayload(
         List<ResourceLocation> bases,
         List<ResourceLocation> ores,
         List<ResourceLocation> drops,
-        boolean vanillaLikeGeneration
-) implements CustomPacketPayload {
-    public static final Type<OreDepositPalettePayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(OresAndDrillsMod.MOD_ID, "ore_deposit_palette")
-    );
-    public static final StreamCodec<RegistryFriendlyByteBuf, OreDepositPalettePayload> STREAM_CODEC = new StreamCodec<>() {
-        @Override
-        public OreDepositPalettePayload decode(RegistryFriendlyByteBuf buffer) {
-            return new OreDepositPalettePayload(readIds(buffer), readIds(buffer), readIds(buffer), buffer.readBoolean());
-        }
+        boolean vanillaLikeGeneration)
+        implements CustomPacketPayload {
+    public static final Type<OreDepositPalettePayload> TYPE =
+            new Type<>(
+                    ResourceLocation.fromNamespaceAndPath(
+                            OresAndDrillsMod.MOD_ID, "ore_deposit_palette"));
+    public static final StreamCodec<RegistryFriendlyByteBuf, OreDepositPalettePayload>
+            STREAM_CODEC =
+                    new StreamCodec<>() {
+                        @Override
+                        public OreDepositPalettePayload decode(RegistryFriendlyByteBuf buffer) {
+                            return new OreDepositPalettePayload(
+                                    readIds(buffer),
+                                    readIds(buffer),
+                                    readIds(buffer),
+                                    buffer.readBoolean());
+                        }
 
-        @Override
-        public void encode(RegistryFriendlyByteBuf buffer, OreDepositPalettePayload payload) {
-            writeIds(buffer, payload.bases());
-            writeIds(buffer, payload.ores());
-            writeIds(buffer, payload.drops());
-            buffer.writeBoolean(payload.vanillaLikeGeneration());
-        }
-    };
+                        @Override
+                        public void encode(
+                                RegistryFriendlyByteBuf buffer, OreDepositPalettePayload payload) {
+                            writeIds(buffer, payload.bases());
+                            writeIds(buffer, payload.ores());
+                            writeIds(buffer, payload.drops());
+                            buffer.writeBoolean(payload.vanillaLikeGeneration());
+                        }
+                    };
 
     public OreDepositPalettePayload {
         bases = List.copyOf(bases);

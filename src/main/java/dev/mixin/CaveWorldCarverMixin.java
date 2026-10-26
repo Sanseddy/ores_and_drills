@@ -16,8 +16,9 @@ public abstract class CaveWorldCarverMixin {
     private void oresAndDrills$slightlyReduceCaveCarverChance(
             CaveCarverConfiguration config,
             RandomSource random,
-            CallbackInfoReturnable<Boolean> callbackInfo
-    ) {
-        callbackInfo.setReturnValue(random.nextFloat() <= config.probability * FACTORY_EXPANSION_CARVER_CHANCE_MULTIPLIER);
+            CallbackInfoReturnable<Boolean> callbackInfo) {
+        callbackInfo.setReturnValue(
+                random.nextFloat()
+                        <= config.probability * FACTORY_EXPANSION_CARVER_CHANCE_MULTIPLIER);
     }
 }

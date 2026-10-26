@@ -1,9 +1,9 @@
 package dev.world.level.levelgen;
 
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.junit.jupiter.api.Test;
 
 class OreDepositDataTest {
     @Test
@@ -25,5 +25,4 @@ class OreDepositDataTest {
     void stageDependsOnAbsoluteBlockReserveOnly() {
         assertEquals(3, DepositTierMath.calculateFillStage(250, 1, 5_000, 4));
     }
-
 }

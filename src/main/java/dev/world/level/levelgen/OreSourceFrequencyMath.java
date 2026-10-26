@@ -1,9 +1,10 @@
 package dev.world.level.levelgen;
 
-/** Pure source-attempt rarity math, deliberately independent of spatial filters and host density. */
+/**
+ * Pure source-attempt rarity math, deliberately independent of spatial filters and host density.
+ */
 final class OreSourceFrequencyMath {
-    private OreSourceFrequencyMath() {
-    }
+    private OreSourceFrequencyMath() {}
 
     static double originalFrequency(double expectedAttempts, double sourceBranchChance) {
         double attempts = Math.max(0.0D, expectedAttempts);

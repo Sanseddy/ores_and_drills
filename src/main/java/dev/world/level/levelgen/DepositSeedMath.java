@@ -2,8 +2,7 @@ package dev.world.level.levelgen;
 
 /** Pure immutable seed composition shared by worldgen and locate planners. */
 final class DepositSeedMath {
-    private DepositSeedMath() {
-    }
+    private DepositSeedMath() {}
 
     static long cellSeed(
             long worldSeed,
@@ -16,8 +15,7 @@ final class DepositSeedMath {
             int slot,
             long ruleSalt,
             long coordinateSaltX,
-            long coordinateSaltZ
-    ) {
+            long coordinateSaltZ) {
         long seed = worldSeed;
         seed ^= SeedMixer.hash64(dimension);
         seed ^= Long.rotateLeft(SeedMixer.hash64(biome), 7);

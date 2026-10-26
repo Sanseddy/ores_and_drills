@@ -14,8 +14,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class ChunkGeneratorMixin {
     @Inject(method = "applyBiomeDecoration", at = @At("TAIL"))
     private void oresAndDrills$placeDataDrivenDeposits(
-            WorldGenLevel level, ChunkAccess chunk, StructureManager structureManager, CallbackInfo ci
-    ) {
+            WorldGenLevel level,
+            ChunkAccess chunk,
+            StructureManager structureManager,
+            CallbackInfo ci) {
         DataDrivenOreDepositBiomeModifier.decorate(level, chunk, (ChunkGenerator) (Object) this);
     }
 }

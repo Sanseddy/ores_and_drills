@@ -13,19 +13,19 @@ import net.minecraft.resources.ResourceLocation;
 import net.neoforged.fml.ModList;
 
 /**
- * Entry point for every map integration. Each compat class is touched only after its mod is confirmed
- * present, so none of the optional map APIs is ever class-loaded without its mod.
+ * Entry point for every map integration. Each compat class is touched only after its mod is
+ * confirmed present, so none of the optional map APIs is ever class-loaded without its mod.
  */
 public final class OreMapIntegrations {
-    private static final ResourceLocation TOGGLE_ICON = ResourceLocation.fromNamespaceAndPath(
-            OresAndDrillsMod.MOD_ID, "textures/gui/ore_map/ore_map_toggle.png");
+    private static final ResourceLocation TOGGLE_ICON =
+            ResourceLocation.fromNamespaceAndPath(
+                    OresAndDrillsMod.MOD_ID, "textures/gui/ore_map/ore_map_toggle.png");
     private static boolean xaeroWorldMap;
     private static boolean xaeroMinimap;
     private static boolean journeyMap;
     private static boolean ftbChunks;
 
-    private OreMapIntegrations() {
-    }
+    private OreMapIntegrations() {}
 
     public static void init() {
         ModList mods = ModList.get();
@@ -68,9 +68,13 @@ public final class OreMapIntegrations {
         }
     }
 
-    /** An installed map release whose API differs from the one compiled against must not take the game down. */
+    /**
+     * An installed map release whose API differs from the one compiled against must not take the
+     * game down.
+     */
     private static boolean disable(String mapMod, LinkageError error) {
-        OresAndDrillsMod.LOGGER.warn("Ore deposits cannot be shown on this {} version", mapMod, error);
+        OresAndDrillsMod.LOGGER.warn(
+                "Ore deposits cannot be shown on this {} version", mapMod, error);
         return false;
     }
 
@@ -88,9 +92,14 @@ public final class OreMapIntegrations {
         }
         button.render(graphics, overButton);
         if (overButton) {
-            graphics.renderTooltip(Minecraft.getInstance().font, Component.translatable(
-                    OreMapMarkers.isEnabled() ? "gui.ores_and_drills.ore_map.hide" : "gui.ores_and_drills.ore_map.show"
-            ), mouseX, mouseY);
+            graphics.renderTooltip(
+                    Minecraft.getInstance().font,
+                    Component.translatable(
+                            OreMapMarkers.isEnabled()
+                                    ? "gui.ores_and_drills.ore_map.hide"
+                                    : "gui.ores_and_drills.ore_map.show"),
+                    mouseX,
+                    mouseY);
         }
     }
 
@@ -100,8 +109,11 @@ public final class OreMapIntegrations {
             return false;
         }
         OreMapMarkers.toggle();
-        Minecraft.getInstance().getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
-                net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK, 1.0F));
+        Minecraft.getInstance()
+                .getSoundManager()
+                .play(
+                        net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
+                                net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK, 1.0F));
         return true;
     }
 
@@ -142,7 +154,12 @@ public final class OreMapIntegrations {
             if (!enabled) {
                 // A red strike-through, the usual "layer hidden" cue.
                 for (int step = 0; step < 14; step++) {
-                    graphics.fill(iconX + 1 + step, iconY + 14 - step, iconX + 3 + step, iconY + 15 - step, 0xFFE03C31);
+                    graphics.fill(
+                            iconX + 1 + step,
+                            iconY + 14 - step,
+                            iconX + 3 + step,
+                            iconY + 15 - step,
+                            0xFFE03C31);
                 }
             }
             graphics.pose().popPose();

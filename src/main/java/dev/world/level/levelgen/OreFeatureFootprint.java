@@ -2,13 +2,13 @@ package dev.world.level.levelgen;
 
 /**
  * Horizontal reach of one {@code Feature.ORE} call around its origin, with the exact arithmetic of
- * {@code OreFeature.place}. The feature reads {@code OCEAN_FLOOR_WG} heights over its whole bounding square,
- * fills positions only inside it, and checks the six neighbours of each position for air; nothing it
- * touches lies farther from the origin than {@link #horizontalReach(int)} blocks along X or Z.
+ * {@code OreFeature.place}. The feature reads {@code OCEAN_FLOOR_WG} heights over its whole
+ * bounding square, fills positions only inside it, and checks the six neighbours of each position
+ * for air; nothing it touches lies farther from the origin than {@link #horizontalReach(int)}
+ * blocks along X or Z.
  */
 final class OreFeatureFootprint {
-    private OreFeatureFootprint() {
-    }
+    private OreFeatureFootprint() {}
 
     static int horizontalReach(int size) {
         float spread = size / 8.0F;

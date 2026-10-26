@@ -1,13 +1,11 @@
 package dev.world.level.levelgen;
 
-import net.minecraft.core.BlockPos;
-
 import java.util.function.Predicate;
+import net.minecraft.core.BlockPos;
 
 /** Exact Manhattan-shell host search shared by generation and non-loading locate prediction. */
 final class TaggedStoneRelocator {
-    private TaggedStoneRelocator() {
-    }
+    private TaggedStoneRelocator() {}
 
     static BlockPos findNearest(
             BlockPos origin,
@@ -17,12 +15,17 @@ final class TaggedStoneRelocator {
             int minimumY,
             int maximumY,
             Predicate<BlockPos> positionAllowed,
-            Predicate<BlockPos> usableStone
-    ) {
-        Search search = new Search(
-                origin, horizontalRadius, verticalRadius, maximumChecks, minimumY, maximumY,
-                positionAllowed, usableStone
-        );
+            Predicate<BlockPos> usableStone) {
+        Search search =
+                new Search(
+                        origin,
+                        horizontalRadius,
+                        verticalRadius,
+                        maximumChecks,
+                        minimumY,
+                        maximumY,
+                        positionAllowed,
+                        usableStone);
         while (!search.isDone()) search.advance(Long.MAX_VALUE, Integer.MAX_VALUE);
         return search.result();
     }
@@ -56,8 +59,7 @@ final class TaggedStoneRelocator {
                 int minimumY,
                 int maximumY,
                 Predicate<BlockPos> positionAllowed,
-                Predicate<BlockPos> usableStone
-        ) {
+                Predicate<BlockPos> usableStone) {
             this.origin = origin.immutable();
             this.horizontalRadius = horizontalRadius;
             this.verticalRadius = verticalRadius;
@@ -78,7 +80,8 @@ final class TaggedStoneRelocator {
                     done = true;
                     return;
                 }
-                if (pos.getY() < minimumY || pos.getY() >= maximumY || !positionAllowed.test(pos)) continue;
+                if (pos.getY() < minimumY || pos.getY() >= maximumY || !positionAllowed.test(pos))
+                    continue;
                 if (!checkingOrigin && checks >= maximumChecks) {
                     done = true;
                     return;

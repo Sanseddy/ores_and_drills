@@ -8,8 +8,9 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * One connected ore fragment found on an original ore texture: its exact shape and original pixel colors
- * (local to its bounding box), its bounding-box position on the source texture, its size and its type.
+ * One connected ore fragment found on an original ore texture: its exact shape and original pixel
+ * colors (local to its bounding box), its bounding-box position on the source texture, its size and
+ * its type.
  */
 public final class OreSpeck {
     private final int originX;
@@ -22,7 +23,15 @@ public final class OreSpeck {
     private final int resolution;
     private final OreSpeckType type;
 
-    private OreSpeck(int originX, int originY, int width, int height, int[] xs, int[] ys, int[] colors, int resolution) {
+    private OreSpeck(
+            int originX,
+            int originY,
+            int width,
+            int height,
+            int[] xs,
+            int[] ys,
+            int[] colors,
+            int resolution) {
         this.originX = originX;
         this.originY = originY;
         this.width = width;
@@ -39,12 +48,16 @@ public final class OreSpeck {
     }
 
     /**
-     * Builds a speck from absolute source coordinates on a texture of {@code resolution}; the bounding box
-     * becomes the local origin.
+     * Builds a speck from absolute source coordinates on a texture of {@code resolution}; the
+     * bounding box becomes the local origin.
      */
-    public static OreSpeck fromAbsolutePixels(int[] absoluteXs, int[] absoluteYs, int[] colors, int resolution) {
-        if (absoluteXs.length == 0 || absoluteXs.length != absoluteYs.length || absoluteXs.length != colors.length) {
-            throw new IllegalArgumentException("A speck needs at least one pixel with matching coordinate/color arrays");
+    public static OreSpeck fromAbsolutePixels(
+            int[] absoluteXs, int[] absoluteYs, int[] colors, int resolution) {
+        if (absoluteXs.length == 0
+                || absoluteXs.length != absoluteYs.length
+                || absoluteXs.length != colors.length) {
+            throw new IllegalArgumentException(
+                    "A speck needs at least one pixel with matching coordinate/color arrays");
         }
 
         int minX = Integer.MAX_VALUE;
@@ -64,12 +77,21 @@ public final class OreSpeck {
             localXs[index] = absoluteXs[index] - minX;
             localYs[index] = absoluteYs[index] - minY;
         }
-        return new OreSpeck(minX, minY, maxX - minX + 1, maxY - minY + 1, localXs, localYs, colors.clone(), resolution);
+        return new OreSpeck(
+                minX,
+                minY,
+                maxX - minX + 1,
+                maxY - minY + 1,
+                localXs,
+                localYs,
+                colors.clone(),
+                resolution);
     }
 
     /**
-     * A smaller, still connected piece of this speck with its original colors, used when an extra speck of a
-     * small type is needed but the original texture has none. Grows from a random pixel through 8-neighbors.
+     * A smaller, still connected piece of this speck with its original colors, used when an extra
+     * speck of a small type is needed but the original texture has none. Grows from a random pixel
+     * through 8-neighbors.
      */
     public OreSpeck cropped(int targetSize, Random random) {
         int size = Math.max(1, Math.min(size(), targetSize));
@@ -163,7 +185,9 @@ public final class OreSpeck {
         return colors[pixel];
     }
 
-    /** The shape as a row-major {@code width x height} mask, mainly for comparisons and debugging. */
+    /**
+     * The shape as a row-major {@code width x height} mask, mainly for comparisons and debugging.
+     */
     public boolean[] shapeMask() {
         boolean[] mask = new boolean[width * height];
         for (int pixel = 0; pixel < size(); pixel++) {
@@ -174,7 +198,18 @@ public final class OreSpeck {
 
     @Override
     public String toString() {
-        return "OreSpeck[type=" + type.number() + ", size=" + size() + ", at=" + originX + "," + originY
-                + ", box=" + width + "x" + height + "]";
+        return "OreSpeck[type="
+                + type.number()
+                + ", size="
+                + size()
+                + ", at="
+                + originX
+                + ","
+                + originY
+                + ", box="
+                + width
+                + "x"
+                + height
+                + "]";
     }
 }

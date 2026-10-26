@@ -8,7 +8,9 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 
 /** Vanilla-typed access to Create's optional MovementContext. */
 @Pseudo
-@Mixin(targets = "com.simibubi.create.content.contraptions.behaviour.MovementContext", remap = false)
+@Mixin(
+        targets = "com.simibubi.create.content.contraptions.behaviour.MovementContext",
+        remap = false)
 public interface CreateMovementContextAccessor {
     @Accessor(value = "world", remap = false)
     Level oresAndDrills$getWorld();

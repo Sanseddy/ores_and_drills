@@ -1,9 +1,9 @@
 package dev.world.block.entity.drill;
 
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import org.junit.jupiter.api.Test;
 
 class ProductivityBonusTest {
     @Test
@@ -75,6 +75,8 @@ class ProductivityBonusTest {
     @Test
     void productivityOutsideFactorioLimitsIsRejected() {
         assertThrows(IllegalArgumentException.class, () -> new ProductivityBonus(-1));
-        assertThrows(IllegalArgumentException.class, () -> new ProductivityBonus(ProductivityBonus.MAX_PERCENT + 1));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new ProductivityBonus(ProductivityBonus.MAX_PERCENT + 1));
     }
 }

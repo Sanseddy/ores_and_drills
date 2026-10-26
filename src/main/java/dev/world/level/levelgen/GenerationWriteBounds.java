@@ -12,8 +12,7 @@ record GenerationWriteBounds(int minimumX, int maximumX, int minimumZ, int maxim
                 minimumChunkX << 4,
                 (maximumChunkX << 4) + 15,
                 minimumChunkZ << 4,
-                (maximumChunkZ << 4) + 15
-        );
+                (maximumChunkZ << 4) + 15);
     }
 
     boolean contains(int x, int z) {
@@ -28,6 +27,7 @@ record GenerationWriteBounds(int minimumX, int maximumX, int minimumZ, int maxim
     /** These bounds shrunk by {@code blocks} on every side; an exhausted area contains nothing. */
     GenerationWriteBounds inset(int blocks) {
         int margin = Math.max(0, blocks);
-        return new GenerationWriteBounds(minimumX + margin, maximumX - margin, minimumZ + margin, maximumZ - margin);
+        return new GenerationWriteBounds(
+                minimumX + margin, maximumX - margin, minimumZ + margin, maximumZ - margin);
     }
 }

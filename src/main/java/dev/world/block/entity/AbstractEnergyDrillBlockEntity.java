@@ -17,9 +17,9 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BucketItem;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ItemUtils;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -44,19 +44,37 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
     protected final FluidTank[] fluidTanks;
     protected final IFluidHandler fluidHandler;
 
-    protected AbstractEnergyDrillBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state,
-                                              MiningDrillTier tier, EnergyProfile energyProfile, DrillStructure structure) {
+    protected AbstractEnergyDrillBlockEntity(
+            BlockEntityType<?> type,
+            BlockPos pos,
+            BlockState state,
+            MiningDrillTier tier,
+            EnergyProfile energyProfile,
+            DrillStructure structure) {
         this(type, pos, state, tier, energyProfile, structure, 0, 0);
     }
 
-    protected AbstractEnergyDrillBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state,
-                                              MiningDrillTier tier, EnergyProfile energyProfile, DrillStructure structure,
-                                              int productivityPercent, int fluidCapacity) {
+    protected AbstractEnergyDrillBlockEntity(
+            BlockEntityType<?> type,
+            BlockPos pos,
+            BlockState state,
+            MiningDrillTier tier,
+            EnergyProfile energyProfile,
+            DrillStructure structure,
+            int productivityPercent,
+            int fluidCapacity) {
         super(type, pos, state, tier, structure, 2, OUTPUT_SLOT);
         this.energyProfile = energyProfile;
-        this.energyBuffer = new EnergyBuffer(energyProfile.capacity(), energyProfile.capacity(), this::setChanged);
+        this.energyBuffer =
+                new EnergyBuffer(
+                        energyProfile.capacity(), energyProfile.capacity(), this::setChanged);
         this.productivity = new ProductivityBonus(productivityPercent);
-        this.fluidTanks = fluidCapacity > 0 ? new FluidTank[]{new DrillFluidTank(fluidCapacity), new DrillFluidTank(fluidCapacity)} : new FluidTank[0];
+        this.fluidTanks =
+                fluidCapacity > 0
+                        ? new FluidTank[] {
+                            new DrillFluidTank(fluidCapacity), new DrillFluidTank(fluidCapacity)
+                        }
+                        : new FluidTank[0];
         this.fluidHandler = fluidCapacity > 0 ? new RoutedFluidHandler() : null;
     }
 
@@ -83,8 +101,10 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
     }
 
     public boolean canInteractWithFluidContainer(ItemStack stack) {
-        return fluidHandler != null && !stack.isEmpty()
-                && (stack.is(Items.BUCKET) || stack.getCapability(Capabilities.FluidHandler.ITEM) != null);
+        return fluidHandler != null
+                && !stack.isEmpty()
+                && (stack.is(Items.BUCKET)
+                        || stack.getCapability(Capabilities.FluidHandler.ITEM) != null);
     }
 
     @SuppressWarnings("deprecation")
@@ -107,12 +127,14 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
 
         IFluidHandler routed = fluidHandler;
 
-        FluidActionResult fillResult = FluidUtil.tryFillContainer(carried, routed, FluidType.BUCKET_VOLUME, player, true);
+        FluidActionResult fillResult =
+                FluidUtil.tryFillContainer(carried, routed, FluidType.BUCKET_VOLUME, player, true);
         if (fillResult.isSuccess()) {
             return fillResult.getResult();
         }
 
-        FluidActionResult drainResult = FluidUtil.tryEmptyContainer(carried, routed, FluidType.BUCKET_VOLUME, player, true);
+        FluidActionResult drainResult =
+                FluidUtil.tryEmptyContainer(carried, routed, FluidType.BUCKET_VOLUME, player, true);
         if (drainResult.isSuccess()) {
             return drainResult.getResult();
         }
@@ -137,10 +159,15 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
     }
 
     public FluidStack getFluidForRender(int tank) {
-        return tank >= 0 && tank < fluidTanks.length ? fluidTanks[tank].getFluid() : FluidStack.EMPTY;
+        return tank >= 0 && tank < fluidTanks.length
+                ? fluidTanks[tank].getFluid()
+                : FluidStack.EMPTY;
     }
 
-    /** Productivity bar carried over from finished cycles, in {@link ProductivityBonus#FULL_BAR} units. */
+    /**
+     * Productivity bar carried over from finished cycles, in {@link ProductivityBonus#FULL_BAR}
+     * units.
+     */
     public int getProductivityProgress() {
         return productivity.progress();
     }
@@ -151,7 +178,11 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
 
     /** Productivity bar fill including the current cycle, as a whole percentage. */
     public int getVisibleProductivityPercent() {
-        return ProductivityBonus.visiblePercent(productivity.progress(), productivity.percent(), miningProgress, getMiningDuration());
+        return ProductivityBonus.visiblePercent(
+                productivity.progress(),
+                productivity.percent(),
+                miningProgress,
+                getMiningDuration());
     }
 
     @Override
@@ -178,12 +209,20 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
         }
 
         int remaining = fluidTanks[tank].getFluidAmount() - required.amount();
-        fluidTanks[tank].setFluid(remaining > 0 ? fluidTanks[tank].getFluid().copyWithAmount(remaining) : FluidStack.EMPTY);
+        fluidTanks[tank].setFluid(
+                remaining > 0
+                        ? fluidTanks[tank].getFluid().copyWithAmount(remaining)
+                        : FluidStack.EMPTY);
         setChanged();
         return true;
     }
 
-    protected static void tickEnergy(Level level, BlockPos pos, BlockState state, AbstractEnergyDrillBlockEntity be, Block expectedBlock) {
+    protected static void tickEnergy(
+            Level level,
+            BlockPos pos,
+            BlockState state,
+            AbstractEnergyDrillBlockEntity be,
+            Block expectedBlock) {
         if (!state.is(expectedBlock)) {
             return;
         }
@@ -259,41 +298,53 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
         return changed;
     }
 
-    private boolean pullFluidFromInput(ServerLevel level, BlockPos origin, Direction facing,
-                                       int offsetX, int offsetY, int offsetZ, Direction externalDirection) {
+    private boolean pullFluidFromInput(
+            ServerLevel level,
+            BlockPos origin,
+            Direction facing,
+            int offsetX,
+            int offsetY,
+            int offsetZ,
+            Direction externalDirection) {
         BlockPos portPos = structure.offset(origin, facing, offsetX, offsetY, offsetZ);
         BlockPos sourcePos = portPos.relative(externalDirection);
-        IFluidHandler source = level.getCapability(
-                Capabilities.FluidHandler.BLOCK,
-                sourcePos,
-                externalDirection.getOpposite()
-        );
+        IFluidHandler source =
+                level.getCapability(
+                        Capabilities.FluidHandler.BLOCK,
+                        sourcePos,
+                        externalDirection.getOpposite());
         if (source == null) {
             return false;
         }
 
         AbstractEnergyDrillBlockEntity connectedDrill = connectedDrillAt(level, sourcePos);
-        if (connectedDrill != null && connectedDrill != this && connectedDrill.fluidHandler == source) {
+        if (connectedDrill != null
+                && connectedDrill != this
+                && connectedDrill.fluidHandler == source) {
             return balanceFluids(fluidHandler, source);
         }
 
-        return !FluidUtil.tryFluidTransfer(fluidHandler, source, FluidType.BUCKET_VOLUME, true).isEmpty();
+        return !FluidUtil.tryFluidTransfer(fluidHandler, source, FluidType.BUCKET_VOLUME, true)
+                .isEmpty();
     }
 
-    private static AbstractEnergyDrillBlockEntity connectedDrillAt(ServerLevel level, BlockPos partPos) {
+    private static AbstractEnergyDrillBlockEntity connectedDrillAt(
+            ServerLevel level, BlockPos partPos) {
         BlockState partState = level.getBlockState(partPos);
         if (!(partState.getBlock() instanceof AbstractDrillPartBlock part)) {
             return null;
         }
 
         BlockPos origin = part.structure().originFromPart(partPos, partState);
-        return level.getBlockEntity(origin) instanceof AbstractEnergyDrillBlockEntity drill ? drill : null;
+        return level.getBlockEntity(origin) instanceof AbstractEnergyDrillBlockEntity drill
+                ? drill
+                : null;
     }
 
     /**
-     * Equalizes every fluid present in either drill. Pairwise equalization makes a row of drills behave like a
-     * Factorio fluid network: liquid spreads through the row over subsequent ticks without being pumped back and
-     * forth by both block entities.
+     * Equalizes every fluid present in either drill. Pairwise equalization makes a row of drills
+     * behave like a Factorio fluid network: liquid spreads through the row over subsequent ticks
+     * without being pumped back and forth by both block entities.
      */
     private static boolean balanceFluids(IFluidHandler first, IFluidHandler second) {
         boolean changed = false;
@@ -321,7 +372,8 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
         return true;
     }
 
-    private static boolean balanceFluid(IFluidHandler first, IFluidHandler second, FluidStack fluid) {
+    private static boolean balanceFluid(
+            IFluidHandler first, IFluidHandler second, FluidStack fluid) {
         int firstAmount = amountOf(first, fluid);
         int secondAmount = amountOf(second, fluid);
         int transferAmount = Math.abs(firstAmount - secondAmount) / 2;
@@ -331,7 +383,9 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
 
         IFluidHandler source = firstAmount > secondAmount ? first : second;
         IFluidHandler destination = firstAmount > secondAmount ? second : first;
-        return !FluidUtil.tryFluidTransfer(destination, source, fluid.copyWithAmount(transferAmount), true).isEmpty();
+        return !FluidUtil.tryFluidTransfer(
+                        destination, source, fluid.copyWithAmount(transferAmount), true)
+                .isEmpty();
     }
 
     private static int amountOf(IFluidHandler handler, FluidStack fluid) {
@@ -384,7 +438,10 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
         FluidStack result = fluidTanks[tank].getFluid().copyWithAmount(drained);
         if (action.execute()) {
             int remaining = fluidTanks[tank].getFluidAmount() - drained;
-            fluidTanks[tank].setFluid(remaining > 0 ? fluidTanks[tank].getFluid().copyWithAmount(remaining) : FluidStack.EMPTY);
+            fluidTanks[tank].setFluid(
+                    remaining > 0
+                            ? fluidTanks[tank].getFluid().copyWithAmount(remaining)
+                            : FluidStack.EMPTY);
             setChanged();
         }
 
@@ -397,7 +454,8 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
             return fillBucketFromTank(player, hand, held);
         }
 
-        if (held.getItem() instanceof BucketItem bucket && bucket.content != net.minecraft.world.level.material.Fluids.EMPTY) {
+        if (held.getItem() instanceof BucketItem bucket
+                && bucket.content != net.minecraft.world.level.material.Fluids.EMPTY) {
             return emptyBucketIntoTank(player, hand, held, bucket);
         }
 
@@ -406,7 +464,9 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
 
     private boolean fillBucketFromTank(Player player, InteractionHand hand, ItemStack held) {
         for (int tank = 0; tank < fluidTanks.length; tank++) {
-            FluidStack simulated = drainFromTank(tank, FluidType.BUCKET_VOLUME, IFluidHandler.FluidAction.SIMULATE);
+            FluidStack simulated =
+                    drainFromTank(
+                            tank, FluidType.BUCKET_VOLUME, IFluidHandler.FluidAction.SIMULATE);
             if (simulated.getAmount() < FluidType.BUCKET_VOLUME) {
                 continue;
             }
@@ -418,7 +478,8 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
 
             drainFromTank(tank, FluidType.BUCKET_VOLUME, IFluidHandler.FluidAction.EXECUTE);
             if (!player.getAbilities().instabuild) {
-                player.setItemInHand(hand, ItemUtils.createFilledResult(held, player, filledBucket));
+                player.setItemInHand(
+                        hand, ItemUtils.createFilledResult(held, player, filledBucket));
             }
             playBucketSound(player, simulated, SoundActions.BUCKET_FILL);
             return true;
@@ -427,9 +488,11 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
         return false;
     }
 
-    private boolean emptyBucketIntoTank(Player player, InteractionHand hand, ItemStack held, BucketItem bucket) {
+    private boolean emptyBucketIntoTank(
+            Player player, InteractionHand hand, ItemStack held, BucketItem bucket) {
         FluidStack fluid = new FluidStack(bucket.content, FluidType.BUCKET_VOLUME);
-        if (fluidHandler.fill(fluid, IFluidHandler.FluidAction.SIMULATE) < FluidType.BUCKET_VOLUME) {
+        if (fluidHandler.fill(fluid, IFluidHandler.FluidAction.SIMULATE)
+                < FluidType.BUCKET_VOLUME) {
             return false;
         }
 
@@ -441,7 +504,8 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
         return true;
     }
 
-    private void playBucketSound(Player player, FluidStack fluid, net.neoforged.neoforge.common.SoundAction action) {
+    private void playBucketSound(
+            Player player, FluidStack fluid, net.neoforged.neoforge.common.SoundAction action) {
         SoundEvent sound = fluid.getFluidType().getSound(fluid, action);
         if (sound != null && level != null) {
             level.playSound(null, player.blockPosition(), sound, SoundSource.BLOCKS, 1.0F, 1.0F);
@@ -458,7 +522,8 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
             productivity.setProgress(tag.getInt("ProductivityBonusProgress"));
         } else {
             // Worlds saved before the Factorio model stored whole percents.
-            productivity.setProgress(tag.getInt("ProductivityProgress") * (ProductivityBonus.FULL_BAR / 100));
+            productivity.setProgress(
+                    tag.getInt("ProductivityProgress") * (ProductivityBonus.FULL_BAR / 100));
         }
         for (int tank = 0; tank < fluidTanks.length; tank++) {
             String key = "FluidTank" + tank;
@@ -510,7 +575,9 @@ public abstract class AbstractEnergyDrillBlockEntity extends AbstractDrillBlockE
 
         @Override
         public FluidStack getFluidInTank(int tank) {
-            return tank >= 0 && tank < fluidTanks.length ? fluidTanks[tank].getFluid() : FluidStack.EMPTY;
+            return tank >= 0 && tank < fluidTanks.length
+                    ? fluidTanks[tank].getFluid()
+                    : FluidStack.EMPTY;
         }
 
         @Override

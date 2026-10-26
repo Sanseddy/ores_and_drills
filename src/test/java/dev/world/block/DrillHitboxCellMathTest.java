@@ -1,20 +1,18 @@
 package dev.world.block;
 
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import org.junit.jupiter.api.Test;
 
 class DrillHitboxCellMathTest {
     private static final double EPSILON = 1.0E-9D;
 
     @Test
     void flatAxesReceiveOnePixelOfCentredCollisionThickness() {
-        DrillHitboxCellMath.Box flat = new DrillHitboxCellMath.Box(
-                -0.25D, 0.5D, 0.75D,
-                0.75D, 0.5D, 0.75D
-        );
+        DrillHitboxCellMath.Box flat =
+                new DrillHitboxCellMath.Box(-0.25D, 0.5D, 0.75D, 0.75D, 0.5D, 0.75D);
 
         DrillHitboxCellMath.Box expanded = DrillHitboxCellMath.expandFlatAxes(flat, 1.0D / 16.0D);
 
@@ -23,30 +21,26 @@ class DrillHitboxCellMathTest {
 
     @Test
     void volumetricAxesAreNotChanged() {
-        DrillHitboxCellMath.Box volume = new DrillHitboxCellMath.Box(
-                0.1D, 0.2D, 0.3D,
-                0.4D, 0.5D, 0.6D
-        );
+        DrillHitboxCellMath.Box volume =
+                new DrillHitboxCellMath.Box(0.1D, 0.2D, 0.3D, 0.4D, 0.5D, 0.6D);
 
         assertEquals(volume, DrillHitboxCellMath.expandFlatAxes(volume, 1.0D / 16.0D));
     }
 
     @Test
     void collisionThicknessMustBePositive() {
-        DrillHitboxCellMath.Box flat = new DrillHitboxCellMath.Box(
-                0.0D, 0.0D, 0.0D,
-                1.0D, 1.0D, 0.0D
-        );
+        DrillHitboxCellMath.Box flat =
+                new DrillHitboxCellMath.Box(0.0D, 0.0D, 0.0D, 1.0D, 1.0D, 0.0D);
 
-        assertThrows(IllegalArgumentException.class, () -> DrillHitboxCellMath.expandFlatAxes(flat, 0.0D));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> DrillHitboxCellMath.expandFlatAxes(flat, 0.0D));
     }
 
     @Test
     void crossingGeometryIsClippedAndTranslatedIntoTheSelectedCell() {
-        DrillHitboxCellMath.Box model = new DrillHitboxCellMath.Box(
-                -0.25D, 0.2D, -0.4D,
-                1.25D, 1.4D, 0.6D
-        );
+        DrillHitboxCellMath.Box model =
+                new DrillHitboxCellMath.Box(-0.25D, 0.2D, -0.4D, 1.25D, 1.4D, 0.6D);
 
         DrillHitboxCellMath.Box centre = DrillHitboxCellMath.clipToCell(model, 0.0D, 0.0D, 0.0D);
         DrillHitboxCellMath.Box left = DrillHitboxCellMath.clipToCell(model, -1.0D, 0.0D, 0.0D);
@@ -59,10 +53,8 @@ class DrillHitboxCellMathTest {
 
     @Test
     void geometryOutsideTheSelectedCellIsAbsent() {
-        DrillHitboxCellMath.Box model = new DrillHitboxCellMath.Box(
-                0.1D, 0.1D, 0.1D,
-                0.9D, 0.9D, 0.9D
-        );
+        DrillHitboxCellMath.Box model =
+                new DrillHitboxCellMath.Box(0.1D, 0.1D, 0.1D, 0.9D, 0.9D, 0.9D);
 
         assertNull(DrillHitboxCellMath.clipToCell(model, 1.0D, 0.0D, 0.0D));
         assertNull(DrillHitboxCellMath.clipToCell(model, 0.0D, -1.0D, 0.0D));
@@ -71,10 +63,8 @@ class DrillHitboxCellMathTest {
 
     @Test
     void clippedCellBoxRotatesAroundItsOwnSixteenPixelCentre() {
-        DrillHitboxCellMath.Box north = new DrillHitboxCellMath.Box(
-                0.1D, 0.2D, 0.3D,
-                0.4D, 0.5D, 0.6D
-        );
+        DrillHitboxCellMath.Box north =
+                new DrillHitboxCellMath.Box(0.1D, 0.2D, 0.3D, 0.4D, 0.5D, 0.6D);
 
         assertBox(DrillHitboxCellMath.rotateY(north, 1), 0.4D, 0.2D, 0.1D, 0.7D, 0.5D, 0.4D);
         assertBox(DrillHitboxCellMath.rotateY(north, 2), 0.6D, 0.2D, 0.4D, 0.9D, 0.5D, 0.7D);
@@ -89,8 +79,7 @@ class DrillHitboxCellMathTest {
             double minZ,
             double maxX,
             double maxY,
-            double maxZ
-    ) {
+            double maxZ) {
         assertEquals(minX, actual.minX(), EPSILON);
         assertEquals(minY, actual.minY(), EPSILON);
         assertEquals(minZ, actual.minZ(), EPSILON);

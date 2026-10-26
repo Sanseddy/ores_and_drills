@@ -18,17 +18,25 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class StructureStartMixin {
     @Inject(method = "placeInChunk", at = @At("HEAD"))
     private void oresAndDrills$enterStructure(
-            WorldGenLevel level, StructureManager structureManager, ChunkGenerator generator, RandomSource random,
-            BoundingBox box, ChunkPos chunkPos, CallbackInfo ci
-    ) {
+            WorldGenLevel level,
+            StructureManager structureManager,
+            ChunkGenerator generator,
+            RandomSource random,
+            BoundingBox box,
+            ChunkPos chunkPos,
+            CallbackInfo ci) {
         DepositWorldgenGuard.enterStructure();
     }
 
     @Inject(method = "placeInChunk", at = @At("RETURN"))
     private void oresAndDrills$exitStructure(
-            WorldGenLevel level, StructureManager structureManager, ChunkGenerator generator, RandomSource random,
-            BoundingBox box, ChunkPos chunkPos, CallbackInfo ci
-    ) {
+            WorldGenLevel level,
+            StructureManager structureManager,
+            ChunkGenerator generator,
+            RandomSource random,
+            BoundingBox box,
+            ChunkPos chunkPos,
+            CallbackInfo ci) {
         DepositWorldgenGuard.exitStructure();
     }
 }

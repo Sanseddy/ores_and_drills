@@ -1,17 +1,16 @@
 package dev.world.level.levelgen;
 
 import dev.OresAndDrillsMod;
+import java.util.Comparator;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import javax.annotation.Nullable;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
-
-import javax.annotation.Nullable;
-import java.util.Comparator;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public final class OreDepositOrePalette {
     public static final int MAX_ORES = 256;
@@ -21,8 +20,7 @@ public final class OreDepositOrePalette {
     private static volatile boolean clientVanillaLikeGeneration;
     private static final AtomicInteger CLIENT_REVISION = new AtomicInteger();
 
-    private OreDepositOrePalette() {
-    }
+    private OreDepositOrePalette() {}
 
     public static List<ResourceLocation> availableIds() {
         List<ResourceLocation> cached = availableIdsCache;
@@ -30,15 +28,20 @@ public final class OreDepositOrePalette {
             return cached;
         }
 
-        cached = OreTags.oreBlocks().stream()
-                .filter(block -> {
-                    var id = BuiltInRegistries.BLOCK.getKey(block);
-                    return id != null && !id.getNamespace().equals(OresAndDrillsMod.MOD_ID);
-                })
-                .sorted(Comparator.comparing(block -> BuiltInRegistries.BLOCK.getKey(block).toString()))
-                .limit(MAX_ORES)
-                .map(OreDepositOrePalette::idOf)
-                .toList();
+        cached =
+                OreTags.oreBlocks().stream()
+                        .filter(
+                                block -> {
+                                    var id = BuiltInRegistries.BLOCK.getKey(block);
+                                    return id != null
+                                            && !id.getNamespace().equals(OresAndDrillsMod.MOD_ID);
+                                })
+                        .sorted(
+                                Comparator.comparing(
+                                        block -> BuiltInRegistries.BLOCK.getKey(block).toString()))
+                        .limit(MAX_ORES)
+                        .map(OreDepositOrePalette::idOf)
+                        .toList();
         availableIdsCache = cached;
         return cached;
     }
@@ -75,7 +78,10 @@ public final class OreDepositOrePalette {
         return BuiltInRegistries.ITEM.containsKey(id) ? BuiltInRegistries.ITEM.get(id) : Items.AIR;
     }
 
-    /** Returns the real server-resolved loot-table drop for this ore, when the world palette is available. */
+    /**
+     * Returns the real server-resolved loot-table drop for this ore, when the world palette is
+     * available.
+     */
     @Nullable
     public static ResourceLocation dropIdForOre(ResourceLocation oreId) {
         int index = clientIds.indexOf(oreId);
@@ -94,20 +100,21 @@ public final class OreDepositOrePalette {
     }
 
     /**
-     * Applies the authoritative server mapping. The return value tells the physical client whether its
-     * pre-stitched ore texture slots must be recolored in place.
+     * Applies the authoritative server mapping. The return value tells the physical client whether
+     * its pre-stitched ore texture slots must be recolored in place.
      */
     public static synchronized boolean applyClientPalette(
             List<ResourceLocation> ids,
             List<ResourceLocation> dropIds,
-            boolean vanillaLikeGeneration
-    ) {
+            boolean vanillaLikeGeneration) {
         List<ResourceLocation> newIds = List.copyOf(ids.subList(0, Math.min(ids.size(), MAX_ORES)));
         ResourceLocation airId = BuiltInRegistries.ITEM.getKey(Items.AIR);
-        List<ResourceLocation> newDropIds = java.util.stream.IntStream.range(0, newIds.size())
-                .mapToObj(index -> index < dropIds.size() ? dropIds.get(index) : airId)
-                .toList();
-        if (newIds.equals(clientIds) && newDropIds.equals(clientDropIds)
+        List<ResourceLocation> newDropIds =
+                java.util.stream.IntStream.range(0, newIds.size())
+                        .mapToObj(index -> index < dropIds.size() ? dropIds.get(index) : airId)
+                        .toList();
+        if (newIds.equals(clientIds)
+                && newDropIds.equals(clientDropIds)
                 && vanillaLikeGeneration == clientVanillaLikeGeneration) {
             return false;
         }
@@ -119,8 +126,8 @@ public final class OreDepositOrePalette {
     }
 
     /**
-     * Whether the server world uses vanilla-like generation; its tiny and small deposits then show their ore's
-     * specks where the original ore texture has them instead of rearranged.
+     * Whether the server world uses vanilla-like generation; its tiny and small deposits then show
+     * their ore's specks where the original ore texture has them instead of rearranged.
      */
     public static boolean clientVanillaLikeGeneration() {
         return clientVanillaLikeGeneration;

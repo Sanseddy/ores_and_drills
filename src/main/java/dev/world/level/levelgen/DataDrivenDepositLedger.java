@@ -2,6 +2,10 @@ package dev.world.level.levelgen;
 
 import dev.OresAndDrillsMod;
 import dev.world.level.storage.FastSavedData;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -10,15 +14,11 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.saveddata.SavedData;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 /**
  * Per-world count of forced datapack deposits in every biome instance (one cave, one biome patch).
- * A chunk reserves a slot before it builds a deposit and commits it only after the deposit is placed, so a
- * failed attempt leaves the slot for another chunk of the same instance and the total never exceeds count.
+ * A chunk reserves a slot before it builds a deposit and commits it only after the deposit is
+ * placed, so a failed attempt leaves the slot for another chunk of the same instance and the total
+ * never exceeds count.
  */
 public final class DataDrivenDepositLedger extends FastSavedData {
     private static final String FILE_ID = OresAndDrillsMod.MOD_ID + "_data_driven_deposits";
@@ -28,22 +28,24 @@ public final class DataDrivenDepositLedger extends FastSavedData {
     private final Map<String, List<Long>> placed = new HashMap<>();
     private final Map<String, List<Long>> reserved = new HashMap<>();
 
-    private DataDrivenDepositLedger() {
-    }
+    private DataDrivenDepositLedger() {}
 
     public static synchronized DataDrivenDepositLedger get(ServerLevel level) {
         return level.getDataStorage().computeIfAbsent(FACTORY, FILE_ID);
     }
 
     /**
-     * Reserves one of {@code count} slots of the instance for a deposit centered at {@code center}, or returns
-     * {@code null} when the instance is full or another deposit of it is closer than {@code spacing}.
+     * Reserves one of {@code count} slots of the instance for a deposit centered at {@code center},
+     * or returns {@code null} when the instance is full or another deposit of it is closer than
+     * {@code spacing}.
      */
-    public synchronized Reservation tryReserve(String instanceKey, int count, BlockPos center, int spacing) {
+    public synchronized Reservation tryReserve(
+            String instanceKey, int count, BlockPos center, int spacing) {
         List<Long> done = placed.getOrDefault(instanceKey, List.of());
         List<Long> pending = reserved.computeIfAbsent(instanceKey, ignored -> new ArrayList<>());
         if (done.size() + pending.size() >= Math.max(1, count)
-                || tooClose(done, center, spacing) || tooClose(pending, center, spacing)) {
+                || tooClose(done, center, spacing)
+                || tooClose(pending, center, spacing)) {
             if (pending.isEmpty()) {
                 reserved.remove(instanceKey);
             }
@@ -66,7 +68,8 @@ public final class DataDrivenDepositLedger extends FastSavedData {
             }
         }
         if (success) {
-            placed.computeIfAbsent(reservation.instanceKey(), ignored -> new ArrayList<>()).add(reservation.center());
+            placed.computeIfAbsent(reservation.instanceKey(), ignored -> new ArrayList<>())
+                    .add(reservation.center());
             setDirty();
         }
     }
@@ -86,9 +89,12 @@ public final class DataDrivenDepositLedger extends FastSavedData {
     @Override
     public synchronized CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
         CompoundTag instances = new CompoundTag();
-        placed.forEach((key, centers) -> instances.put(
-                key, new LongArrayTag(centers.stream().mapToLong(Long::longValue).toArray())
-        ));
+        placed.forEach(
+                (key, centers) ->
+                        instances.put(
+                                key,
+                                new LongArrayTag(
+                                        centers.stream().mapToLong(Long::longValue).toArray())));
         tag.put("Instances", instances);
         return tag;
     }

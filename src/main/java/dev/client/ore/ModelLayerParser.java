@@ -2,7 +2,6 @@ package dev.client.ore;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -12,23 +11,26 @@ import java.util.Set;
 import java.util.function.Function;
 
 /**
- * Reads which textures a block or item model JSON draws and the tint index of each, following the parent
- * chain, {@code elements} faces, composite {@code children} (NeoForge's composite loader) and the layers of
- * {@code item/generated}, where {@code layerN} is tinted with index {@code N}. Ids are plain strings and an id
- * without a namespace is a {@code minecraft} one, as in vanilla model files.
+ * Reads which textures a block or item model JSON draws and the tint index of each, following the
+ * parent chain, {@code elements} faces, composite {@code children} (NeoForge's composite loader)
+ * and the layers of {@code item/generated}, where {@code layerN} is tinted with index {@code N}.
+ * Ids are plain strings and an id without a namespace is a {@code minecraft} one, as in vanilla
+ * model files.
  */
 final class ModelLayerParser {
     private static final int MAX_DEPTH = 32;
-    private static final Set<String> GENERATED_ITEM_PARENTS = Set.of("minecraft:item/generated", "minecraft:builtin/generated");
+    private static final Set<String> GENERATED_ITEM_PARENTS =
+            Set.of("minecraft:item/generated", "minecraft:builtin/generated");
 
     /** One drawn texture; {@code tintIndex} is -1 for an untinted layer. */
-    record Layer(String texture, int tintIndex) {
-    }
+    record Layer(String texture, int tintIndex) {}
 
-    private ModelLayerParser() {
-    }
+    private ModelLayerParser() {}
 
-    /** Layers of {@code modelId} in drawing order; {@code loader} returns a model JSON or {@code null}. */
+    /**
+     * Layers of {@code modelId} in drawing order; {@code loader} returns a model JSON or {@code
+     * null}.
+     */
     static List<Layer> layers(String modelId, Function<String, JsonObject> loader) {
         Set<Layer> layers = new LinkedHashSet<>();
         collect(loader.apply(qualify(modelId)), loader, Map.of(), layers, 0);
@@ -44,8 +46,7 @@ final class ModelLayerParser {
             Function<String, JsonObject> loader,
             Map<String, String> inheritedTextures,
             Set<Layer> layers,
-            int depth
-    ) {
+            int depth) {
         if (model == null || depth > MAX_DEPTH) {
             return;
         }
@@ -57,16 +58,21 @@ final class ModelLayerParser {
         JsonObject current = model;
         for (int level = 0; current != null && level < MAX_DEPTH; level++) {
             if (current.has("textures") && current.get("textures").isJsonObject()) {
-                for (Map.Entry<String, JsonElement> entry : current.getAsJsonObject("textures").entrySet()) {
+                for (Map.Entry<String, JsonElement> entry :
+                        current.getAsJsonObject("textures").entrySet()) {
                     if (entry.getValue().isJsonPrimitive()) {
                         textures.putIfAbsent(entry.getKey(), entry.getValue().getAsString());
                     }
                 }
             }
-            if (elements == null && current.has("elements") && current.get("elements").isJsonArray()) {
+            if (elements == null
+                    && current.has("elements")
+                    && current.get("elements").isJsonArray()) {
                 elements = current.get("elements");
             }
-            if (children == null && current.has("children") && current.get("children").isJsonObject()) {
+            if (children == null
+                    && current.has("children")
+                    && current.get("children").isJsonObject()) {
                 children = current.getAsJsonObject("children");
             }
             if (!current.has("parent") || !current.get("parent").isJsonPrimitive()) {
@@ -88,28 +94,39 @@ final class ModelLayerParser {
         if (children != null) {
             for (Map.Entry<String, JsonElement> child : children.entrySet()) {
                 if (child.getValue().isJsonObject()) {
-                    collect(child.getValue().getAsJsonObject(), loader, textures, layers, depth + 1);
+                    collect(
+                            child.getValue().getAsJsonObject(),
+                            loader,
+                            textures,
+                            layers,
+                            depth + 1);
                 }
             }
             return;
         }
         if (elements != null) {
             for (JsonElement element : elements.getAsJsonArray()) {
-                if (!element.isJsonObject() || !element.getAsJsonObject().has("faces")
+                if (!element.isJsonObject()
+                        || !element.getAsJsonObject().has("faces")
                         || !element.getAsJsonObject().get("faces").isJsonObject()) {
                     continue;
                 }
-                for (Map.Entry<String, JsonElement> face : element.getAsJsonObject().getAsJsonObject("faces").entrySet()) {
+                for (Map.Entry<String, JsonElement> face :
+                        element.getAsJsonObject().getAsJsonObject("faces").entrySet()) {
                     if (!face.getValue().isJsonObject()) {
                         continue;
                     }
                     JsonObject faceObject = face.getValue().getAsJsonObject();
-                    if (!faceObject.has("texture") || !faceObject.get("texture").isJsonPrimitive()) {
+                    if (!faceObject.has("texture")
+                            || !faceObject.get("texture").isJsonPrimitive()) {
                         continue;
                     }
                     String texture = resolve(faceObject.get("texture").getAsString(), textures);
-                    int tintIndex = faceObject.has("tintindex") && faceObject.get("tintindex").isJsonPrimitive()
-                            ? faceObject.get("tintindex").getAsInt() : -1;
+                    int tintIndex =
+                            faceObject.has("tintindex")
+                                            && faceObject.get("tintindex").isJsonPrimitive()
+                                    ? faceObject.get("tintindex").getAsInt()
+                                    : -1;
                     if (texture != null) {
                         layers.add(new Layer(texture, tintIndex));
                     }

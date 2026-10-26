@@ -13,21 +13,32 @@ public final class ModCreativeTabs {
             DeferredRegister.create(Registries.CREATIVE_MODE_TAB, OresAndDrillsMod.MOD_ID);
 
     /** All drill tiers, in progression order. */
-    public static final DeferredHolder<CreativeModeTab, CreativeModeTab> DRILLS = CREATIVE_MODE_TABS.register(
-            "drills",
-            () -> CreativeModeTab.builder()
-                    .title(Component.translatable("itemGroup.ores_and_drills.drills"))
-                    .icon(() -> ModBlocks.ELECTRIC_MINING_DRILL_ITEM.get().getDefaultInstance())
-                    .withTabsBefore(CreativeModeTabs.SPAWN_EGGS)
-                    .displayItems((parameters, output) -> {
-                        output.accept(ModBlocks.BURNER_MINING_DRILL_ITEM.get());
-                        output.accept(ModBlocks.ELECTRIC_MINING_DRILL_ITEM.get());
-                        output.accept(ModBlocks.ADVANCED_MINING_DRILL_ITEM.get());
-                        output.accept(ModBlocks.ULTIMATE_MINING_DRILL_ITEM.get());
-                    })
-                    .build()
-    );
+    public static final DeferredHolder<CreativeModeTab, CreativeModeTab> DRILLS =
+            CREATIVE_MODE_TABS.register(
+                    "drills",
+                    () ->
+                            CreativeModeTab.builder()
+                                    .title(
+                                            Component.translatable(
+                                                    "itemGroup.ores_and_drills.drills"))
+                                    .icon(
+                                            () ->
+                                                    ModBlocks.ELECTRIC_MINING_DRILL_ITEM
+                                                            .get()
+                                                            .getDefaultInstance())
+                                    .withTabsBefore(CreativeModeTabs.SPAWN_EGGS)
+                                    .displayItems(
+                                            (parameters, output) -> {
+                                                output.accept(
+                                                        ModBlocks.BURNER_MINING_DRILL_ITEM.get());
+                                                output.accept(
+                                                        ModBlocks.ELECTRIC_MINING_DRILL_ITEM.get());
+                                                output.accept(
+                                                        ModBlocks.ADVANCED_MINING_DRILL_ITEM.get());
+                                                output.accept(
+                                                        ModBlocks.ULTIMATE_MINING_DRILL_ITEM.get());
+                                            })
+                                    .build());
 
-    private ModCreativeTabs() {
-    }
+    private ModCreativeTabs() {}
 }

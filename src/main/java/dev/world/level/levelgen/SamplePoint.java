@@ -6,7 +6,8 @@ import net.minecraft.core.BlockPos;
 public record SamplePoint(BlockPos pos, int section) {
     public SamplePoint {
         if (pos == null || section < 0) {
-            throw new IllegalArgumentException("A sample position and non-negative section are required");
+            throw new IllegalArgumentException(
+                    "A sample position and non-negative section are required");
         }
         pos = pos.immutable();
     }

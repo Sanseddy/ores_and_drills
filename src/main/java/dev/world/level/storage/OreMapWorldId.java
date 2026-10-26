@@ -1,12 +1,11 @@
 package dev.world.level.storage;
 
 import dev.OresAndDrillsMod;
+import java.util.UUID;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.saveddata.SavedData;
-
-import java.util.UUID;
 
 /** Persistent identity used to keep client ore-map files separate after a server world reset. */
 public final class OreMapWorldId extends FastSavedData {

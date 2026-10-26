@@ -5,15 +5,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.OresAndDrillsMod;
-import net.minecraft.core.Direction;
-import net.minecraft.util.Mth;
-import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.phys.shapes.Shapes;
-import net.minecraft.world.phys.shapes.VoxelShape;
-import org.joml.Matrix4f;
-import org.joml.Vector3f;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -24,14 +15,22 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import net.minecraft.core.Direction;
+import net.minecraft.util.Mth;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.VoxelShape;
+import org.joml.Matrix4f;
+import org.joml.Vector3f;
 
 /**
  * Builds block-local hitboxes from a GeckoLib Bedrock geometry file.
  *
- * <p>A Minecraft {@link VoxelShape} can only contain axis-aligned boxes. Rotated cubes are therefore
- * divided into one-model-pixel cells and each cell is conservatively wrapped in an AABB. Every resulting
- * box is clipped to one physical block cell before it is added. Consequently selecting a multiblock part
- * only outlines the geometry contained in that part's 16x16x16 space.</p>
+ * <p>A Minecraft {@link VoxelShape} can only contain axis-aligned boxes. Rotated cubes are
+ * therefore divided into one-model-pixel cells and each cell is conservatively wrapped in an AABB.
+ * Every resulting box is clipped to one physical block cell before it is added. Consequently
+ * selecting a multiblock part only outlines the geometry contained in that part's 16x16x16 space.
  */
 final class DrillHitboxModel {
     private static final float PIXELS_PER_BLOCK = 16.0F;
@@ -39,8 +38,7 @@ final class DrillHitboxModel {
     private static final float EPSILON = 1.0E-5F;
     private static final int MAX_SUBDIVISIONS_PER_AXIS = 64;
 
-    private DrillHitboxModel() {
-    }
+    private DrillHitboxModel() {}
 
     static LoadedHitboxes loadOrFullBlocks(
             String resourcePath,
@@ -49,17 +47,23 @@ final class DrillHitboxModel {
             int mainOffsetX,
             int mainOffsetY,
             int mainOffsetZ,
-            double modelForwardOffset
-    ) {
+            double modelForwardOffset) {
         try {
-            return load(resourcePath, size, height, mainOffsetX, mainOffsetY, mainOffsetZ, modelForwardOffset);
+            return load(
+                    resourcePath,
+                    size,
+                    height,
+                    mainOffsetX,
+                    mainOffsetY,
+                    mainOffsetZ,
+                    modelForwardOffset);
         } catch (RuntimeException | IOException exception) {
             OresAndDrillsMod.LOGGER.debug(
                     "Could not build drill hitboxes from {}; falling back to full blocks",
                     resourcePath,
-                    exception
-            );
-            return new LoadedHitboxes(fullBlocks(size, height), new DrillModelCell[size][height][size]);
+                    exception);
+            return new LoadedHitboxes(
+                    fullBlocks(size, height), new DrillModelCell[size][height][size]);
         }
     }
 
@@ -70,8 +74,8 @@ final class DrillHitboxModel {
             int mainOffsetX,
             int mainOffsetY,
             int mainOffsetZ,
-            double modelForwardOffset
-    ) throws IOException {
+            double modelForwardOffset)
+            throws IOException {
         JsonObject root;
         try (InputStream stream = DrillHitboxModel.class.getResourceAsStream(resourcePath)) {
             if (stream == null) {
@@ -94,13 +98,14 @@ final class DrillHitboxModel {
             JsonObject bone = element.getAsJsonObject();
             String name = requiredString(bone, "name");
             String parent = optionalString(bone, "parent");
-            bones.put(name, new BoneDefinition(
+            bones.put(
                     name,
-                    parent,
-                    readVector(bone, "pivot"),
-                    readVector(bone, "rotation"),
-                    readCubes(bone)
-            ));
+                    new BoneDefinition(
+                            name,
+                            parent,
+                            readVector(bone, "pivot"),
+                            readVector(bone, "rotation"),
+                            readCubes(bone)));
         }
 
         PixelCell[][][] cells = new PixelCell[size][height][size];
@@ -114,15 +119,17 @@ final class DrillHitboxModel {
             }
         }
 
-        // This matches the NORTH renderer: centre the GeckoLib origin in the main block,
-        // move it forward to the multiblock centre, then apply the model's 180-degree yaw.
-        Matrix4f modelTransform = new Matrix4f()
-                .translate(0.5F, 0.0F, 0.5F - (float) modelForwardOffset)
-                .rotateY((float) Math.PI);
+        // This matches the NORTH renderer: centre the GeckoLib origin in the main block, move it
+        // forward to the multiblock centre, then apply the model's 180-degree yaw.
+        Matrix4f modelTransform =
+                new Matrix4f()
+                        .translate(0.5F, 0.0F, 0.5F - (float) modelForwardOffset)
+                        .rotateY((float) Math.PI);
 
         Map<String, Matrix4f> resolvedBones = new HashMap<>();
         for (BoneDefinition bone : bones.values()) {
-            Matrix4f boneTransform = resolveBoneTransform(bone, bones, resolvedBones, new ArrayList<>());
+            Matrix4f boneTransform =
+                    resolveBoneTransform(bone, bones, resolvedBones, new ArrayList<>());
             for (CubeDefinition cube : bone.cubes()) {
                 addCube(
                         new Matrix4f(modelTransform).mul(boneTransform).mul(cubeTransform(cube)),
@@ -133,8 +140,7 @@ final class DrillHitboxModel {
                         height,
                         mainOffsetX,
                         mainOffsetY,
-                        mainOffsetZ
-                );
+                        mainOffsetZ);
             }
         }
 
@@ -143,10 +149,12 @@ final class DrillHitboxModel {
         for (int offsetX = 0; offsetX < size; offsetX++) {
             for (int offsetY = 0; offsetY < height; offsetY++) {
                 for (int offsetZ = 0; offsetZ < size; offsetZ++) {
-                    result[offsetX][offsetY][offsetZ] = cells[offsetX][offsetY][offsetZ].buildShape();
-                    exactCells[offsetX][offsetY][offsetZ] = result[offsetX][offsetY][offsetZ].isEmpty()
-                            ? DrillModelCell.EMPTY
-                            : exactBuilders[offsetX][offsetY][offsetZ].build();
+                    result[offsetX][offsetY][offsetZ] =
+                            cells[offsetX][offsetY][offsetZ].buildShape();
+                    exactCells[offsetX][offsetY][offsetZ] =
+                            result[offsetX][offsetY][offsetZ].isEmpty()
+                                    ? DrillModelCell.EMPTY
+                                    : exactBuilders[offsetX][offsetY][offsetZ].build();
                 }
             }
         }
@@ -158,25 +166,37 @@ final class DrillHitboxModel {
             return northShape;
         }
         if (facing.getAxis().isVertical()) {
-            throw new IllegalArgumentException("Drill hitboxes only support horizontal facings: " + facing);
+            throw new IllegalArgumentException(
+                    "Drill hitboxes only support horizontal facings: " + facing);
         }
 
         VoxelShape[] rotated = {Shapes.empty()};
-        northShape.forAllBoxes((minX, minY, minZ, maxX, maxY, maxZ) -> {
-            int quarterTurns = switch (facing) {
-                case EAST -> 1;
-                case SOUTH -> 2;
-                case WEST -> 3;
-                default -> throw new IllegalArgumentException("Unexpected facing " + facing);
-            };
-            DrillHitboxCellMath.Box box = DrillHitboxCellMath.rotateY(
-                    new DrillHitboxCellMath.Box(minX, minY, minZ, maxX, maxY, maxZ),
-                    quarterTurns
-            );
-            rotated[0] = Shapes.or(rotated[0], Shapes.box(
-                    box.minX(), box.minY(), box.minZ(), box.maxX(), box.maxY(), box.maxZ()
-            ));
-        });
+        northShape.forAllBoxes(
+                (minX, minY, minZ, maxX, maxY, maxZ) -> {
+                    int quarterTurns =
+                            switch (facing) {
+                                case EAST -> 1;
+                                case SOUTH -> 2;
+                                case WEST -> 3;
+                                default ->
+                                        throw new IllegalArgumentException(
+                                                "Unexpected facing " + facing);
+                            };
+                    DrillHitboxCellMath.Box box =
+                            DrillHitboxCellMath.rotateY(
+                                    new DrillHitboxCellMath.Box(minX, minY, minZ, maxX, maxY, maxZ),
+                                    quarterTurns);
+                    rotated[0] =
+                            Shapes.or(
+                                    rotated[0],
+                                    Shapes.box(
+                                            box.minX(),
+                                            box.minY(),
+                                            box.minZ(),
+                                            box.maxX(),
+                                            box.maxY(),
+                                            box.maxZ()));
+                });
         return rotated[0].optimize();
     }
 
@@ -189,13 +209,13 @@ final class DrillHitboxModel {
         List<CubeDefinition> cubes = new ArrayList<>(elements.size());
         for (JsonElement element : elements) {
             JsonObject cube = element.getAsJsonObject();
-            cubes.add(new CubeDefinition(
-                    requiredVector(cube, "origin"),
-                    requiredVector(cube, "size"),
-                    readVector(cube, "pivot"),
-                    readVector(cube, "rotation"),
-                    optionalFloat(cube, "inflate", 0.0F)
-            ));
+            cubes.add(
+                    new CubeDefinition(
+                            requiredVector(cube, "origin"),
+                            requiredVector(cube, "size"),
+                            readVector(cube, "pivot"),
+                            readVector(cube, "rotation"),
+                            optionalFloat(cube, "inflate", 0.0F)));
         }
         return List.copyOf(cubes);
     }
@@ -204,14 +224,15 @@ final class DrillHitboxModel {
             BoneDefinition bone,
             Map<String, BoneDefinition> bones,
             Map<String, Matrix4f> resolved,
-            List<String> resolving
-    ) throws IOException {
+            List<String> resolving)
+            throws IOException {
         Matrix4f cached = resolved.get(bone.name());
         if (cached != null) {
             return new Matrix4f(cached);
         }
         if (resolving.contains(bone.name())) {
-            throw new IOException("Bone parent cycle: " + String.join(" -> ", resolving) + " -> " + bone.name());
+            throw new IOException(
+                    "Bone parent cycle: " + String.join(" -> ", resolving) + " -> " + bone.name());
         }
 
         resolving.add(bone.name());
@@ -219,7 +240,8 @@ final class DrillHitboxModel {
         if (bone.parent() != null) {
             BoneDefinition parent = bones.get(bone.parent());
             if (parent == null) {
-                throw new IOException("Unknown parent bone " + bone.parent() + " for " + bone.name());
+                throw new IOException(
+                        "Unknown parent bone " + bone.parent() + " for " + bone.name());
             }
             transform.set(resolveBoneTransform(parent, bones, resolved, resolving));
         }
@@ -259,8 +281,7 @@ final class DrillHitboxModel {
             int height,
             int mainOffsetX,
             int mainOffsetY,
-            int mainOffsetZ
-    ) {
+            int mainOffsetZ) {
         Vector3f rawOrigin = cube.origin();
         Vector3f rawSize = cube.size();
         float inflate = cube.inflate() / PIXELS_PER_BLOCK;
@@ -275,23 +296,26 @@ final class DrillHitboxModel {
 
         addExactCube(
                 transform,
-                minX, minY, minZ,
-                maxX, maxY, maxZ,
+                minX,
+                minY,
+                minZ,
+                maxX,
+                maxY,
+                maxZ,
                 exactBuilders,
                 size,
                 height,
                 mainOffsetX,
                 mainOffsetY,
-                mainOffsetZ
-        );
+                mainOffsetZ);
 
         // Bedrock models allow cubes with a zero-sized axis. They still render and can be selected,
         // but a VoxelShape needs volume to collide with entities. Give only those flat cubes one
         // model pixel of collision thickness while preserving their exact visual/selection surface.
-        DrillHitboxCellMath.Box collisionBox = DrillHitboxCellMath.expandFlatAxes(
-                new DrillHitboxCellMath.Box(minX, minY, minZ, maxX, maxY, maxZ),
-                FLAT_CUBE_COLLISION_THICKNESS
-        );
+        DrillHitboxCellMath.Box collisionBox =
+                DrillHitboxCellMath.expandFlatAxes(
+                        new DrillHitboxCellMath.Box(minX, minY, minZ, maxX, maxY, maxZ),
+                        FLAT_CUBE_COLLISION_THICKNESS);
         minX = (float) collisionBox.minX();
         minY = (float) collisionBox.minY();
         minZ = (float) collisionBox.minZ();
@@ -312,11 +336,10 @@ final class DrillHitboxModel {
                 for (int partZ = 0; partZ < divisionsZ; partZ++) {
                     float partMinZ = lerp(minZ, maxZ, (float) partZ / divisionsZ);
                     float partMaxZ = lerp(minZ, maxZ, (float) (partZ + 1) / divisionsZ);
-                    AABB transformed = transformAabb(
-                            transform,
-                            partMinX, partMinY, partMinZ,
-                            partMaxX, partMaxY, partMaxZ
-                    );
+                    AABB transformed =
+                            transformAabb(
+                                    transform, partMinX, partMinY, partMinZ, partMaxX, partMaxY,
+                                    partMaxZ);
                     addClippedToCells(
                             transformed,
                             cells,
@@ -324,8 +347,7 @@ final class DrillHitboxModel {
                             height,
                             mainOffsetX,
                             mainOffsetY,
-                            mainOffsetZ
-                    );
+                            mainOffsetZ);
                 }
             }
         }
@@ -335,14 +357,17 @@ final class DrillHitboxModel {
         if (isAxisAligned(transform)) {
             return 1;
         }
-        return Math.clamp((int) Math.ceil((maximum - minimum) * PIXELS_PER_BLOCK), 1, MAX_SUBDIVISIONS_PER_AXIS);
+        return Math.clamp(
+                (int) Math.ceil((maximum - minimum) * PIXELS_PER_BLOCK),
+                1,
+                MAX_SUBDIVISIONS_PER_AXIS);
     }
 
     private static boolean isAxisAligned(Matrix4f matrix) {
         float[][] values = {
-                {matrix.m00(), matrix.m01(), matrix.m02()},
-                {matrix.m10(), matrix.m11(), matrix.m12()},
-                {matrix.m20(), matrix.m21(), matrix.m22()}
+            {matrix.m00(), matrix.m01(), matrix.m02()},
+            {matrix.m10(), matrix.m11(), matrix.m12()},
+            {matrix.m20(), matrix.m21(), matrix.m22()}
         };
 
         for (int row = 0; row < 3; row++) {
@@ -370,8 +395,7 @@ final class DrillHitboxModel {
             float minZ,
             float maxX,
             float maxY,
-            float maxZ
-    ) {
+            float maxZ) {
         double transformedMinX = Double.POSITIVE_INFINITY;
         double transformedMinY = Double.POSITIVE_INFINITY;
         double transformedMinZ = Double.POSITIVE_INFINITY;
@@ -380,11 +404,11 @@ final class DrillHitboxModel {
         double transformedMaxZ = Double.NEGATIVE_INFINITY;
 
         for (int corner = 0; corner < 8; corner++) {
-            Vector3f point = new Vector3f(
-                    (corner & 1) == 0 ? minX : maxX,
-                    (corner & 2) == 0 ? minY : maxY,
-                    (corner & 4) == 0 ? minZ : maxZ
-            );
+            Vector3f point =
+                    new Vector3f(
+                            (corner & 1) == 0 ? minX : maxX,
+                            (corner & 2) == 0 ? minY : maxY,
+                            (corner & 4) == 0 ? minZ : maxZ);
             transform.transformPosition(point);
             transformedMinX = Math.min(transformedMinX, point.x);
             transformedMinY = Math.min(transformedMinY, point.y);
@@ -395,9 +419,12 @@ final class DrillHitboxModel {
         }
 
         return new AABB(
-                transformedMinX, transformedMinY, transformedMinZ,
-                transformedMaxX, transformedMaxY, transformedMaxZ
-        );
+                transformedMinX,
+                transformedMinY,
+                transformedMinZ,
+                transformedMaxX,
+                transformedMaxY,
+                transformedMaxZ);
     }
 
     private static void addExactCube(
@@ -413,31 +440,29 @@ final class DrillHitboxModel {
             int height,
             int mainOffsetX,
             int mainOffsetY,
-            int mainOffsetZ
-    ) {
+            int mainOffsetZ) {
         Vec3[] corners = {
-                transformPoint(transform, minX, minY, minZ),
-                transformPoint(transform, maxX, minY, minZ),
-                transformPoint(transform, maxX, maxY, minZ),
-                transformPoint(transform, minX, maxY, minZ),
-                transformPoint(transform, minX, minY, maxZ),
-                transformPoint(transform, maxX, minY, maxZ),
-                transformPoint(transform, maxX, maxY, maxZ),
-                transformPoint(transform, minX, maxY, maxZ)
+            transformPoint(transform, minX, minY, minZ),
+            transformPoint(transform, maxX, minY, minZ),
+            transformPoint(transform, maxX, maxY, minZ),
+            transformPoint(transform, minX, maxY, minZ),
+            transformPoint(transform, minX, minY, maxZ),
+            transformPoint(transform, maxX, minY, maxZ),
+            transformPoint(transform, maxX, maxY, maxZ),
+            transformPoint(transform, minX, maxY, maxZ)
         };
         int[][] faces = {
-                {0, 3, 2, 1},
-                {4, 5, 6, 7},
-                {0, 1, 5, 4},
-                {3, 7, 6, 2},
-                {0, 4, 7, 3},
-                {1, 2, 6, 5}
+            {0, 3, 2, 1},
+            {4, 5, 6, 7},
+            {0, 1, 5, 4},
+            {3, 7, 6, 2},
+            {0, 4, 7, 3},
+            {1, 2, 6, 5}
         };
 
         for (int[] face : faces) {
-            List<Vec3> polygon = List.of(
-                    corners[face[0]], corners[face[1]], corners[face[2]], corners[face[3]]
-            );
+            List<Vec3> polygon =
+                    List.of(corners[face[0]], corners[face[1]], corners[face[2]], corners[face[3]]);
             addFaceToCells(polygon, builders, size, height, mainOffsetX, mainOffsetY, mainOffsetZ);
         }
     }
@@ -449,8 +474,7 @@ final class DrillHitboxModel {
             int height,
             int mainOffsetX,
             int mainOffsetY,
-            int mainOffsetZ
-    ) {
+            int mainOffsetZ) {
         for (int offsetX = 0; offsetX < size; offsetX++) {
             double cellX = offsetX - mainOffsetX;
             for (int offsetY = 0; offsetY < height; offsetY++) {
@@ -469,11 +493,11 @@ final class DrillHitboxModel {
 
                     List<Vec3> local = new ArrayList<>(clipped.size());
                     for (Vec3 point : clipped) {
-                        local.add(new Vec3(
-                                clampUnit(point.x - cellX),
-                                clampUnit(point.y - cellY),
-                                clampUnit(point.z - cellZ)
-                        ));
+                        local.add(
+                                new Vec3(
+                                        clampUnit(point.x - cellX),
+                                        clampUnit(point.y - cellY),
+                                        clampUnit(point.z - cellZ)));
                     }
                     builders[offsetX][offsetY][offsetZ].addPolygon(local);
                 }
@@ -482,11 +506,7 @@ final class DrillHitboxModel {
     }
 
     private static List<Vec3> clipPolygon(
-            List<Vec3> input,
-            int axis,
-            double boundary,
-            boolean keepGreater
-    ) {
+            List<Vec3> input, int axis, double boundary, boolean keepGreater) {
         if (input.isEmpty()) {
             return input;
         }
@@ -494,15 +514,17 @@ final class DrillHitboxModel {
         List<Vec3> output = new ArrayList<>(input.size() + 1);
         Vec3 previous = input.getLast();
         double previousValue = axisValue(previous, axis);
-        boolean previousInside = keepGreater
-                ? previousValue >= boundary - EPSILON
-                : previousValue <= boundary + EPSILON;
+        boolean previousInside =
+                keepGreater
+                        ? previousValue >= boundary - EPSILON
+                        : previousValue <= boundary + EPSILON;
 
         for (Vec3 current : input) {
             double currentValue = axisValue(current, axis);
-            boolean currentInside = keepGreater
-                    ? currentValue >= boundary - EPSILON
-                    : currentValue <= boundary + EPSILON;
+            boolean currentInside =
+                    keepGreater
+                            ? currentValue >= boundary - EPSILON
+                            : currentValue <= boundary + EPSILON;
             if (currentInside != previousInside) {
                 double amount = (boundary - previousValue) / (currentValue - previousValue);
                 output.add(previous.lerp(current, Mth.clamp(amount, 0.0D, 1.0D)));
@@ -539,8 +561,7 @@ final class DrillHitboxModel {
             int height,
             int mainOffsetX,
             int mainOffsetY,
-            int mainOffsetZ
-    ) {
+            int mainOffsetZ) {
         for (int offsetX = 0; offsetX < size; offsetX++) {
             double cellX = offsetX - mainOffsetX;
             for (int offsetY = 0; offsetY < height; offsetY++) {
@@ -548,15 +569,18 @@ final class DrillHitboxModel {
                 for (int offsetZ = 0; offsetZ < size; offsetZ++) {
                     // For NORTH, increasing structure Z travels towards negative world Z.
                     double cellZ = mainOffsetZ - offsetZ;
-                    DrillHitboxCellMath.Box clipped = DrillHitboxCellMath.clipToCell(
-                            new DrillHitboxCellMath.Box(
-                                    modelBox.minX, modelBox.minY, modelBox.minZ,
-                                    modelBox.maxX, modelBox.maxY, modelBox.maxZ
-                            ),
-                            cellX,
-                            cellY,
-                            cellZ
-                    );
+                    DrillHitboxCellMath.Box clipped =
+                            DrillHitboxCellMath.clipToCell(
+                                    new DrillHitboxCellMath.Box(
+                                            modelBox.minX,
+                                            modelBox.minY,
+                                            modelBox.minZ,
+                                            modelBox.maxX,
+                                            modelBox.maxY,
+                                            modelBox.maxZ),
+                                    cellX,
+                                    cellY,
+                                    cellZ);
                     if (clipped == null) {
                         continue;
                     }
@@ -610,7 +634,8 @@ final class DrillHitboxModel {
         if (array == null || array.size() != 3) {
             throw new IOException("Missing three-component vector '" + name + "'");
         }
-        return new Vector3f(array.get(0).getAsFloat(), array.get(1).getAsFloat(), array.get(2).getAsFloat());
+        return new Vector3f(
+                array.get(0).getAsFloat(), array.get(1).getAsFloat(), array.get(2).getAsFloat());
     }
 
     private static Vector3f readVector(JsonObject object, String name) throws IOException {
@@ -621,7 +646,8 @@ final class DrillHitboxModel {
         if (array.size() != 3) {
             throw new IOException("Vector '" + name + "' must have three components");
         }
-        return new Vector3f(array.get(0).getAsFloat(), array.get(1).getAsFloat(), array.get(2).getAsFloat());
+        return new Vector3f(
+                array.get(0).getAsFloat(), array.get(1).getAsFloat(), array.get(2).getAsFloat());
     }
 
     private static float optionalFloat(JsonObject object, String name, float fallback) {
@@ -637,26 +663,17 @@ final class DrillHitboxModel {
         return Math.clamp(value, 0.0D, 1.0D);
     }
 
-    record LoadedHitboxes(VoxelShape[][][] collisionShapes, DrillModelCell[][][] exactCells) {
-    }
+    record LoadedHitboxes(VoxelShape[][][] collisionShapes, DrillModelCell[][][] exactCells) {}
 
     private record BoneDefinition(
             String name,
             String parent,
             Vector3f pivot,
             Vector3f rotation,
-            List<CubeDefinition> cubes
-    ) {
-    }
+            List<CubeDefinition> cubes) {}
 
     private record CubeDefinition(
-            Vector3f origin,
-            Vector3f size,
-            Vector3f pivot,
-            Vector3f rotation,
-            float inflate
-    ) {
-    }
+            Vector3f origin, Vector3f size, Vector3f pivot, Vector3f rotation, float inflate) {}
 
     /** A fixed 16x16x16 occupancy grid keeps generated shapes compact and startup work bounded. */
     private static final class PixelCell {
@@ -698,16 +715,15 @@ final class DrillHitboxModel {
                 }
 
                 int endZ = startZ + 1;
-                while (endZ < RESOLUTION && rectangleIsSet(
-                        remaining, startX, endX, startY, startY + 1, endZ, endZ + 1
-                )) {
+                while (endZ < RESOLUTION
+                        && rectangleIsSet(
+                                remaining, startX, endX, startY, startY + 1, endZ, endZ + 1)) {
                     endZ++;
                 }
 
                 int endY = startY + 1;
-                while (endY < RESOLUTION && rectangleIsSet(
-                        remaining, startX, endX, endY, endY + 1, startZ, endZ
-                )) {
+                while (endY < RESOLUTION
+                        && rectangleIsSet(remaining, startX, endX, endY, endY + 1, startZ, endZ)) {
                     endY++;
                 }
 
@@ -717,27 +733,22 @@ final class DrillHitboxModel {
                     }
                 }
 
-                shape = Shapes.or(shape, Shapes.box(
-                        (double) startX / RESOLUTION,
-                        (double) startY / RESOLUTION,
-                        (double) startZ / RESOLUTION,
-                        (double) endX / RESOLUTION,
-                        (double) endY / RESOLUTION,
-                        (double) endZ / RESOLUTION
-                ));
+                shape =
+                        Shapes.or(
+                                shape,
+                                Shapes.box(
+                                        (double) startX / RESOLUTION,
+                                        (double) startY / RESOLUTION,
+                                        (double) startZ / RESOLUTION,
+                                        (double) endX / RESOLUTION,
+                                        (double) endY / RESOLUTION,
+                                        (double) endZ / RESOLUTION));
             }
             return shape.optimize();
         }
 
         private static boolean rectangleIsSet(
-                BitSet bits,
-                int minX,
-                int maxX,
-                int minY,
-                int maxY,
-                int minZ,
-                int maxZ
-        ) {
+                BitSet bits, int minX, int maxX, int minY, int maxY, int minZ, int maxZ) {
             for (int y = minY; y < maxY; y++) {
                 for (int z = minZ; z < maxZ; z++) {
                     int start = index(minX, y, z);
@@ -751,7 +762,8 @@ final class DrillHitboxModel {
         }
 
         private static int lowerPixel(double coordinate) {
-            return Math.clamp((int) Math.floor(coordinate * RESOLUTION + EPSILON), 0, RESOLUTION - 1);
+            return Math.clamp(
+                    (int) Math.floor(coordinate * RESOLUTION + EPSILON), 0, RESOLUTION - 1);
         }
 
         private static int upperPixel(double coordinate) {

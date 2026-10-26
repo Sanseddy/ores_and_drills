@@ -3,6 +3,7 @@ plugins {
     id 'maven-publish'
     id 'net.neoforged.moddev' version '2.0.141'
     id 'idea'
+    id 'com.diffplug.spotless' version '7.0.2'
 }
 
 version = mod_version
@@ -36,6 +37,11 @@ repositories {
         name = 'Architectury'
         url = 'https://maven.architectury.dev/'
         content { includeGroup 'dev.architectury' }
+    }
+    maven {
+        name = 'Sable'
+        url = 'https://maven.ryanhcode.dev/releases'
+        content { includeGroup 'dev.ryanhcode.sable-companion' }
     }
     exclusiveContent {
         forRepository {
@@ -122,6 +128,10 @@ dependencies {
     compileOnly('dev.ftb.mods:ftb-chunks-neoforge:2101.1.22') { transitive = false }
     compileOnly('dev.ftb.mods:ftb-library-neoforge:2101.1.35') { transitive = false }
     compileOnly('dev.architectury:architectury-neoforge:13.0.8') { transitive = false }
+    // Sable sub-level impacts: dev.compat.sable is registered only after a ModList check.
+    compileOnly('maven.modrinth:sable:2.0.3+mc1.21.1') { transitive = false }
+    // Sable's sub-level classes implement its companion API; javac needs it to resolve them.
+    compileOnly('dev.ryanhcode.sable-companion:sable-companion-common-1.21.1:1.6.0') { transitive = false }
     testImplementation platform('org.junit:junit-bom:5.11.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     // Same Gson as Minecraft 1.21.1, for tests of code that walks encoded worldgen JSON.
@@ -174,6 +184,18 @@ neoForge.ideSyncTask generateModMetadata
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+}
+
+// ./gradlew spotlessApply formats the code; spotlessCheck only reports. The check is not part of
+// build, so an unformatted file never blocks a test run.
+spotless {
+    enforceCheck false
+    // The repository mixes LF and CRLF files; formatting must not rewrite every line ending.
+    lineEndings 'PRESERVE'
+    java {
+        target 'src/*/java/**/*.java'
+        googleJavaFormat('1.22.0').aosp()
+    }
 }
 
 idea {

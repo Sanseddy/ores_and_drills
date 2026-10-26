@@ -1,12 +1,11 @@
 package dev.world.level.levelgen;
 
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.junit.jupiter.api.Test;
 
 class StableLongTopKTest {
     @Test
@@ -33,10 +32,12 @@ class StableLongTopKTest {
         }
 
         AtomicInteger mapped = new AtomicInteger();
-        List<Long> values = selection.mapToList((value, ignored) -> {
-            mapped.incrementAndGet();
-            return value;
-        });
+        List<Long> values =
+                selection.mapToList(
+                        (value, ignored) -> {
+                            mapped.incrementAndGet();
+                            return value;
+                        });
 
         assertEquals(16, mapped.get());
         assertEquals(16, values.size());

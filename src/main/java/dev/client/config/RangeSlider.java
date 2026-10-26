@@ -1,11 +1,10 @@
 package dev.client.config;
 
+import java.util.function.DoubleConsumer;
+import java.util.function.DoubleFunction;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
-
-import java.util.function.DoubleConsumer;
-import java.util.function.DoubleFunction;
 
 /** Slider over [min, max] snapped to {@code step}, reporting the snapped value on every change. */
 final class RangeSlider extends AbstractSliderButton {
@@ -15,8 +14,14 @@ final class RangeSlider extends AbstractSliderButton {
     private final DoubleFunction<Component> format;
     private final DoubleConsumer onChange;
 
-    RangeSlider(int width, double min, double max, double step, double initial,
-                DoubleFunction<Component> format, DoubleConsumer onChange) {
+    RangeSlider(
+            int width,
+            double min,
+            double max,
+            double step,
+            double initial,
+            DoubleFunction<Component> format,
+            DoubleConsumer onChange) {
         super(0, 0, width, 20, Component.empty(), 0.0D);
         this.min = min;
         this.max = max;

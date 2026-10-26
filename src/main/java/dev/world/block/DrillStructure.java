@@ -4,11 +4,14 @@ import dev.registry.ModBlocks;
 import dev.world.block.entity.drill.OreScanner;
 import dev.world.level.levelgen.OreDepositData;
 import dev.world.level.levelgen.OreTags;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Supplier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.Block;
@@ -19,10 +22,6 @@ import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.VoxelShape;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Supplier;
 
 public final class DrillStructure {
     private static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
@@ -44,14 +43,21 @@ public final class DrillStructure {
     private final VoxelShape[][][][] structureShapes;
     private final DrillModelCell[][][][] exactCells;
 
-    public DrillStructure(int size, int height, int mainOffsetX, int mainOffsetY, int mainOffsetZ,
-                          Supplier<? extends Block> mainBlock,
-                          Supplier<? extends Block> partBlock,
-                          Supplier<? extends Item> partCloneItem,
-                          IntegerProperty offsetXProperty, IntegerProperty offsetYProperty, IntegerProperty offsetZProperty,
-                          double modelForwardOffset,
-                          String geometryResource,
-                          MiningDrillTier tier) {
+    public DrillStructure(
+            int size,
+            int height,
+            int mainOffsetX,
+            int mainOffsetY,
+            int mainOffsetZ,
+            Supplier<? extends Block> mainBlock,
+            Supplier<? extends Block> partBlock,
+            Supplier<? extends Item> partCloneItem,
+            IntegerProperty offsetXProperty,
+            IntegerProperty offsetYProperty,
+            IntegerProperty offsetZProperty,
+            double modelForwardOffset,
+            String geometryResource,
+            MiningDrillTier tier) {
         this.size = size;
         this.tier = tier;
         this.miningAreaMargin = Math.max(0, tier.miningAreaMargin());
@@ -65,15 +71,15 @@ public final class DrillStructure {
         this.offsetXProperty = offsetXProperty;
         this.offsetYProperty = offsetYProperty;
         this.offsetZProperty = offsetZProperty;
-        DrillHitboxModel.LoadedHitboxes hitboxes = DrillHitboxModel.loadOrFullBlocks(
-                geometryResource,
-                size,
-                height,
-                mainOffsetX,
-                mainOffsetY,
-                mainOffsetZ,
-                modelForwardOffset
-        );
+        DrillHitboxModel.LoadedHitboxes hitboxes =
+                DrillHitboxModel.loadOrFullBlocks(
+                        geometryResource,
+                        size,
+                        height,
+                        mainOffsetX,
+                        mainOffsetY,
+                        mainOffsetZ,
+                        modelForwardOffset);
         this.northShapes = hitboxes.collisionShapes();
         this.structureShapes = createStructureShapes();
         this.exactCells = createExactCells(hitboxes.exactCells());
@@ -93,16 +99,22 @@ public final class DrillStructure {
     }
 
     /**
-     * Horizontal bounds of the mined columns: the body footprint grown by {@link #miningAreaMargin()} on every
-     * side. The box spans the ground layer directly below the drill; ore is scanned downwards from there.
+     * Horizontal bounds of the mined columns: the body footprint grown by {@link
+     * #miningAreaMargin()} on every side. The box spans the ground layer directly below the drill;
+     * ore is scanned downwards from there.
      */
     public AABB miningAreaBounds(BlockPos origin, Direction facing) {
         BlockPos first = offset(origin, facing, -miningAreaMargin, 0, -miningAreaMargin).below();
-        BlockPos second = offset(origin, facing, size - 1 + miningAreaMargin, 0, size - 1 + miningAreaMargin).below();
+        BlockPos second =
+                offset(origin, facing, size - 1 + miningAreaMargin, 0, size - 1 + miningAreaMargin)
+                        .below();
         return new AABB(
-                Math.min(first.getX(), second.getX()), first.getY(), Math.min(first.getZ(), second.getZ()),
-                Math.max(first.getX(), second.getX()) + 1, first.getY() + 1, Math.max(first.getZ(), second.getZ()) + 1
-        );
+                Math.min(first.getX(), second.getX()),
+                first.getY(),
+                Math.min(first.getZ(), second.getZ()),
+                Math.max(first.getX(), second.getX()) + 1,
+                first.getY() + 1,
+                Math.max(first.getZ(), second.getZ()) + 1);
     }
 
     public IntegerProperty offsetXProperty() {
@@ -160,8 +172,8 @@ public final class DrillStructure {
     }
 
     /**
-     * True when the mining area holds ore this drill can harvest, searched as deep as the drill scans. The
-     * ore may lie anywhere in the area, not only under the body.
+     * True when the mining area holds ore this drill can harvest, searched as deep as the drill
+     * scans. The ore may lie anywhere in the area, not only under the body.
      */
     public boolean hasMineableOre(Level level, BlockPos origin, Direction facing) {
         for (int offsetX = -miningAreaMargin; offsetX < size + miningAreaMargin; offsetX++) {
@@ -170,7 +182,10 @@ public final class DrillStructure {
                 for (int depth = 0; depth < OreScanner.SCAN_DEPTH; depth++) {
                     BlockPos pos = columnTop.below(depth);
                     BlockState state = level.getBlockState(pos);
-                    if ((OreTags.isOre(state) || dev.recipe.DrillMiningRecipes.find(level.getRecipeManager(), state) != null)
+                    if ((OreTags.isOre(state)
+                                    || dev.recipe.DrillMiningRecipes.find(
+                                                    level.getRecipeManager(), state)
+                                            != null)
                             && tier.canHarvest(harvestCheckState(level, pos, state))) {
                         return true;
                     }
@@ -198,11 +213,14 @@ public final class DrillStructure {
                     }
 
                     BlockPos target = offset(origin, facing, offsetX, offsetY, offsetZ);
-                    BlockState partState = partBlock.get().defaultBlockState()
-                            .setValue(FACING, facing)
-                            .setValue(offsetXProperty, offsetX)
-                            .setValue(offsetYProperty, offsetY)
-                            .setValue(offsetZProperty, offsetZ);
+                    BlockState partState =
+                            partBlock
+                                    .get()
+                                    .defaultBlockState()
+                                    .setValue(FACING, facing)
+                                    .setValue(offsetXProperty, offsetX)
+                                    .setValue(offsetYProperty, offsetY)
+                                    .setValue(offsetZProperty, offsetZ);
                     level.setBlock(target, partState, Block.UPDATE_ALL);
                 }
             }
@@ -264,7 +282,8 @@ public final class DrillStructure {
         return collisionShapeForOffset(facing, mainOffsetX, mainOffsetY, mainOffsetZ);
     }
 
-    public VoxelShape collisionShapeForOffset(Direction facing, int offsetX, int offsetY, int offsetZ) {
+    public VoxelShape collisionShapeForOffset(
+            Direction facing, int offsetX, int offsetY, int offsetZ) {
         return structureShapes[facing.ordinal()][offsetX][offsetY][offsetZ];
     }
 
@@ -272,7 +291,8 @@ public final class DrillStructure {
         return exactCellForOffset(facing, mainOffsetX, mainOffsetY, mainOffsetZ);
     }
 
-    public DrillModelCell exactCellForOffset(Direction facing, int offsetX, int offsetY, int offsetZ) {
+    public DrillModelCell exactCellForOffset(
+            Direction facing, int offsetX, int offsetY, int offsetZ) {
         return exactCells[facing.ordinal()][offsetX][offsetY][offsetZ];
     }
 
@@ -283,16 +303,15 @@ public final class DrillStructure {
         int offsetZ = partState.getValue(offsetZProperty);
 
         Direction right = facing.getClockWise();
-        return partPos
-                .relative(right, mainOffsetX - offsetX)
+        return partPos.relative(right, mainOffsetX - offsetX)
                 .above(mainOffsetY - offsetY)
                 .relative(facing, mainOffsetZ - offsetZ);
     }
 
-    public BlockPos offset(BlockPos origin, Direction facing, int offsetX, int offsetY, int offsetZ) {
+    public BlockPos offset(
+            BlockPos origin, Direction facing, int offsetX, int offsetY, int offsetZ) {
         Direction right = facing.getClockWise();
-        return origin
-                .relative(right, offsetX - mainOffsetX)
+        return origin.relative(right, offsetX - mainOffsetX)
                 .above(offsetY - mainOffsetY)
                 .relative(facing, offsetZ - mainOffsetZ);
     }
@@ -322,18 +341,21 @@ public final class DrillStructure {
         return new AABB(minX, minY, minZ, maxX, maxY, maxZ);
     }
 
-    public boolean isWithinInteractionDistance(Player player, BlockPos origin, Direction facing, double maxDistanceSquared) {
+    public boolean isWithinInteractionDistance(
+            Player player, BlockPos origin, Direction facing, double maxDistanceSquared) {
         Direction right = facing.getClockWise();
         for (int offsetX = 0; offsetX < size; offsetX++) {
             for (int offsetY = 0; offsetY < height; offsetY++) {
                 for (int offsetZ = 0; offsetZ < size; offsetZ++) {
-                    int x = origin.getX()
-                            + right.getStepX() * (offsetX - mainOffsetX)
-                            + facing.getStepX() * (offsetZ - mainOffsetZ);
+                    int x =
+                            origin.getX()
+                                    + right.getStepX() * (offsetX - mainOffsetX)
+                                    + facing.getStepX() * (offsetZ - mainOffsetZ);
                     int y = origin.getY() + offsetY - mainOffsetY;
-                    int z = origin.getZ()
-                            + right.getStepZ() * (offsetX - mainOffsetX)
-                            + facing.getStepZ() * (offsetZ - mainOffsetZ);
+                    int z =
+                            origin.getZ()
+                                    + right.getStepZ() * (offsetX - mainOffsetX)
+                                    + facing.getStepZ() * (offsetZ - mainOffsetZ);
                     if (player.distanceToSqr(x + 0.5D, y + 0.5D, z + 0.5D) <= maxDistanceSquared) {
                         return true;
                     }
@@ -344,7 +366,8 @@ public final class DrillStructure {
         return false;
     }
 
-    public boolean isMatchingPart(BlockState state, Direction facing, int offsetX, int offsetY, int offsetZ) {
+    public boolean isMatchingPart(
+            BlockState state, Direction facing, int offsetX, int offsetY, int offsetZ) {
         return state.is(partBlock.get())
                 && state.getValue(FACING) == facing
                 && state.getValue(offsetXProperty) == offsetX
@@ -363,7 +386,8 @@ public final class DrillStructure {
             for (int offsetX = 0; offsetX < size; offsetX++) {
                 for (int offsetY = 0; offsetY < height; offsetY++) {
                     for (int offsetZ = 0; offsetZ < size; offsetZ++) {
-                        shapes[facing.ordinal()][offsetX][offsetY][offsetZ] = createStructureShape(facing, offsetX, offsetY, offsetZ);
+                        shapes[facing.ordinal()][offsetX][offsetY][offsetZ] =
+                                createStructureShape(facing, offsetX, offsetY, offsetZ);
                     }
                 }
             }
@@ -372,30 +396,31 @@ public final class DrillStructure {
         return shapes;
     }
 
-    private VoxelShape createStructureShape(Direction facing, int currentOffsetX, int currentOffsetY, int currentOffsetZ) {
+    private VoxelShape createStructureShape(
+            Direction facing, int currentOffsetX, int currentOffsetY, int currentOffsetZ) {
         return DrillHitboxModel.rotateY(
-                northShapes[currentOffsetX][currentOffsetY][currentOffsetZ],
-                facing
-        );
+                northShapes[currentOffsetX][currentOffsetY][currentOffsetZ], facing);
     }
 
     private DrillModelCell[][][][] createExactCells(DrillModelCell[][][] northCells) {
-        DrillModelCell[][][][] cells = new DrillModelCell[Direction.values().length][size][height][size];
+        DrillModelCell[][][][] cells =
+                new DrillModelCell[Direction.values().length][size][height][size];
         for (Direction facing : Direction.Plane.HORIZONTAL) {
-            int turns = switch (facing) {
-                case NORTH -> 0;
-                case EAST -> 1;
-                case SOUTH -> 2;
-                case WEST -> 3;
-                default -> throw new IllegalArgumentException("Unexpected facing " + facing);
-            };
+            int turns =
+                    switch (facing) {
+                        case NORTH -> 0;
+                        case EAST -> 1;
+                        case SOUTH -> 2;
+                        case WEST -> 3;
+                        default ->
+                                throw new IllegalArgumentException("Unexpected facing " + facing);
+                    };
             for (int offsetX = 0; offsetX < size; offsetX++) {
                 for (int offsetY = 0; offsetY < height; offsetY++) {
                     for (int offsetZ = 0; offsetZ < size; offsetZ++) {
                         DrillModelCell northCell = northCells[offsetX][offsetY][offsetZ];
-                        cells[facing.ordinal()][offsetX][offsetY][offsetZ] = northCell == null
-                                ? null
-                                : northCell.rotateY(turns);
+                        cells[facing.ordinal()][offsetX][offsetY][offsetZ] =
+                                northCell == null ? null : northCell.rotateY(turns);
                     }
                 }
             }

@@ -1,11 +1,17 @@
 package dev.config;
 
-import dev.OresAndDrillsMod;
-import dev.world.level.levelgen.DepositTerrainValidator;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
+import dev.OresAndDrillsMod;
+import dev.world.level.levelgen.DepositTerrainValidator;
+import java.io.IOException;
+import java.io.Reader;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
@@ -18,13 +24,6 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.level.block.Block;
 import net.neoforged.neoforge.event.AddReloadListenerEvent;
 
-import java.io.IOException;
-import java.io.Reader;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
 public final class OreSettingsPresetManager implements ResourceManagerReloadListener {
     private static final String DIRECTORY = "ore_settings_presets";
     private static final OreSettingsPresetManager INSTANCE = new OreSettingsPresetManager();
@@ -35,8 +34,7 @@ public final class OreSettingsPresetManager implements ResourceManagerReloadList
     private static volatile ResourceLocation activePresetId;
     private static volatile int generation;
 
-    private OreSettingsPresetManager() {
-    }
+    private OreSettingsPresetManager() {}
 
     public static void addReloadListener(AddReloadListenerEvent event) {
         event.addListener(INSTANCE);
@@ -45,10 +43,9 @@ public final class OreSettingsPresetManager implements ResourceManagerReloadList
     @Override
     public void onResourceManagerReload(ResourceManager resourceManager) {
         Map<ResourceLocation, Preset> loaded = new LinkedHashMap<>();
-        Map<ResourceLocation, Resource> resources = resourceManager.listResources(
-                DIRECTORY,
-                location -> location.getPath().endsWith(".json")
-        );
+        Map<ResourceLocation, Resource> resources =
+                resourceManager.listResources(
+                        DIRECTORY, location -> location.getPath().endsWith(".json"));
 
         for (Map.Entry<ResourceLocation, Resource> entry : resources.entrySet()) {
             ResourceLocation file = entry.getKey();
@@ -60,7 +57,11 @@ public final class OreSettingsPresetManager implements ResourceManagerReloadList
             try (Reader reader = entry.getValue().openAsReader()) {
                 loaded.put(presetId, parsePreset(GsonHelper.parse(reader)));
             } catch (IOException | JsonParseException | IllegalArgumentException exception) {
-                OresAndDrillsMod.LOGGER.debug("Ore settings: failed to load preset {} from {}", presetId, file, exception);
+                OresAndDrillsMod.LOGGER.debug(
+                        "Ore settings: failed to load preset {} from {}",
+                        presetId,
+                        file,
+                        exception);
             }
         }
 
@@ -70,10 +71,12 @@ public final class OreSettingsPresetManager implements ResourceManagerReloadList
         if (activePresetId == null) {
             OresAndDrillsMod.LOGGER.debug(
                     "Ore settings: active preset {} was not found; using neutral settings",
-                    configuredPresetId()
-            );
+                    configuredPresetId());
         } else {
-            OresAndDrillsMod.LOGGER.debug("Ore settings: loaded {} datapack preset(s), active preset is {}", loaded.size(), activePresetId);
+            OresAndDrillsMod.LOGGER.debug(
+                    "Ore settings: loaded {} datapack preset(s), active preset is {}",
+                    loaded.size(),
+                    activePresetId);
         }
     }
 
@@ -121,13 +124,16 @@ public final class OreSettingsPresetManager implements ResourceManagerReloadList
         }
 
         String presetPath = path.substring(prefix.length(), path.length() - ".json".length());
-        return presetPath.isEmpty() ? null : ResourceLocation.fromNamespaceAndPath(file.getNamespace(), presetPath);
+        return presetPath.isEmpty()
+                ? null
+                : ResourceLocation.fromNamespaceAndPath(file.getNamespace(), presetPath);
     }
 
     private static Preset parsePreset(JsonObject root) {
-        Patch defaults = root.has("defaults")
-                ? parsePatch(GsonHelper.getAsJsonObject(root, "defaults"))
-                : Patch.EMPTY;
+        Patch defaults =
+                root.has("defaults")
+                        ? parsePatch(GsonHelper.getAsJsonObject(root, "defaults"))
+                        : Patch.EMPTY;
         List<Rule> rules = new ArrayList<>();
         if (root.has("ores")) {
             JsonArray array = GsonHelper.getAsJsonArray(root, "ores");
@@ -170,8 +176,7 @@ public final class OreSettingsPresetManager implements ResourceManagerReloadList
                 optionalBoolean(object, "enabled"),
                 optionalMultiplier(object, "frequency"),
                 optionalMultiplier(object, "size"),
-                optionalMultiplier(object, "richness")
-        );
+                optionalMultiplier(object, "richness"));
     }
 
     private static Boolean optionalBoolean(JsonObject object, String key) {
@@ -188,8 +193,7 @@ public final class OreSettingsPresetManager implements ResourceManagerReloadList
                     patch.enabled() != null ? patch.enabled() : enabled,
                     patch.frequency() != null ? patch.frequency() : frequency,
                     patch.size() != null ? patch.size() : size,
-                    patch.richness() != null ? patch.richness() : richness
-            );
+                    patch.richness() != null ? patch.richness() : richness);
         }
 
         public OreOverrides.OreOverride multipliers() {
@@ -219,7 +223,9 @@ public final class OreSettingsPresetManager implements ResourceManagerReloadList
     public record Rule(List<Selector> targets, Patch settings) {
         private boolean matchesTag(Block block) {
             for (Selector target : targets) {
-                if (target.tag() && block.defaultBlockState().is(TagKey.create(Registries.BLOCK, target.id()))) {
+                if (target.tag()
+                        && block.defaultBlockState()
+                                .is(TagKey.create(Registries.BLOCK, target.id()))) {
                     return true;
                 }
             }
@@ -240,8 +246,7 @@ public final class OreSettingsPresetManager implements ResourceManagerReloadList
         }
     }
 
-    public record Selector(ResourceLocation id, boolean tag) {
-    }
+    public record Selector(ResourceLocation id, boolean tag) {}
 
     public record Patch(Boolean enabled, Float frequency, Float size, Float richness) {
         private static final Patch EMPTY = new Patch(null, null, null, null);

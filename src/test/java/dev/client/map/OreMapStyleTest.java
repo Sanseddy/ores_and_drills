@@ -1,13 +1,12 @@
 package dev.client.map;
 
-import org.junit.jupiter.api.Test;
-
-import java.util.HashSet;
-import java.util.Set;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.HashSet;
+import java.util.Set;
+import org.junit.jupiter.api.Test;
 
 class OreMapStyleTest {
     @Test
@@ -42,7 +41,7 @@ class OreMapStyleTest {
         int[] palette = {0xFF101010, 0xFFF8F8F8, 0xFF807A70, 0xFF3FA040, 0xFF909090};
 
         assertEquals(0x3FA040, OreMapPalette.mostVivid(palette));
-        assertNull(OreMapPalette.mostVivid(new int[]{0xFF050505, 0xFFFAFAFA}));
+        assertNull(OreMapPalette.mostVivid(new int[] {0xFF050505, 0xFFFAFAFA}));
     }
 
     @Test
@@ -102,7 +101,8 @@ class OreMapStyleTest {
     void mergedTilesShadeByTheirCombinedDepletion() {
         int[] xs = {0, 1};
         int[] zs = {0, 0};
-        OreMapTiling.Tiles tiles = OreMapTiling.tile(xs, zs, new long[]{0, 100}, new long[]{100, 100}, 2, 0xCD6337);
+        OreMapTiling.Tiles tiles =
+                OreMapTiling.tile(xs, zs, new long[] {0, 100}, new long[] {100, 100}, 2, 0xCD6337);
 
         assertEquals(1, tiles.size());
         assertEquals(OreMapPalette.shade(0xCD6337, 100, 200), tiles.colors()[0]);
@@ -119,12 +119,14 @@ class OreMapStyleTest {
 
     @Test
     void xaeroMinimapRotationMatchesTheWayXaeroPlacesElements() {
-        // Xaero places an element at (ps*dx - pc*dz, pc*dx + ps*dz) * zoom with ps = sin(pi - a), pc = cos(pi - a).
+        // Xaero places an element at (ps*dx - pc*dz, pc*dx + ps*dz) * zoom with ps = sin(pi - a),
+        // pc = cos(pi - a).
         double angle = Math.toRadians(37.0D);
         double ps = Math.sin(Math.PI - angle);
         double pc = Math.cos(Math.PI - angle);
         double zoom = 3.0D;
-        OreMapTransform transform = new OreMapTransform(ps * zoom, -pc * zoom, 0.0D, pc * zoom, ps * zoom, 0.0D);
+        OreMapTransform transform =
+                new OreMapTransform(ps * zoom, -pc * zoom, 0.0D, pc * zoom, ps * zoom, 0.0D);
 
         double dx = 5.0D;
         double dz = -2.0D;
@@ -149,5 +151,4 @@ class OreMapStyleTest {
         assertEquals("6.9M", OreMapPalette.compactAmount(6_900_000));
         assertEquals("125M", OreMapPalette.compactAmount(125_000_000));
     }
-
 }

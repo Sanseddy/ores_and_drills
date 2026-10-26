@@ -1,22 +1,20 @@
 package dev.world.level.levelgen;
 
-import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.Level;
-
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.function.BooleanSupplier;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
 
 /**
- * Explicit escape hatch for operations that intentionally remove a physical deposit block.
- * Unknown miners must use virtual extraction instead of replacing the persistent container.
+ * Explicit escape hatch for operations that intentionally remove a physical deposit block. Unknown
+ * miners must use virtual extraction instead of replacing the persistent container.
  */
 public final class OreDepositRemovalGuard {
     private static final ThreadLocal<Deque<AuthorizedRemoval>> AUTHORIZED =
             ThreadLocal.withInitial(ArrayDeque::new);
 
-    private OreDepositRemovalGuard() {
-    }
+    private OreDepositRemovalGuard() {}
 
     public static boolean isAuthorized(Level level, BlockPos pos) {
         for (AuthorizedRemoval removal : AUTHORIZED.get()) {
@@ -40,6 +38,5 @@ public final class OreDepositRemovalGuard {
         }
     }
 
-    private record AuthorizedRemoval(Level level, long pos) {
-    }
+    private record AuthorizedRemoval(Level level, long pos) {}
 }

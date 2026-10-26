@@ -6,18 +6,16 @@ import dev.world.block.AbstractDrillBlock;
 import dev.world.block.AbstractDrillPartBlock;
 import dev.world.block.DrillModelCell;
 import dev.world.block.DrillStructure;
+import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
-import javax.annotation.Nullable;
-
 /** Client-side exact raycast and outline rendering for rotated drill model cubes. */
 public final class DrillExactHitboxes {
-    private DrillExactHitboxes() {
-    }
+    private DrillExactHitboxes() {}
 
     public static boolean usesExactRaycast(BlockState state) {
         return resolve(state).drill();
@@ -36,8 +34,7 @@ public final class DrillExactHitboxes {
             BlockPos pos,
             double cameraX,
             double cameraY,
-            double cameraZ
-    ) {
+            double cameraZ) {
         ResolvedCell resolved = resolve(state);
         if (!resolved.drill() || resolved.cell() == null) {
             return false;
@@ -63,16 +60,14 @@ public final class DrillExactHitboxes {
                             pose,
                             (float) (start.x + translateX),
                             (float) (start.y + translateY),
-                            (float) (start.z + translateZ)
-                    )
+                            (float) (start.z + translateZ))
                     .setColor(0.0F, 0.0F, 0.0F, 0.4F)
                     .setNormal(pose, normalX, normalY, normalZ);
             consumer.addVertex(
                             pose,
                             (float) (end.x + translateX),
                             (float) (end.y + translateY),
-                            (float) (end.z + translateZ)
-                    )
+                            (float) (end.z + translateZ))
                     .setColor(0.0F, 0.0F, 0.0F, 0.4F)
                     .setNormal(pose, normalX, normalY, normalZ);
         }
@@ -87,16 +82,16 @@ public final class DrillExactHitboxes {
         if (state.getBlock() instanceof AbstractDrillPartBlock block) {
             DrillStructure structure = block.structure();
             Direction facing = state.getValue(AbstractDrillBlock.FACING);
-            return new ResolvedCell(true, structure.exactCellForOffset(
-                    facing,
-                    state.getValue(structure.offsetXProperty()),
-                    state.getValue(structure.offsetYProperty()),
-                    state.getValue(structure.offsetZProperty())
-            ));
+            return new ResolvedCell(
+                    true,
+                    structure.exactCellForOffset(
+                            facing,
+                            state.getValue(structure.offsetXProperty()),
+                            state.getValue(structure.offsetYProperty()),
+                            state.getValue(structure.offsetZProperty())));
         }
         return new ResolvedCell(false, null);
     }
 
-    private record ResolvedCell(boolean drill, DrillModelCell cell) {
-    }
+    private record ResolvedCell(boolean drill, DrillModelCell cell) {}
 }

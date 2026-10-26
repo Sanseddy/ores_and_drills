@@ -5,6 +5,7 @@ import dev.client.map.OreMapPainter;
 import dev.client.map.OreMapPatch;
 import dev.client.map.OreMapTooltip;
 import dev.client.map.OreMapTransform;
+import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -20,11 +21,9 @@ import xaero.map.element.render.ElementRenderProvider;
 import xaero.map.element.render.ElementRenderer;
 import xaero.map.graphics.renderer.multitexture.MultiTextureRenderTypeRendererProvider;
 
-import java.util.List;
-
 /**
- * Xaero's World Map layer, registered as a native map element so patches pan, zoom and clip with the map
- * and sit underneath waypoints. Only loaded when Xaero's World Map is installed.
+ * Xaero's World Map layer, registered as a native map element so patches pan, zoom and clip with
+ * the map and sit underneath waypoints. Only loaded when Xaero's World Map is installed.
  */
 public final class XaeroWorldMapOreLayer
         extends ElementRenderer<OreMapPatch, XaeroWorldMapOreLayer.Context, XaeroWorldMapOreLayer> {
@@ -38,7 +37,10 @@ public final class XaeroWorldMapOreLayer
         super(new Context(), new Provider(), new Reader());
     }
 
-    /** Xaero builds its element handler late in its own client load, so registration is retried each tick. */
+    /**
+     * Xaero builds its element handler late in its own client load, so registration is retried each
+     * tick.
+     */
     public static void ensureRegistered() {
         if (!WorldMap.loaded) {
             return;
@@ -51,13 +53,16 @@ public final class XaeroWorldMapOreLayer
     }
 
     public static boolean isMapScreen(Screen screen) {
-        // By name: GuiMap extends a class from the jar-in-jar xaerolib, which is not on the compile classpath.
+        // By name: GuiMap extends a class from the jar-in-jar xaerolib, which is not on the compile
+        // classpath.
         return screen != null && screen.getClass().getName().equals("xaero.map.gui.GuiMap");
     }
 
     /** Factorio-style tooltip for the tile under the cursor, drawn after Xaero's own UI. */
     public static void renderTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
-        if (hoveredPatch == null || System.nanoTime() - hoveredAt > HOVER_TIMEOUT_NANOS || !OreMapMarkers.isEnabled()) {
+        if (hoveredPatch == null
+                || System.nanoTime() - hoveredAt > HOVER_TIMEOUT_NANOS
+                || !OreMapMarkers.isEnabled()) {
             return;
         }
         OreMapTooltip.renderMapLabel(graphics, hoveredPatch, mouseX, mouseY);
@@ -70,7 +75,8 @@ public final class XaeroWorldMapOreLayer
 
     @Override
     public boolean shouldBeDimScaled() {
-        // Patches are stored in the coordinates of the dimension they belong to, which is the one on screen.
+        // Patches are stored in the coordinates of the dimension they belong to, which is the one
+        // on screen.
         return false;
     }
 
@@ -80,9 +86,13 @@ public final class XaeroWorldMapOreLayer
     }
 
     @Override
-    public void preRender(ElementRenderInfo info, MultiBufferSource.BufferSource buffers,
-                          MultiTextureRenderTypeRendererProvider rendererProvider, boolean pre) {
-        // Xaero batches its map frame; flushing it first keeps the patches above terrain and below markers.
+    public void preRender(
+            ElementRenderInfo info,
+            MultiBufferSource.BufferSource buffers,
+            MultiTextureRenderTypeRendererProvider rendererProvider,
+            boolean pre) {
+        // Xaero batches its map frame; flushing it first keeps the patches above terrain and below
+        // markers.
         buffers.endBatch();
         context.dimension = info.mapDimension;
 
@@ -99,26 +109,45 @@ public final class XaeroWorldMapOreLayer
     }
 
     @Override
-    public void postRender(ElementRenderInfo info, MultiBufferSource.BufferSource buffers,
-                           MultiTextureRenderTypeRendererProvider rendererProvider, boolean pre) {
-    }
+    public void postRender(
+            ElementRenderInfo info,
+            MultiBufferSource.BufferSource buffers,
+            MultiTextureRenderTypeRendererProvider rendererProvider,
+            boolean pre) {}
 
     @Override
-    public void renderElementShadow(OreMapPatch patch, boolean highlighted, float optionalScale,
-                                    double partialX, double partialY, ElementRenderInfo info, GuiGraphics graphics,
-                                    MultiBufferSource.BufferSource buffers,
-                                    MultiTextureRenderTypeRendererProvider rendererProvider) {
-    }
+    public void renderElementShadow(
+            OreMapPatch patch,
+            boolean highlighted,
+            float optionalScale,
+            double partialX,
+            double partialY,
+            ElementRenderInfo info,
+            GuiGraphics graphics,
+            MultiBufferSource.BufferSource buffers,
+            MultiTextureRenderTypeRendererProvider rendererProvider) {}
 
     @Override
-    public boolean renderElement(OreMapPatch patch, boolean highlighted, double optionalDepth, float optionalScale,
-                                 double partialX, double partialY, ElementRenderInfo info, GuiGraphics graphics,
-                                 MultiBufferSource.BufferSource buffers,
-                                 MultiTextureRenderTypeRendererProvider rendererProvider) {
-        // The pose is centred on the deposit centre in real screen pixels; one block is info.scale pixels.
-        OreMapPainter.paint(graphics, patch,
+    public boolean renderElement(
+            OreMapPatch patch,
+            boolean highlighted,
+            double optionalDepth,
+            float optionalScale,
+            double partialX,
+            double partialY,
+            ElementRenderInfo info,
+            GuiGraphics graphics,
+            MultiBufferSource.BufferSource buffers,
+            MultiTextureRenderTypeRendererProvider rendererProvider) {
+        // The pose is centred on the deposit centre in real screen pixels; one block is info.scale
+        // pixels.
+        OreMapPainter.paint(
+                graphics,
+                patch,
                 OreMapTransform.axisAligned(info.scale, partialX, partialY),
-                OreMapPainter.TILE_ALPHA, null, patch == hoveredPatch);
+                OreMapPainter.TILE_ALPHA,
+                null,
+                patch == hoveredPatch);
         return true;
     }
 
@@ -131,9 +160,10 @@ public final class XaeroWorldMapOreLayer
     private static final class Provider extends ElementRenderProvider<OreMapPatch, Context> {
         @Override
         public void begin(ElementRenderLocation location, Context context) {
-            context.patches = context.dimension == null
-                    ? List.of()
-                    : OreMapMarkers.inDimension(context.dimension.location());
+            context.patches =
+                    context.dimension == null
+                            ? List.of()
+                            : OreMapMarkers.inDimension(context.dimension.location());
             context.next = 0;
         }
 
@@ -153,7 +183,8 @@ public final class XaeroWorldMapOreLayer
         }
     }
 
-    private static final class Reader extends ElementReader<OreMapPatch, Context, XaeroWorldMapOreLayer> {
+    private static final class Reader
+            extends ElementReader<OreMapPatch, Context, XaeroWorldMapOreLayer> {
         @Override
         public boolean isHidden(OreMapPatch patch, Context context) {
             return patch.isEmpty();
@@ -171,13 +202,24 @@ public final class XaeroWorldMapOreLayer
 
         /** Xaero's default test assumes icon-sized boxes; a patch scales with the zoom instead. */
         @Override
-        public boolean isOnScreen(OreMapPatch patch, double cameraX, double cameraZ, int width, int height,
-                                  double scale, double screenSizeBasedScale, double rendererDimDiv,
-                                  Context context, float partialTicks) {
+        public boolean isOnScreen(
+                OreMapPatch patch,
+                double cameraX,
+                double cameraZ,
+                int width,
+                int height,
+                double scale,
+                double screenSizeBasedScale,
+                double rendererDimDiv,
+                Context context,
+                float partialTicks) {
             double x = (patch.center().getX() - cameraX) * scale + width / 2.0D;
             double z = (patch.center().getZ() - cameraZ) * scale + height / 2.0D;
             double extent = patch.extent() * scale + 1.0D;
-            return x + extent >= 0.0D && x - extent <= width && z + extent >= 0.0D && z - extent <= height;
+            return x + extent >= 0.0D
+                    && x - extent <= width
+                    && z + extent >= 0.0D
+                    && z - extent <= height;
         }
 
         @Override

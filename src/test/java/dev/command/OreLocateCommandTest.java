@@ -1,22 +1,18 @@
 package dev.command;
 
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.junit.jupiter.api.Test;
 
 class OreLocateCommandTest {
     private static final double EPSILON = 1.0E-9D;
 
     @Test
     void locateDistanceIsHorizontalAndIgnoresHeight() {
-        assertEquals(0.0D,
-                LocateDistanceMath.horizontalDistanceSqr(10, -4, 10, -4),
-                EPSILON);
-        assertEquals(25.0D,
-                LocateDistanceMath.horizontalDistanceSqr(10, -4, 13, 0),
-                EPSILON);
+        assertEquals(0.0D, LocateDistanceMath.horizontalDistanceSqr(10, -4, 10, -4), EPSILON);
+        assertEquals(25.0D, LocateDistanceMath.horizontalDistanceSqr(10, -4, 13, 0), EPSILON);
     }
 
     @Test
@@ -26,7 +22,8 @@ class OreLocateCommandTest {
         assertEquals(0.0D, LocateDistanceMath.minimumReachableDistanceForRing(6, 108), EPSILON);
         assertEquals(4.0D, LocateDistanceMath.minimumReachableDistanceForRing(7, 108), EPSILON);
 
-        // A source-chunk center just outside the requested radius can still produce a deposit inside it.
+        // A source-chunk center just outside the requested radius can still produce a deposit
+        // inside it.
         assertTrue(LocateDistanceMath.centerCanReachRadius(4204, 0, 0, 0, 4096, 108));
         assertFalse(LocateDistanceMath.centerCanReachRadius(4205, 0, 0, 0, 4096, 108));
         assertEquals(1031, LocateDistanceMath.chunkRadius(16384, 108));
@@ -36,15 +33,17 @@ class OreLocateCommandTest {
     @Test
     void anchorGridRingsIncludeBoundaryRegionsAndUseAConservativeDistanceBound() {
         assertEquals(18, LocateDistanceMath.gridRingRadius(263, 16));
-        assertEquals(0.0D,
-                LocateDistanceMath.minimumReachableDistanceForGridRing(1, 16, 108), EPSILON);
-        assertEquals(148.0D,
-                LocateDistanceMath.minimumReachableDistanceForGridRing(2, 16, 108), EPSILON);
+        assertEquals(
+                0.0D, LocateDistanceMath.minimumReachableDistanceForGridRing(1, 16, 108), EPSILON);
+        assertEquals(
+                148.0D,
+                LocateDistanceMath.minimumReachableDistanceForGridRing(2, 16, 108),
+                EPSILON);
 
         // A one-chunk grid retains the tighter ordinary chunk-ring behavior.
         assertEquals(263, LocateDistanceMath.gridRingRadius(263, 1));
-        assertEquals(4.0D,
-                LocateDistanceMath.minimumReachableDistanceForGridRing(7, 1, 108), EPSILON);
+        assertEquals(
+                4.0D, LocateDistanceMath.minimumReachableDistanceForGridRing(7, 1, 108), EPSILON);
     }
 
     @Test

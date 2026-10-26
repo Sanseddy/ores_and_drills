@@ -8,8 +8,8 @@ import net.minecraft.world.level.block.state.BlockState;
 /**
  * Marker block entity for drill structure parts.
  *
- * <p>It intentionally stores no data and has no ticker. The capabilities exposed
- * at this position are resolved to the drill's central block entity.</p>
+ * <p>It intentionally stores no data and has no ticker. The capabilities exposed at this position
+ * are resolved to the drill's central block entity.
  */
 public final class DrillPartBlockEntity extends BlockEntity {
     public DrillPartBlockEntity(BlockPos pos, BlockState state) {
