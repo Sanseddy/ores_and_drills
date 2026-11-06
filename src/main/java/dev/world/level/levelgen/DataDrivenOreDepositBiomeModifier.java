@@ -309,7 +309,7 @@ public record DataDrivenOreDepositBiomeModifier(
         }
     }
 
-    static boolean explicitlyConfigured(ServerLevel level, Block ore) {
+    public static boolean explicitlyConfigured(ServerLevel level, Block ore) {
         return loadedRules(level).stream().anyMatch(rule -> rule.matchesUnifiedOre(ore));
     }
 

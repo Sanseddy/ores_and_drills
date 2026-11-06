@@ -18,6 +18,19 @@ public final class ModSounds {
     public static final DeferredHolder<SoundEvent, SoundEvent> ULTIMATE_MINING_DRILL_WORK =
             register("block.ultimate_mining_drill.work");
 
+    /** One striker impact of a seismic station; heard from afar like a real thumper. */
+    public static final DeferredHolder<SoundEvent, SoundEvent> SEISMIC_STATION_THUMP =
+            register("block.seismic_survey_station.thump");
+
+    public static final DeferredHolder<SoundEvent, SoundEvent> SEISMIC_STATION_START =
+            register("block.seismic_survey_station.start");
+
+    public static final DeferredHolder<SoundEvent, SoundEvent> SEISMIC_STATION_FINISH =
+            register("block.seismic_survey_station.finish");
+
+    public static final DeferredHolder<SoundEvent, SoundEvent> EXPLORATION_DRILL_WORK =
+            register("block.exploration_drill.work");
+
     private ModSounds() {}
 
     private static DeferredHolder<SoundEvent, SoundEvent> register(String name) {

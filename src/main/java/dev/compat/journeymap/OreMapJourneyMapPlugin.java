@@ -69,6 +69,11 @@ public final class OreMapJourneyMapPlugin implements IClientPlugin {
         return OresAndDrillsMod.MOD_ID;
     }
 
+    /** JourneyMap's client API once it initialised this plugin, else null. */
+    public static IClientAPI api() {
+        return api;
+    }
+
     @Override
     public void initialize(IClientAPI clientApi) {
         api = clientApi;

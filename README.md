@@ -23,6 +23,13 @@ thousands of units are worked with drills.
   Xaero's World Map, Xaero's Minimap or FTB Chunks, with name, size and remaining amount.
 - **Locating.** `/locate oredeposit <ore> <tiny|small|medium|large>` finds the nearest deposit without
   loading distant chunks.
+- **Seismic exploration.** A 3×3×3 survey station, geophones and an exploration drill. Regional and
+  detailed surveys measure how strongly the ground reflects — not where ore lies. The station builds a
+  LiDAR-style 3D point cloud while the pulse travels outwards and refines it with every survey; a cave
+  analyser module maps caves and their connections. Select structures in 3D, copy their coordinates or
+  place waypoints in JourneyMap, Xaero's or FTB Chunks, and confirm deposits with a core. Scanner
+  modules (levels 1–4) and analyser modules (1–3) improve the results, and identification names ores
+  with probabilities derived from the game's own generation data.
 - **Datapacks.** Custom deposit rules, settings presets and mining recipes with fluids, all in JSON.
 
 ## Drills
@@ -55,8 +62,10 @@ is installed:
 - **JourneyMap, Xaero's World Map, Xaero's Minimap, FTB Chunks**: a deposit layer on the map.
 - **Create, Mekanism (Digital Miner), Just Hammers**: machines and hammers take one unit at a time
   instead of erasing the whole block.
-- **Sable, Simulated**: drills move into physics structures as a whole; a deposit inside such a
-  structure loses ore when it hits things.
+- **Sable, Simulated**: drills and the seismic station move into physics structures as a whole
+  (including with Simulated's Physics Assembler); a deposit inside such a structure loses ore when it
+  hits things. A seismic station or exploration drill on a structure surveys and bores the ground
+  under it.
 - **Alex's Caves**: deposits in rock the mod creates after the base terrain (radrock).
 
 ## Configuration
@@ -78,6 +87,7 @@ Generation changes apply only to new chunks; terrain that is already generated i
   mode, `/locate`.
 - [Datapacks: deposits and presets](docs/en/ore-deposit-datapacks.md): rule and preset format.
 - [Drill mining recipes](docs/en/drill-mining-recipes.md): fluids, conditions, recipe selection.
+- [Seismic survey](docs/en/seismic-survey.md): equipment, the physical model, accuracy, limitations.
 - [Development](docs/en/development.md): building, tests, code rules.
 
 ## Development

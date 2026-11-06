@@ -1,0 +1,355 @@
+{
+  "multipart": [
+    {
+      "when": {
+        "facing": "north",
+        "active": "false"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "active": "true"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_active"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "level": "1|2|3|4"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_upgrade_1"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "level": "2|3|4"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_upgrade_2"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "level": "3|4"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_upgrade_3"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "level": "4"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_upgrade_4"
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "active": "false"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "active": "true"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_active",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "level": "1|2|3|4"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_upgrade_1",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "level": "2|3|4"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_upgrade_2",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "level": "3|4"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_upgrade_3",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "level": "4"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_upgrade_4",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "active": "false"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "active": "true"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_active",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "level": "1|2|3|4"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_upgrade_1",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "level": "2|3|4"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_upgrade_2",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "level": "3|4"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_upgrade_3",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "level": "4"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_upgrade_4",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "active": "false"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "active": "true"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_active",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "level": "1|2|3|4"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_upgrade_1",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "level": "2|3|4"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_upgrade_2",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "level": "3|4"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_upgrade_3",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "level": "4"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_upgrade_4",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "analyzer": "1|2|3"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_analyzer_1"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "analyzer": "2|3"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_analyzer_2"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "analyzer": "3"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_analyzer_3"
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "analyzer": "1|2|3"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_analyzer_1",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "analyzer": "2|3"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_analyzer_2",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "analyzer": "3"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_analyzer_3",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "analyzer": "1|2|3"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_analyzer_1",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "analyzer": "2|3"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_analyzer_2",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "analyzer": "3"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_analyzer_3",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "analyzer": "1|2|3"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_analyzer_1",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "analyzer": "2|3"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_analyzer_2",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "analyzer": "3"
+      },
+      "apply": {
+        "model": "ores_and_drills:block/exploration_drill_analyzer_3",
+        "y": 270
+      }
+    }
+  ]
+}

@@ -1750,6 +1750,49 @@ public class OreDepositFeature extends Feature<OreDepositFeature.Configuration> 
         return false;
     }
 
+    /**
+     * The material whose MEDIUM/LARGE slot this anchor chunk's lottery selects, or empty. Read-only
+     * counterpart of {@link #predictsMaterialForChunk} for callers that survey every material at
+     * once: one lottery draw instead of one call per material. Uses the same seeds, budget and
+     * spacing arbitration, so it can never select a material worldgen would not; like any
+     * prediction, worldgen may still place nothing.
+     */
+    static Optional<SelectedMaterial> predictedCompactMaterial(
+            ServerLevel level, int chunkX, int chunkZ, int tier) {
+        if (tier < TIER_MEDIUM || tier >= TIER_COUNT || !isTierAnchorChunk(chunkX, chunkZ, tier)) {
+            return Optional.empty();
+        }
+        ResourceLocation biomeId = automaticSourceBiomeId(level, chunkX, chunkZ);
+        ResourceLocation dimension = level.dimension().location();
+        // Without recorded sources real placement fails open for every material; the material is
+        // unknowable, so nothing is predicted.
+        if (!OreGenerationWeights.hasRecordedData(dimension, biomeId)) {
+            return Optional.empty();
+        }
+        int attempts =
+                Math.min(
+                        1,
+                        attemptsForChunkTier(
+                                level, chunkX, chunkZ, biomeId, tier, computeTierShares()));
+        if (attempts <= 0) {
+            return Optional.empty();
+        }
+        double randomValue = attemptSlotSeed(level, chunkX, chunkZ, tier, 0, biomeId).nextDouble();
+        String material =
+                OreGenerationWeights.selectedMaterialForRegion(
+                        dimension, biomeId, tier, randomValue);
+        if (material.isEmpty() || !compactSpacingAllows(level, chunkX, chunkZ, tier)) {
+            return Optional.empty();
+        }
+        ResourceLocation oreId =
+                OreGenerationWeights.oreIdForMaterial(dimension, biomeId, material);
+        return oreId == null
+                ? Optional.empty()
+                : Optional.of(new SelectedMaterial(material, oreId, biomeId));
+    }
+
+    record SelectedMaterial(String materialKey, ResourceLocation oreId, ResourceLocation biomeId) {}
+
     private record CompactGeometryKey(long seed, int tier, int size) {}
 
     private static final BoundedLoadingCache<CompactGeometryKey, CompactDepositGeometry>

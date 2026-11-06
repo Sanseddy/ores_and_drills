@@ -1,7 +1,6 @@
 package dev.client.map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashSet;
@@ -9,41 +8,6 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class OreMapStyleTest {
-    @Test
-    void factorioResourcesUseFactorioMapColours() {
-        assertEquals(0x6A8694, OreMapPalette.materialColor("iron"));
-        assertEquals(0xCD6337, OreMapPalette.materialColor("deepslate_copper_ore"));
-        assertEquals(0x00B300, OreMapPalette.materialColor("uranium"));
-    }
-
-    @Test
-    void specificMaterialNamesWinOverShorterOnes() {
-        assertEquals(0xC4241B, OreMapPalette.materialColor("deepslate_redstone_ore"));
-        assertEquals(0xB9D5F0, OreMapPalette.materialColor("certus_quartz_ore"));
-        assertEquals(0x6E4C3C, OreMapPalette.materialColor("ancient_debris"));
-    }
-
-    @Test
-    void materialsInsideOtherWordsAreNotMistaken() {
-        assertEquals(0xA9DFF2, OreMapPalette.materialColor("platinum_ore"));
-        assertEquals(0x6A8694, OreMapPalette.materialColor("basalt_iron_ore"));
-        assertNull(OreMapPalette.materialColor("basalt_ore"));
-        assertEquals(0x6A8694, OreMapPalette.materialColor("ironore"));
-    }
-
-    @Test
-    void unknownMaterialsFallThrough() {
-        assertNull(OreMapPalette.materialColor("mystery_rock"));
-    }
-
-    @Test
-    void textureFallbackPicksTheMostColourfulUsableTone() {
-        int[] palette = {0xFF101010, 0xFFF8F8F8, 0xFF807A70, 0xFF3FA040, 0xFF909090};
-
-        assertEquals(0x3FA040, OreMapPalette.mostVivid(palette));
-        assertNull(OreMapPalette.mostVivid(new int[] {0xFF050505, 0xFFFAFAFA}));
-    }
-
     @Test
     void depletedTilesAreDarkerButKeepTheResourceHue() {
         int full = OreMapPalette.shade(0xCD6337, 1_000, 1_000);

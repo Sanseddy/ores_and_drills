@@ -136,6 +136,8 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter'
     // Same Gson as Minecraft 1.21.1, for tests of code that walks encoded worldgen JSON.
     testImplementation 'com.google.code.gson:gson:2.10.1'
+    // The LiDAR camera math is unit-tested against the JOML version Minecraft ships.
+    testImplementation 'org.joml:joml:1.10.5'
 }
 
 tasks.named('test', Test) {

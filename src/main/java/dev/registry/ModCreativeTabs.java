@@ -37,6 +37,13 @@ public final class ModCreativeTabs {
                                                         ModBlocks.ADVANCED_MINING_DRILL_ITEM.get());
                                                 output.accept(
                                                         ModBlocks.ULTIMATE_MINING_DRILL_ITEM.get());
+                                                output.accept(ModBlocks.SEISMIC_STATION_ITEM.get());
+                                                output.accept(
+                                                        ModBlocks.SEISMIC_UPGRADE_MODULE.get());
+                                                output.accept(ModBlocks.CAVE_ANALYZER_MODULE.get());
+                                                output.accept(ModBlocks.GEOPHONE_ITEM.get());
+                                                output.accept(
+                                                        ModBlocks.EXPLORATION_DRILL_ITEM.get());
                                             })
                                     .build());
 

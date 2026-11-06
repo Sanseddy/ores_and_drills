@@ -88,10 +88,7 @@ public final class OreMapPatch {
     }
 
     public int baseColor() {
-        if (baseColor < 0) {
-            baseColor = OreMapColors.colorFor(deposit.oreId());
-        }
-        return baseColor;
+        return baseColor < 0 ? OreMapColors.colorFor(deposit.oreId()) : baseColor;
     }
 
     /** The cell covering this block column, or null when the column is not part of the deposit. */

@@ -2,6 +2,8 @@ package dev.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.OresAndDrillsMod;
+import dev.client.geology.lidar.LidarClientCache;
+import dev.client.geology.lidar.LidarShaders;
 import dev.client.map.OreMapIntegrations;
 import dev.client.map.OreMapMarkers;
 import dev.client.ore.OreDepositBakedModel;
@@ -14,6 +16,7 @@ import dev.registry.ModBlockEntities;
 import dev.registry.ModBlocks;
 import dev.registry.ModMenuTypes;
 import dev.world.level.levelgen.OreDepositOrePalette;
+import java.io.IOException;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
 import net.minecraft.client.renderer.RenderType;
@@ -21,11 +24,13 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.ModelEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
+import net.neoforged.neoforge.client.event.RegisterShadersEvent;
 import net.neoforged.neoforge.client.event.RegisterSpriteSourceTypesEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 import org.lwjgl.glfw.GLFW;
@@ -56,6 +61,9 @@ public final class ClientEvents {
         event.registerBlockEntityRenderer(
                 ModBlockEntities.ULTIMATE_MINING_DRILL.get(),
                 context -> new UltimateMiningDrill.Renderer());
+        event.registerBlockEntityRenderer(
+                ModBlockEntities.SEISMIC_STATION.get(),
+                context -> new dev.client.geology.SeismicStationRenderer());
     }
 
     @SubscribeEvent
@@ -64,6 +72,11 @@ public final class ClientEvents {
         event.register(ModMenuTypes.ELECTRIC_MINING_DRILL.get(), ElectricMiningDrill.Screen::new);
         event.register(ModMenuTypes.ADVANCED_MINING_DRILL.get(), AdvancedMiningDrill.Screen::new);
         event.register(ModMenuTypes.ULTIMATE_MINING_DRILL.get(), UltimateMiningDrill.Screen::new);
+        event.register(
+                ModMenuTypes.SEISMIC_STATION.get(), dev.client.geology.SeismicStationScreen::new);
+        event.register(
+                ModMenuTypes.EXPLORATION_DRILL.get(),
+                dev.client.geology.ExplorationDrillScreen::new);
     }
 
     @SubscribeEvent
@@ -94,6 +107,16 @@ public final class ClientEvents {
     }
 
     @SubscribeEvent
+    public static void registerShaders(RegisterShadersEvent event) throws IOException {
+        LidarShaders.register(event);
+    }
+
+    @SubscribeEvent
+    public static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
+        LidarClientCache.clear();
+    }
+
+    @SubscribeEvent
     public static void modifyBakedModels(ModelEvent.ModifyBakingResult event) {
         OreDepositBakedModel.replaceModels(event);
     }
@@ -104,6 +127,7 @@ public final class ClientEvents {
      */
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
+        LidarClientCache.tick();
         OreMapIntegrations.tick();
         while (TOGGLE_ORE_MAP.consumeClick()) {
             OreMapMarkers.toggle();

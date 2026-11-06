@@ -46,6 +46,9 @@ the late-rock test `LateCaveRockGameTests` is skipped.
 | `OreSpawnDimensionsGameTests`, `OreTagsGameTests` | recognising ores by features and item tags |
 | `OreDepositImpactGameTests` | deposits of every size lose ore on impacts |
 | `DrillMiningRecipeGameTests` | mining recipes, fluids, ports, manual mining |
+| `SeismicSurveyGameTests` | station multiblock, geophone registry, exploration drill, survey determinism and accuracy, no chunk loading at 4096 blocks, tick budget, saving and resuming |
+| `SeismicForecastGameTests` | the survey forecast selects exactly the material worldgen predicts |
+| `OverworldCalibrationGameTests` | deposits against the real overworld cave field (vanilla noise router built for the seed) |
 
 ## Code style
 
@@ -80,6 +83,41 @@ Deposit generation lives in `dev.world.level.levelgen`:
 | `DepositLocator`, `OreDepositLocateCommand` | `/locate oredeposit` |
 | `ConfirmedDepositIndex`, `OreDepositChunkData` | storage |
 | `DepositWorldgenGuard` | gravel protection for MEDIUM/LARGE |
+| `SeismicDepositForecast` | read-only MEDIUM/LARGE forecast for the seismic survey |
+
+The seismic survey lives in `dev.world.geology` ([seismic survey](seismic-survey.md)):
+
+| Classes | Responsibility |
+|---|---|
+| `RockProperties`, `RockCatalog`, `RockPhysics` | density, velocity, Q; datapack `rock_physics` |
+| `SeismicMath`, `ArrayGeometry` | reflection formulas; receiver geometry and accuracy |
+| `DepositBodies`, `NaturalGeology`, `CavityGrid` | model bodies: deposits with halo, natural structures, caves |
+| `SeismicForwardModel`, `SurveyAnomalies`, `SurveyComposite` | maps with per-pixel source attribution, picking, stacking |
+| `ore.OreSignatureTable`, `ore.OreSignatureMath`, `ore.OreIdentification` | ore table from game data, conditional minerals, Bayesian identification shared by station and drill |
+| `SurveyInterpretation`, `SurveyTarget`, `ScannerUpgrade`, `SurveyPreset` | targets with errors and candidates; upgrade levels; survey programmes |
+| `survey.SeismicSurveyService`, `survey.SurveyJob` | tick-budgeted surveys over world snapshots |
+| `GeologySavedData`, `SurveyArchive`, `SurveyRecord` | geophones, boreholes, station archives |
+| `station.*`, `exploration.*`, `GeophoneBlock`, `UpgradeModuleItem` | blocks, block entities, menus, upgrade modules (scanner, cave analyser) |
+| `CaveAnalyzer`, `CaveAnalysis`, `survey.CaveSnapshot`, `survey.CaveLinkCheck` | cave analyser levels; probe lattice to caves, walls and connections (pure); lattice reading and connection checks on the server thread |
+| `lidar.LidarMap`, `lidar.LidarMapStorage`, `lidar.StationLidarData` | the 3D map: revisioned buckets, averaging and replacement rules; `Format=1` storage; per-station file |
+| `lidar.LidarExtraction`, `lidar.LidarSweep`, `lidar.LidarObjectMerge`, `lidar.CandidateFusion`, `lidar.OrePriors` | survey results to samples and objects; front-paced reveal; refinement of targets and fused identification |
+| `lidar.LidarSync`, `lidar.LidarCodec`, `lidar.LidarWire` | incremental sync to viewers within a per-tick budget; wire format |
+
+The station and drill screens (`dev.client.geology`) take every area from the pure
+`layout.StationLayout`/`ColumnLayout` and fit every text with `layout.TextFit` against the real font;
+`StationLayoutTest`, `ColumnLayoutTest` and `TextFitTest` check them at scaled sizes from 320×180 up and
+with very long labels. The 3D view is `lidar.LidarView`: the pure `LidarCamera` (perspective orbit
+camera) and `LidarPoints` (deterministic expansion of samples into points) under `LidarRenderer`, which
+keeps GPU buffers per bucket and draws them with the `ores_and_drills:lidar_point` core shader;
+`LidarClientCache` holds the session's maps. Waypoints go through `dev.client.map.MapWaypoints` and one
+adapter per map mod in `dev.compat` (`XaeroWaypoints`, `JourneyMapWaypoints`, `FtbChunksWaypoints`).
+
+Survey rules: world state is read only on the server thread and never loads or generates a chunk;
+forecasting, cave probing and the model run on the background executor over immutable snapshots;
+everything random is a function of the seed and the survey configuration; clients receive only
+processed measurements and interpreted targets, never deposit identities, true positions or bodies;
+ores have no per-ore constants — their properties come only from tags, mining tier, hardness and
+recorded generation.
 
 ## Generation rules
 

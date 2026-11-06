@@ -1,0 +1,27 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "I": {
+      "tag": "c:ingots/iron"
+    },
+    "R": {
+      "tag": "c:dusts/redstone"
+    },
+    "P": {
+      "item": "minecraft:piston"
+    },
+    "T": {
+      "item": "minecraft:iron_pickaxe"
+    }
+  },
+  "pattern": [
+    "IRI",
+    "IPI",
+    "ITI"
+  ],
+  "result": {
+    "count": 1,
+    "id": "ores_and_drills:exploration_drill"
+  }
+}

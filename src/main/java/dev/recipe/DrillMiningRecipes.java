@@ -2,6 +2,7 @@ package dev.recipe;
 
 import dev.registry.ModBlocks;
 import dev.registry.ModRecipes;
+import dev.world.level.levelgen.DataDrivenOreDepositBiomeModifier;
 import dev.world.level.levelgen.OreDepositData;
 import java.util.Collection;
 import java.util.Comparator;
@@ -10,6 +11,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderSet;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeManager;
@@ -22,12 +25,17 @@ import net.neoforged.neoforge.event.TagsUpdatedEvent;
  * scans.
  */
 public final class DrillMiningRecipes {
+    private static final ResourceLocation ORDINARY_ORES_RECIPE =
+            ResourceLocation.fromNamespaceAndPath(
+                    dev.OresAndDrillsMod.MOD_ID, "drill_mining/ordinary_ores");
     private static final Map<RecipeManager, Index> INDEXES = new WeakHashMap<>();
 
     private record Index(
             Collection<RecipeHolder<?>> snapshot,
             List<RecipeHolder<DrillMiningRecipe>> recipes,
-            Map<Block, List<RecipeHolder<DrillMiningRecipe>>> byBlock) {}
+            Map<Block, List<RecipeHolder<DrillMiningRecipe>>> byBlock,
+            Map<Block, DrillMiningRecipe> dataDrivenDefaults,
+            DrillMiningRecipe ordinaryOres) {}
 
     private DrillMiningRecipes() {}
 
@@ -41,7 +49,14 @@ public final class DrillMiningRecipes {
     }
 
     public static DrillMiningRecipe find(ServerLevel level, BlockState source) {
-        return find(level.getRecipeManager(), source);
+        RecipeManager manager = level.getRecipeManager();
+        DrillMiningRecipe recipe = find(manager, source);
+        if (recipe != null
+                || !DataDrivenOreDepositBiomeModifier.explicitlyConfigured(
+                        level, source.getBlock())) {
+            return recipe;
+        }
+        return dataDrivenDefault(manager, source);
     }
 
     public static DrillMiningRecipe find(RecipeManager manager, BlockState source) {
@@ -82,19 +97,56 @@ public final class DrillMiningRecipes {
 
     private static synchronized List<RecipeHolder<DrillMiningRecipe>> matching(
             RecipeManager manager, BlockState state) {
+        Index index = index(manager);
+        return index.byBlock.computeIfAbsent(
+                state.getBlock(),
+                block ->
+                        index.recipes.stream()
+                                .filter(holder -> holder.value().accepts(state))
+                                .toList());
+    }
+
+    private static synchronized DrillMiningRecipe dataDrivenDefault(
+            RecipeManager manager, BlockState state) {
+        Index index = index(manager);
+        if (index.ordinaryOres == null) {
+            return null;
+        }
+        return index.dataDrivenDefaults.computeIfAbsent(
+                state.getBlock(),
+                block -> {
+                    DrillMiningRecipe ordinary = index.ordinaryOres;
+                    return new DrillMiningRecipe(
+                            HolderSet.direct(state.getBlockHolder()),
+                            ordinary.fluid(),
+                            ordinary.minimumDrillTier(),
+                            ordinary.conditions(),
+                            ordinary.priority(),
+                            ordinary.result());
+                });
+    }
+
+    private static Index index(RecipeManager manager) {
         Collection<RecipeHolder<?>> snapshot = manager.getRecipes();
         Index index = INDEXES.get(manager);
         if (index == null || index.snapshot != snapshot) {
             dev.world.block.entity.drill.OreScanner.clearDropRangeCache();
-            index = new Index(snapshot, ordered(manager), new IdentityHashMap<>());
+            List<RecipeHolder<DrillMiningRecipe>> recipes = ordered(manager);
+            DrillMiningRecipe ordinaryOres =
+                    recipes.stream()
+                            .filter(holder -> holder.id().equals(ORDINARY_ORES_RECIPE))
+                            .map(RecipeHolder::value)
+                            .findFirst()
+                            .orElse(null);
+            index =
+                    new Index(
+                            snapshot,
+                            recipes,
+                            new IdentityHashMap<>(),
+                            new IdentityHashMap<>(),
+                            ordinaryOres);
             INDEXES.put(manager, index);
         }
-        Index current = index;
-        return index.byBlock.computeIfAbsent(
-                state.getBlock(),
-                block ->
-                        current.recipes.stream()
-                                .filter(holder -> holder.value().accepts(state))
-                                .toList());
+        return index;
     }
 }

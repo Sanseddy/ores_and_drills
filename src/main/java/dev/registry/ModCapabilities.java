@@ -55,6 +55,28 @@ public final class ModCapabilities {
                 ModCapabilities::findFluidHandler,
                 ModBlocks.ADVANCED_MINING_DRILL_PART.get(),
                 ModBlocks.ULTIMATE_MINING_DRILL_PART.get());
+
+        // Survey equipment takes energy on every face of every block, so a cable can reach the
+        // station from any side of its 3x3x3 body.
+        event.registerBlockEntity(
+                Capabilities.EnergyStorage.BLOCK,
+                ModBlockEntities.SEISMIC_STATION.get(),
+                (station, side) -> station.energyStorage());
+        event.registerBlock(
+                Capabilities.EnergyStorage.BLOCK,
+                (level, pos, state, blockEntity, side) ->
+                        level.getBlockEntity(
+                                                ModBlocks.SEISMIC_STATION_STRUCTURE.originFromPart(
+                                                        pos, state))
+                                        instanceof
+                                        dev.world.geology.station.SeismicStationBlockEntity station
+                                ? station.energyStorage()
+                                : null,
+                ModBlocks.SEISMIC_STATION_PART.get());
+        event.registerBlockEntity(
+                Capabilities.EnergyStorage.BLOCK,
+                ModBlockEntities.EXPLORATION_DRILL.get(),
+                (drill, side) -> drill.energyStorage());
     }
 
     private static BlockEntity originBlockEntity(Level level, BlockPos pos, BlockState state) {

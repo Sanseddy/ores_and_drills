@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "ores_and_drills:block/seismic_survey_station"
+    },
+    "facing=east": {
+      "model": "ores_and_drills:block/seismic_survey_station",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "ores_and_drills:block/seismic_survey_station",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "ores_and_drills:block/seismic_survey_station",
+      "y": 270
+    }
+  }
+}

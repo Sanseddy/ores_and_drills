@@ -172,7 +172,9 @@ class OreDepositImpactDamageTest {
             }
         }
         long[] targets = {pack(0, 0, 0), pack(1, 0, 1), pack(2, 0, 2)};
-        LongUnaryOperator[] horizontal = {NEIGHBOURS[0], NEIGHBOURS[1], NEIGHBOURS[4], NEIGHBOURS[5]};
+        LongUnaryOperator[] horizontal = {
+            NEIGHBOURS[0], NEIGHBOURS[1], NEIGHBOURS[4], NEIGHBOURS[5]
+        };
         assertArrayEquals(new int[] {0, 0, 0}, depths(plate, targets));
         assertArrayEquals(
                 new int[] {0, 1, 2},

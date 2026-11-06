@@ -1,9 +1,12 @@
 package dev.compat.sable;
 
 import dev.OresAndDrillsMod;
+import dev.registry.ModBlocks;
 import dev.world.block.AbstractDrillBlock;
 import dev.world.block.AbstractDrillPartBlock;
 import dev.world.block.DrillStructure;
+import dev.world.geology.station.SeismicStationPartBlock;
+import dev.world.geology.station.SeismicStationStructure;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -18,12 +21,13 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
- * Guards complete multipart drills while Sable copies their real blocks to another level. A normal
- * part removal must still break the controller, so positions are protected only when Sable selected
- * every cell of a valid drill structure in the current moveBlocks call.
+ * Guards complete multipart drills and seismic stations while Sable copies their real blocks to
+ * another level. A normal part removal must still break the controller, so positions are protected
+ * only when Sable selected every cell of a valid structure in the current moveBlocks call.
  */
 public final class SableAssemblyTransfer {
     private static final ThreadLocal<Deque<Batch>> ACTIVE_BATCHES = new ThreadLocal<>();
+    private static final SeismicStationStructure STATION = ModBlocks.SEISMIC_STATION_STRUCTURE;
 
     private SableAssemblyTransfer() {}
 
@@ -43,8 +47,19 @@ public final class SableAssemblyTransfer {
 
         Set<Long> protectedPositions = new HashSet<>();
         List<MovedDrill> movedDrills = new ArrayList<>();
+        List<BlockPos> movedStations = new ArrayList<>();
         for (BlockPos pos : selectedPositions) {
             BlockState state = sourceLevel.getBlockState(pos);
+            if (STATION.isMainBlock(state)) {
+                List<BlockPos> stationPositions = STATION.positions(pos);
+                if (STATION.isComplete(sourceLevel, pos)
+                        && stationPositions.stream()
+                                .allMatch(cell -> selectedPositionKeys.contains(cell.asLong()))) {
+                    stationPositions.forEach(cell -> protectedPositions.add(cell.asLong()));
+                    movedStations.add(positionTransform.apply(pos).immutable());
+                }
+                continue;
+            }
             if (!(state.getBlock() instanceof AbstractDrillBlock drillBlock)
                     || !state.hasProperty(AbstractDrillBlock.FACING)) {
                 continue;
@@ -79,7 +94,13 @@ public final class SableAssemblyTransfer {
             batches = new ArrayDeque<>();
             ACTIVE_BATCHES.set(batches);
         }
-        batches.push(new Batch(sourceLevel, destinationLevel, protectedPositions, movedDrills));
+        batches.push(
+                new Batch(
+                        sourceLevel,
+                        destinationLevel,
+                        protectedPositions,
+                        movedDrills,
+                        movedStations));
     }
 
     public static void finish() {
@@ -99,6 +120,14 @@ public final class SableAssemblyTransfer {
                 OresAndDrillsMod.LOGGER.debug(
                         "Sable moved an incomplete drill structure to {} in {}",
                         movedDrill.destinationOrigin(),
+                        batch.destinationLevel().dimension().location());
+            }
+        }
+        for (BlockPos station : batch.movedStations()) {
+            if (!STATION.isComplete(batch.destinationLevel(), station)) {
+                OresAndDrillsMod.LOGGER.debug(
+                        "Sable moved an incomplete seismic station to {} in {}",
+                        station,
                         batch.destinationLevel().dimension().location());
             }
         }
@@ -122,9 +151,9 @@ public final class SableAssemblyTransfer {
     }
 
     /**
-     * Simulated's Physics Assembler discovers blocks through glue. Drill parts are connected by
-     * their controller instead, so include every cell as soon as the assembler visits one valid
-     * drill cell.
+     * Simulated's Physics Assembler discovers blocks through glue. Drill and station parts are
+     * connected by their main block instead, so include every cell as soon as the assembler visits
+     * one cell of a complete structure; half a station would break as soon as it is moved.
      */
     public static void expandSimulatedQueue(
             Level level,
@@ -133,6 +162,23 @@ public final class SableAssemblyTransfer {
             java.util.Queue<BlockPos> queue,
             Set<BlockPos> movedBlocks) {
         if (level.isClientSide) {
+            return;
+        }
+
+        BlockPos stationOrigin = null;
+        if (STATION.isMainBlock(selectedState)) {
+            stationOrigin = selectedPos;
+        } else if (selectedState.getBlock() instanceof SeismicStationPartBlock) {
+            stationOrigin = STATION.originFromPart(selectedPos, selectedState);
+        }
+        if (stationOrigin != null) {
+            if (STATION.isComplete(level, stationOrigin)) {
+                for (BlockPos cell : STATION.positions(stationOrigin)) {
+                    if (!movedBlocks.contains(cell)) {
+                        queue.add(cell);
+                    }
+                }
+            }
             return;
         }
 
@@ -171,7 +217,8 @@ public final class SableAssemblyTransfer {
             ServerLevel sourceLevel,
             ServerLevel destinationLevel,
             Set<Long> protectedPositions,
-            List<MovedDrill> movedDrills) {}
+            List<MovedDrill> movedDrills,
+            List<BlockPos> movedStations) {}
 
     private record MovedDrill(
             DrillStructure structure, BlockPos destinationOrigin, Direction destinationFacing) {}

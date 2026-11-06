@@ -1,0 +1,146 @@
+{
+  "textures": {
+    "particle": "ores_and_drills:block/exploration_drill_casing",
+    "casing": "ores_and_drills:block/exploration_drill_casing",
+    "rod": "ores_and_drills:block/exploration_drill_rod",
+    "analyzer": "ores_and_drills:block/exploration_drill_analyzer"
+  },
+  "elements": [
+    {
+      "from": [
+        5.5,
+        3,
+        12
+      ],
+      "to": [
+        10.5,
+        7,
+        15
+      ],
+      "faces": {
+        "north": {
+          "texture": "#casing",
+          "uv": [
+            5.5,
+            9,
+            10.5,
+            13
+          ]
+        },
+        "south": {
+          "texture": "#analyzer",
+          "uv": [
+            5.5,
+            9,
+            10.5,
+            13
+          ]
+        },
+        "east": {
+          "texture": "#casing",
+          "uv": [
+            12,
+            9,
+            15,
+            13
+          ]
+        },
+        "west": {
+          "texture": "#casing",
+          "uv": [
+            12,
+            9,
+            15,
+            13
+          ]
+        },
+        "up": {
+          "texture": "#casing",
+          "uv": [
+            5.5,
+            12,
+            10.5,
+            15
+          ]
+        },
+        "down": {
+          "texture": "#casing",
+          "uv": [
+            5.5,
+            12,
+            10.5,
+            15
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        7.5,
+        0,
+        13
+      ],
+      "to": [
+        8.5,
+        3,
+        14
+      ],
+      "faces": {
+        "north": {
+          "texture": "#rod",
+          "uv": [
+            7.5,
+            13,
+            8.5,
+            16
+          ]
+        },
+        "south": {
+          "texture": "#rod",
+          "uv": [
+            7.5,
+            13,
+            8.5,
+            16
+          ]
+        },
+        "east": {
+          "texture": "#rod",
+          "uv": [
+            13,
+            13,
+            14,
+            16
+          ]
+        },
+        "west": {
+          "texture": "#rod",
+          "uv": [
+            13,
+            13,
+            14,
+            16
+          ]
+        },
+        "up": {
+          "texture": "#rod",
+          "uv": [
+            7.5,
+            13,
+            8.5,
+            14
+          ]
+        },
+        "down": {
+          "texture": "#rod",
+          "uv": [
+            7.5,
+            13,
+            8.5,
+            14
+          ]
+        }
+      }
+    }
+  ]
+}

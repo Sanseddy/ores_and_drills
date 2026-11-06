@@ -1,0 +1,30 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "I": {
+      "tag": "c:ingots/iron"
+    },
+    "C": {
+      "item": "minecraft:compass"
+    },
+    "P": {
+      "item": "minecraft:piston"
+    },
+    "A": {
+      "item": "minecraft:anvil"
+    },
+    "R": {
+      "tag": "c:dusts/redstone"
+    }
+  },
+  "pattern": [
+    "ICI",
+    "PAP",
+    "IRI"
+  ],
+  "result": {
+    "count": 1,
+    "id": "ores_and_drills:seismic_survey_station"
+  }
+}

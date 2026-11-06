@@ -19,6 +19,7 @@ import dev.world.level.levelgen.OreDepositData;
 import dev.world.level.levelgen.OreDepositOrePalette;
 import dev.world.level.levelgen.OreDepositRemovalGuard;
 import dev.world.level.levelgen.OreDepositStonePalette;
+import dev.world.level.levelgen.OreTags;
 import io.netty.buffer.Unpooled;
 import java.util.ArrayList;
 import java.util.List;
@@ -52,6 +53,29 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @GameTestHolder(OresAndDrillsMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class DrillMiningRecipeGameTests {
+    @GameTest(template = "empty", timeoutTicks = 200)
+    public static void directDataDrivenOreUsesOrdinaryDrillRecipe(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        helper.assertTrue(
+                !OreTags.isOre(Blocks.DIAMOND_BLOCK.defaultBlockState()),
+                "Regression fixture unexpectedly entered a convention ore tag");
+
+        DrillMiningRecipe recipe =
+                DrillMiningRecipes.find(level, Blocks.DIAMOND_BLOCK.defaultBlockState());
+        helper.assertTrue(
+                recipe != null
+                        && recipe.accepts(Blocks.DIAMOND_BLOCK.defaultBlockState())
+                        && recipe.matches(
+                                new DrillMiningInput(
+                                        Blocks.DIAMOND_BLOCK.defaultBlockState(),
+                                        BlockPos.ZERO,
+                                        BlockPos.ZERO,
+                                        1),
+                                level),
+                "Direct data-driven ore did not inherit the ordinary drill recipe");
+        helper.succeed();
+    }
+
     @GameTest(template = "empty", timeoutTicks = 200)
     public static void unknownDirectRemovalIsRejectedWithoutLoot(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();

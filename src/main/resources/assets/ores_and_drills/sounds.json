@@ -7,5 +7,72 @@
         "attenuation_distance": 24
       }
     ]
+  },
+  "block.seismic_survey_station.thump": {
+    "subtitle": "subtitles.ores_and_drills.block.seismic_survey_station.thump",
+    "sounds": [
+      {
+        "name": "minecraft:item/mace/smash_ground1",
+        "pitch": 0.65,
+        "attenuation_distance": 48
+      },
+      {
+        "name": "minecraft:item/mace/smash_ground2",
+        "pitch": 0.65,
+        "attenuation_distance": 48
+      },
+      {
+        "name": "minecraft:item/mace/smash_ground3",
+        "pitch": 0.65,
+        "attenuation_distance": 48
+      }
+    ]
+  },
+  "block.seismic_survey_station.start": {
+    "subtitle": "subtitles.ores_and_drills.block.seismic_survey_station.start",
+    "sounds": [
+      {
+        "name": "minecraft:tile/piston/out",
+        "pitch": 0.6
+      },
+      {
+        "name": "minecraft:block/vault/activate",
+        "pitch": 0.8
+      }
+    ]
+  },
+  "block.seismic_survey_station.finish": {
+    "subtitle": "subtitles.ores_and_drills.block.seismic_survey_station.finish",
+    "sounds": [
+      {
+        "name": "minecraft:block/beacon/deactivate",
+        "pitch": 1.2
+      }
+    ]
+  },
+  "block.exploration_drill.work": {
+    "subtitle": "subtitles.ores_and_drills.block.exploration_drill.work",
+    "sounds": [
+      {
+        "name": "minecraft:dig/stone1",
+        "pitch": 0.8,
+        "volume": 0.7
+      },
+      {
+        "name": "minecraft:dig/stone2",
+        "pitch": 0.8,
+        "volume": 0.7
+      },
+      {
+        "name": "minecraft:dig/stone3",
+        "pitch": 0.8,
+        "volume": 0.7
+      },
+      {
+        "name": "minecraft:dig/stone4",
+        "pitch": 0.8,
+        "volume": 0.7
+      }
+    ]
   }
 }

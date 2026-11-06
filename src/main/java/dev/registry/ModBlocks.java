@@ -8,6 +8,14 @@ import dev.drill.UltimateMiningDrill;
 import dev.world.block.DrillStructure;
 import dev.world.block.ExhaustedOreDepositBlock;
 import dev.world.block.OreDepositBlock;
+import dev.world.geology.GeophoneBlock;
+import dev.world.geology.UpgradeModuleItem;
+import dev.world.geology.exploration.CoreSampleItem;
+import dev.world.geology.exploration.ExplorationDrillBlock;
+import dev.world.geology.station.SeismicStationBlock;
+import dev.world.geology.station.SeismicStationItem;
+import dev.world.geology.station.SeismicStationPartBlock;
+import dev.world.geology.station.SeismicStationStructure;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
@@ -202,6 +210,80 @@ public final class ModBlocks {
                     3.0D,
                     "/assets/ores_and_drills/geo/ultimate_mining_drill.geo.json",
                     UltimateMiningDrill.TIER);
+
+    // Geophysical exploration
+
+    private static final BlockBehaviour.Properties SURVEY_EQUIPMENT_PROPERTIES =
+            BlockBehaviour.Properties.ofFullCopy(Blocks.IRON_BLOCK)
+                    .noOcclusion()
+                    .sound(SoundType.METAL)
+                    .pushReaction(PushReaction.BLOCK)
+                    .requiresCorrectToolForDrops()
+                    .strength(4.0F, 6.0F);
+
+    public static final DeferredHolder<Block, SeismicStationBlock> SEISMIC_STATION =
+            BLOCKS.register(
+                    "seismic_survey_station",
+                    () -> new SeismicStationBlock(SURVEY_EQUIPMENT_PROPERTIES));
+
+    public static final DeferredHolder<Block, SeismicStationPartBlock> SEISMIC_STATION_PART =
+            BLOCKS.register(
+                    "seismic_survey_station_part",
+                    () -> new SeismicStationPartBlock(SURVEY_EQUIPMENT_PROPERTIES));
+
+    public static final DeferredItem<SeismicStationItem> SEISMIC_STATION_ITEM =
+            ITEMS.register(
+                    "seismic_survey_station",
+                    () ->
+                            new SeismicStationItem(
+                                    SEISMIC_STATION.get(), new Item.Properties().stacksTo(1)));
+
+    public static final DeferredItem<UpgradeModuleItem> SEISMIC_UPGRADE_MODULE =
+            ITEMS.register(
+                    "seismic_upgrade_module",
+                    () ->
+                            new UpgradeModuleItem(
+                                    new Item.Properties().stacksTo(16),
+                                    UpgradeModuleItem.Kind.SCANNER));
+
+    public static final DeferredItem<UpgradeModuleItem> CAVE_ANALYZER_MODULE =
+            ITEMS.register(
+                    "cave_analyzer_module",
+                    () ->
+                            new UpgradeModuleItem(
+                                    new Item.Properties().stacksTo(16),
+                                    UpgradeModuleItem.Kind.CAVE_ANALYZER));
+
+    public static final SeismicStationStructure SEISMIC_STATION_STRUCTURE =
+            new SeismicStationStructure(SEISMIC_STATION, SEISMIC_STATION_PART);
+
+    public static final DeferredHolder<Block, GeophoneBlock> GEOPHONE =
+            BLOCKS.register(
+                    "geophone",
+                    () ->
+                            new GeophoneBlock(
+                                    BlockBehaviour.Properties.ofFullCopy(Blocks.IRON_BLOCK)
+                                            .noOcclusion()
+                                            .sound(SoundType.METAL)
+                                            .pushReaction(PushReaction.DESTROY)
+                                            .strength(1.0F, 3.0F)));
+
+    public static final DeferredItem<BlockItem> GEOPHONE_ITEM =
+            ITEMS.register("geophone", () -> new BlockItem(GEOPHONE.get(), new Item.Properties()));
+
+    public static final DeferredHolder<Block, ExplorationDrillBlock> EXPLORATION_DRILL =
+            BLOCKS.register(
+                    "exploration_drill",
+                    () -> new ExplorationDrillBlock(SURVEY_EQUIPMENT_PROPERTIES));
+
+    public static final DeferredItem<BlockItem> EXPLORATION_DRILL_ITEM =
+            ITEMS.register(
+                    "exploration_drill",
+                    () -> new BlockItem(EXPLORATION_DRILL.get(), new Item.Properties()));
+
+    public static final DeferredItem<CoreSampleItem> CORE_SAMPLE =
+            ITEMS.register(
+                    "core_sample", () -> new CoreSampleItem(new Item.Properties().stacksTo(1)));
 
     private ModBlocks() {}
 }

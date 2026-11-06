@@ -7,11 +7,11 @@ import com.mojang.blaze3d.platform.NativeImage;
 import dev.OresAndDrillsMod;
 import dev.client.ore.speck.ArgbImage;
 import dev.world.level.levelgen.OreDepositOrePalette;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -29,11 +29,11 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 
 /**
- * Resolves the color palette of the item most likely dropped by an original ore block. The palette
- * is not painted onto anything: {@link OreSpeckLibrary} uses it to recognize which pixels of the
- * original ore texture are ore specks. Only depends on {@link ResourceManager} (no {@code
- * ItemRenderer}/baked-model access) since this is resolved during atlas stitching, which runs
- * before model baking in the reload order.
+ * Resolves the colors of the item most likely dropped by an original ore block. The complete
+ * frequency-weighted average colors the ore map, while the most common palette entries let {@link
+ * OreSpeckLibrary} recognize which pixels of the original ore texture are ore specks. Only depends
+ * on {@link ResourceManager} (no {@code ItemRenderer}/baked-model access) since this is also
+ * resolved during atlas stitching, which runs before model baking in the reload order.
  *
  * <p>Keyed by the ore block's own {@link ResourceLocation}, not a per-world {@code oreIndex}:
  * block-tag data (which {@link OreDepositOrePalette#availableIds()} partly depends on) isn't bound
@@ -43,23 +43,28 @@ import net.minecraft.world.level.block.Block;
  * shifts anything's position.
  */
 public final class OreDepositOreColors {
-    private static final int[] NO_PALETTE = new int[0];
-
     /**
      * Enough distinct tones to cover an item's shading, highlights and outline without matching
      * everything.
      */
     private static final int MAX_PALETTE_COLORS = 16;
 
-    private static final int MINIMUM_BRIGHTNESS = 20;
-    private static final Map<ResourceLocation, int[]> CACHE = new ConcurrentHashMap<>();
-    private static final Map<ResourceLocation, int[]> DROP_CACHE = new ConcurrentHashMap<>();
+    private static final Map<ResourceLocation, TextureColorAverager.Analysis> CACHE =
+            new ConcurrentHashMap<>();
+    private static final Map<ResourceLocation, TextureColorAverager.Analysis> DROP_CACHE =
+            new ConcurrentHashMap<>();
 
     private OreDepositOreColors() {}
 
     public static int[] paletteForOre(
             ResourceManager resourceManager, ResourceLocation oreBlockId) {
-        return CACHE.computeIfAbsent(oreBlockId, id -> resolvePalette(resourceManager, id));
+        return colorsForOre(resourceManager, oreBlockId).palette();
+    }
+
+    /** Frequency-weighted RGB average of the ore's drop-item texture, or {@code -1} if absent. */
+    public static int averageColorForOre(
+            ResourceManager resourceManager, ResourceLocation oreBlockId) {
+        return colorsForOre(resourceManager, oreBlockId).averageRgb();
     }
 
     static void clearCache() {
@@ -70,27 +75,37 @@ public final class OreDepositOreColors {
     /** Resolves colors directly from the item id selected by the server-side loot table. */
     static int[] paletteForDrop(ResourceManager resourceManager, ResourceLocation dropId) {
         if (dropId == null) {
-            return NO_PALETTE;
+            return TextureColorAverager.Analysis.EMPTY.palette();
         }
+        return colorsForDrop(resourceManager, dropId).palette();
+    }
+
+    private static TextureColorAverager.Analysis colorsForOre(
+            ResourceManager resourceManager, ResourceLocation oreBlockId) {
+        return CACHE.computeIfAbsent(oreBlockId, id -> resolveColors(resourceManager, id));
+    }
+
+    private static TextureColorAverager.Analysis colorsForDrop(
+            ResourceManager resourceManager, ResourceLocation dropId) {
         return DROP_CACHE.computeIfAbsent(
                 dropId,
                 id -> {
-                    int[] palette = paletteForItem(resourceManager, id);
-                    if (palette == null) {
+                    TextureColorAverager.Analysis colors = colorsForItem(resourceManager, id);
+                    if (colors == null) {
                         OresAndDrillsMod.LOGGER.debug(
                                 "Ore deposit: no texture found for synchronized drop {} - specks"
                                         + " are detected without a palette",
                                 id);
-                        return NO_PALETTE;
+                        return TextureColorAverager.Analysis.EMPTY;
                     }
-                    return palette;
+                    return colors;
                 });
     }
 
-    private static int[] resolvePalette(
+    private static TextureColorAverager.Analysis resolveColors(
             ResourceManager resourceManager, ResourceLocation oreBlockId) {
         if (!BuiltInRegistries.BLOCK.containsKey(oreBlockId)) {
-            return NO_PALETTE;
+            return TextureColorAverager.Analysis.EMPTY;
         }
 
         Block ore = BuiltInRegistries.BLOCK.get(oreBlockId);
@@ -102,19 +117,20 @@ public final class OreDepositOreColors {
             // stitching.
             displayDropId = mostLikelyDropId(resourceManager, ore);
         }
-        int[] palette = paletteForItem(resourceManager, displayDropId);
-        if (palette == null) {
+        TextureColorAverager.Analysis colors = colorsForItem(resourceManager, displayDropId);
+        if (colors == null) {
             OresAndDrillsMod.LOGGER.debug(
                     "Ore deposit: no texture found for {} (resolved drop {}) - specks are detected"
                             + " without a palette",
                     oreBlockId,
                     displayDropId);
-            return NO_PALETTE;
+            return TextureColorAverager.Analysis.EMPTY;
         }
-        return palette;
+        return colors;
     }
 
-    private static int[] paletteForItem(ResourceManager resourceManager, ResourceLocation itemId) {
+    private static TextureColorAverager.Analysis colorsForItem(
+            ResourceManager resourceManager, ResourceLocation itemId) {
         if (itemId == null) {
             return null;
         }
@@ -122,12 +138,13 @@ public final class OreDepositOreColors {
         // Material-based items are grey textures colored per layer by an ItemColor; read them in
         // that color.
         Item item = itemById(itemId);
-        Map<ResourceLocation, Integer> tintIndices =
-                OreModelLayers.tintIndices(
-                        OreModelLayers.layers(
-                                resourceManager,
-                                ResourceLocation.fromNamespaceAndPath(
-                                        itemId.getNamespace(), "item/" + itemId.getPath())));
+        List<OreModelLayers.Layer> layers =
+                OreModelLayers.layers(
+                        resourceManager,
+                        ResourceLocation.fromNamespaceAndPath(
+                                itemId.getNamespace(), "item/" + itemId.getPath()));
+        Map<ResourceLocation, Integer> tintIndices = OreModelLayers.tintIndices(layers);
+        IntArrayList pixels = new IntArrayList();
         for (ResourceLocation textureId : texturesFromItemModel(resourceManager, itemId)) {
             ResourceLocation texturePath =
                     ResourceLocation.fromNamespaceAndPath(
@@ -137,10 +154,10 @@ public final class OreDepositOreColors {
                             ? 0xFFFFFF
                             : OreModelLayers.itemTint(
                                     item, tintIndices.getOrDefault(textureId, -1));
-            int[] palette = paletteFromTexture(resourceManager, texturePath, tint);
-            if (palette != null) {
-                return palette;
-            }
+            appendTexturePixels(resourceManager, texturePath, tint, pixels);
+        }
+        if (!pixels.isEmpty()) {
+            return TextureColorAverager.analyze(pixels.toIntArray(), MAX_PALETTE_COLORS);
         }
 
         // Compatibility fallback for resource packs/items that provide a conventional texture but
@@ -148,15 +165,16 @@ public final class OreDepositOreColors {
         ResourceLocation itemTexture =
                 ResourceLocation.fromNamespaceAndPath(
                         itemId.getNamespace(), "textures/item/" + itemId.getPath() + ".png");
-        int[] palette = paletteFromTexture(resourceManager, itemTexture, 0xFFFFFF);
-        if (palette != null) {
-            return palette;
+        if (appendTexturePixels(resourceManager, itemTexture, 0xFFFFFF, pixels)) {
+            return TextureColorAverager.analyze(pixels.toIntArray(), MAX_PALETTE_COLORS);
         }
 
         ResourceLocation blockTexture =
                 ResourceLocation.fromNamespaceAndPath(
                         itemId.getNamespace(), "textures/block/" + itemId.getPath() + ".png");
-        return paletteFromTexture(resourceManager, blockTexture, 0xFFFFFF);
+        return appendTexturePixels(resourceManager, blockTexture, 0xFFFFFF, pixels)
+                ? TextureColorAverager.analyze(pixels.toIntArray(), MAX_PALETTE_COLORS)
+                : null;
     }
 
     private static List<ResourceLocation> texturesFromItemModel(
@@ -416,21 +434,22 @@ public final class OreDepositOreColors {
     }
 
     /**
-     * The real colors of the drop texture: pixels grouped into similar-color buckets, most common
-     * first, up to {@link #MAX_PALETTE_COLORS} bucket averages. Near-black and transparent pixels
-     * are ignored so the palette does not match every dark crack of the host rock. {@code tintRgb}
-     * is multiplied into every pixel first, as the game does for a tinted layer (white for none).
+     * Adds the real colors of one drop-texture layer. {@code tintRgb} is multiplied into every
+     * pixel first, as the game does for a tinted layer (white for none); transparency and dark
+     * filtering happen after all layers have been collected.
      */
-    private static int[] paletteFromTexture(
-            ResourceManager resourceManager, ResourceLocation texturePath, int tintRgb) {
+    private static boolean appendTexturePixels(
+            ResourceManager resourceManager,
+            ResourceLocation texturePath,
+            int tintRgb,
+            IntArrayList pixels) {
         Optional<Resource> resource = resourceManager.getResource(texturePath);
         if (resource.isEmpty()) {
-            return null;
+            return false;
         }
 
         try (InputStream stream = resource.get().open();
                 NativeImage image = NativeImage.read(stream)) {
-            Map<Integer, long[]> buckets = new HashMap<>();
             for (int y = 0; y < image.getHeight(); y++) {
                 for (int x = 0; x < image.getWidth(); x++) {
                     int abgr = image.getPixelRGBA(x, y);
@@ -442,41 +461,16 @@ public final class OreDepositOreColors {
                                             | abgr & 0xFF00
                                             | (abgr >> 16) & 0xFF,
                                     tintRgb);
-                    int red = ArgbImage.red(argb);
-                    int green = ArgbImage.green(argb);
-                    int blue = ArgbImage.blue(argb);
-                    if (alpha < 128 || Math.max(red, Math.max(green, blue)) < MINIMUM_BRIGHTNESS) {
-                        continue;
-                    }
-
-                    int bucketKey = ((red >> 4) << 8) | ((green >> 4) << 4) | (blue >> 4);
-                    long[] bucket = buckets.computeIfAbsent(bucketKey, ignored -> new long[4]);
-                    bucket[0] += red;
-                    bucket[1] += green;
-                    bucket[2] += blue;
-                    bucket[3] += 1;
+                    pixels.add(argb);
                 }
             }
-
-            if (buckets.isEmpty()) {
-                return null;
-            }
-
-            return buckets.values().stream()
-                    .sorted(Comparator.comparingLong((long[] bucket) -> bucket[3]).reversed())
-                    .limit(MAX_PALETTE_COLORS)
-                    .mapToInt(
-                            bucket ->
-                                    (int) (bucket[0] / bucket[3]) << 16
-                                            | (int) (bucket[1] / bucket[3]) << 8
-                                            | (int) (bucket[2] / bucket[3]))
-                    .toArray();
+            return true;
         } catch (IOException exception) {
             OresAndDrillsMod.LOGGER.debug(
                     "Ore deposit: failed to read texture {} for the drop palette",
                     texturePath,
                     exception);
-            return null;
+            return false;
         }
     }
 

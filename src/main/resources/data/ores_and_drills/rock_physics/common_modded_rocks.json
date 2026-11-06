@@ -1,0 +1,31 @@
+{
+  "entries": [
+    {
+      "targets": [
+        "create:limestone"
+      ],
+      "density": 2.71,
+      "velocity": 6000,
+      "quality": 120
+    },
+    {
+      "targets": [
+        "create:scoria"
+      ],
+      "density": 2.2,
+      "velocity": 3000,
+      "quality": 40
+    },
+    {
+      "targets": [
+        "create:asurine",
+        "create:crimsite",
+        "create:ochrum",
+        "create:veridium"
+      ],
+      "density": 2.9,
+      "velocity": 5900,
+      "quality": 150
+    }
+  ]
+}

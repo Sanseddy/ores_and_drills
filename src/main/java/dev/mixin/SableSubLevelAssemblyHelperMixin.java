@@ -11,7 +11,10 @@ import org.spongepowered.asm.mixin.injection.Coerce;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Protects multipart drills and moves position-based ore attachments during Sable assembly. */
+/**
+ * Protects multipart drills and seismic stations and moves position-based ore attachments during
+ * Sable assembly.
+ */
 @Pseudo
 @Mixin(targets = "dev.ryanhcode.sable.api.SubLevelAssemblyHelper", remap = false)
 public abstract class SableSubLevelAssemblyHelperMixin {

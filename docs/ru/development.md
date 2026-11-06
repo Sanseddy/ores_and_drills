@@ -46,6 +46,9 @@
 | `OreSpawnDimensionsGameTests`, `OreTagsGameTests` | распознавание руд по фичам и тегам предметов |
 | `OreDepositImpactGameTests` | залежи всех размеров теряют руду от ударов |
 | `DrillMiningRecipeGameTests` | рецепты добычи, жидкости, порты, ручная добыча |
+| `SeismicSurveyGameTests` | многоблочная станция, реестр геофонов, разведочный бур, детерминизм и точность съёмки, отсутствие загрузки чанков при радиусе 4096, бюджет тика, сохранение и возобновление |
+| `SeismicForecastGameTests` | прогноз съёмки выбирает ровно тот материал, который предсказывает генерация |
+| `OverworldCalibrationGameTests` | залежи на фоне реального поля пещер верхнего мира (ванильный шумовой маршрутизатор для сида) |
 
 ## Стиль кода
 
@@ -81,6 +84,41 @@
 | `DepositLocator`, `OreDepositLocateCommand` | `/locate oredeposit` |
 | `ConfirmedDepositIndex`, `OreDepositChunkData` | сохранение |
 | `DepositWorldgenGuard` | защита MEDIUM/LARGE от гравия |
+| `SeismicDepositForecast` | прогноз MEDIUM/LARGE для сейсморазведки, только чтение |
+
+Сейсморазведка находится в `dev.world.geology` ([сейсморазведка](seismic-survey.md)):
+
+| Классы | Назначение |
+|---|---|
+| `RockProperties`, `RockCatalog`, `RockPhysics` | плотность, скорость, Q; датапаки `rock_physics` |
+| `SeismicMath`, `ArrayGeometry` | формулы отражения; геометрия приёмников и точность |
+| `DepositBodies`, `NaturalGeology`, `CavityGrid` | тела модели: залежи с ореолом, естественные структуры, пещеры |
+| `SeismicForwardModel`, `SurveyAnomalies`, `SurveyComposite` | карты с привязкой событий к источникам, выделение аномалий, сведение |
+| `ore.OreSignatureTable`, `ore.OreSignatureMath`, `ore.OreIdentification` | таблица руд из данных игры, условные минералы, байесовское распознавание для станции и бура |
+| `SurveyInterpretation`, `SurveyTarget`, `ScannerUpgrade`, `SurveyPreset` | цели с ошибками и вариантами; уровни улучшения; программы съёмки |
+| `survey.SeismicSurveyService`, `survey.SurveyJob` | съёмки по снимкам мира с бюджетом на тик |
+| `GeologySavedData`, `SurveyArchive`, `SurveyRecord` | геофоны, скважины, архивы станций |
+| `station.*`, `exploration.*`, `GeophoneBlock`, `UpgradeModuleItem` | блоки, блок-сущности, меню, модули улучшения (сканер, анализатор пещер) |
+| `CaveAnalyzer`, `CaveAnalysis`, `survey.CaveSnapshot`, `survey.CaveLinkCheck` | уровни анализатора пещер; от решётки зондов к пещерам, стенкам и соединениям (чистый код); чтение решётки и проверка соединений в серверном потоке |
+| `lidar.LidarMap`, `lidar.LidarMapStorage`, `lidar.StationLidarData` | 3D-карта: ячейки с ревизиями, правила усреднения и замены; хранение `Format=1`; файл станции |
+| `lidar.LidarExtraction`, `lidar.LidarSweep`, `lidar.LidarObjectMerge`, `lidar.CandidateFusion`, `lidar.OrePriors` | результаты съёмки в отсчёты и объекты; раскрытие по фронту; уточнение целей и объединение распознавания |
+| `lidar.LidarSync`, `lidar.LidarCodec`, `lidar.LidarWire` | инкрементальная синхронизация со зрителями в пределах бюджета на тик; сетевой формат |
+
+Экраны станции и бура (`dev.client.geology`) берут все области из чистых `layout.StationLayout` и
+`ColumnLayout`, а весь текст подгоняют `layout.TextFit` по реальному шрифту; `StationLayoutTest`,
+`ColumnLayoutTest` и `TextFitTest` проверяют их на масштабированных размерах от 320×180 и с очень
+длинными надписями. 3D-вид — `lidar.LidarView`: чистые `LidarCamera` (перспективная орбитальная камера)
+и `LidarPoints` (детерминированное разворачивание отсчётов в точки) под `LidarRenderer`, который держит
+GPU-буферы по ячейкам и рисует их ядровым шейдером `ores_and_drills:lidar_point`; `LidarClientCache`
+хранит карты сеанса. Метки ставятся через `dev.client.map.MapWaypoints` и по одному адаптеру на мод карты
+в `dev.compat` (`XaeroWaypoints`, `JourneyMapWaypoints`, `FtbChunksWaypoints`).
+
+Правила съёмки: состояние мира читается только в серверном потоке, и ни один чанк при этом не
+загружается и не генерируется; прогноз, зондирование пещер и модель работают в фоновом исполнителе над
+неизменяемыми снимками; всё случайное — функция сида и конфигурации съёмки; клиент получает только
+обработанные измерения и интерпретированные цели, а не идентификаторы залежей, истинные положения и
+тела модели; у руд нет констант для конкретных руд — их свойства берутся только из тегов, уровня
+инструмента, твёрдости и записанной генерации.
 
 ## Правила генерации
 

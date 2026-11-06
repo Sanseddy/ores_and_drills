@@ -182,11 +182,13 @@ public final class DrillStructure {
                 for (int depth = 0; depth < OreScanner.SCAN_DEPTH; depth++) {
                     BlockPos pos = columnTop.below(depth);
                     BlockState state = level.getBlockState(pos);
-                    if ((OreTags.isOre(state)
-                                    || dev.recipe.DrillMiningRecipes.find(
-                                                    level.getRecipeManager(), state)
-                                            != null)
-                            && tier.canHarvest(harvestCheckState(level, pos, state))) {
+                    BlockState source = harvestCheckState(level, pos, state);
+                    dev.recipe.DrillMiningRecipe recipe =
+                            level instanceof net.minecraft.server.level.ServerLevel serverLevel
+                                    ? dev.recipe.DrillMiningRecipes.find(serverLevel, source)
+                                    : dev.recipe.DrillMiningRecipes.find(
+                                            level.getRecipeManager(), source);
+                    if ((OreTags.isOre(source) || recipe != null) && tier.canHarvest(source)) {
                         return true;
                     }
                 }

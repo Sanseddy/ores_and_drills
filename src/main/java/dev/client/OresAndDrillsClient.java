@@ -17,6 +17,10 @@ import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 @Mod(value = OresAndDrillsMod.MOD_ID, dist = Dist.CLIENT)
 public final class OresAndDrillsClient {
     public OresAndDrillsClient(ModContainer container) {
+        container.registerConfig(
+                net.neoforged.fml.config.ModConfig.Type.CLIENT,
+                dev.client.geology.lidar.LidarQuality.SPEC,
+                "ores_and_drills-client.toml");
         container.registerExtensionPoint(
                 IConfigScreenFactory.class,
                 (IConfigScreenFactory) (mod, parent) -> new OresAndDrillsSettingsScreen(parent));

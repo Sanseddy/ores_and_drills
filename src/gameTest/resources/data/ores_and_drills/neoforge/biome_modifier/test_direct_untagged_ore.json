@@ -1,0 +1,13 @@
+{
+  "type": "ores_and_drills:ore_deposit_rule",
+  "ores": ["minecraft:diamond_block"],
+  "biomes": ["minecraft:plains"],
+  "dimensions": ["minecraft:overworld"],
+  "min_y": -64,
+  "max_y": 320,
+  "replaceables": ["minecraft:stone"],
+  "priority": -2000,
+  "sizes": {
+    "medium": {"frequency": 0.0, "placement": "underground"}
+  }
+}

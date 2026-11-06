@@ -5,9 +5,12 @@ import dev.drill.AdvancedMiningDrill;
 import dev.drill.BurnerMiningDrill;
 import dev.drill.ElectricMiningDrill;
 import dev.drill.UltimateMiningDrill;
+import dev.world.geology.exploration.ExplorationDrillMenu;
+import dev.world.geology.station.SeismicStationMenu;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.MenuType;
+import net.neoforged.neoforge.common.extensions.IMenuTypeExtension;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
@@ -49,6 +52,17 @@ public final class ModMenuTypes {
                                     new MenuType<>(
                                             UltimateMiningDrill.Menu::new,
                                             FeatureFlags.VANILLA_SET));
+
+    public static final DeferredHolder<MenuType<?>, MenuType<SeismicStationMenu>> SEISMIC_STATION =
+            MENU_TYPES.register(
+                    "seismic_survey_station",
+                    () -> IMenuTypeExtension.create(SeismicStationMenu::new));
+
+    public static final DeferredHolder<MenuType<?>, MenuType<ExplorationDrillMenu>>
+            EXPLORATION_DRILL =
+                    MENU_TYPES.register(
+                            "exploration_drill",
+                            () -> IMenuTypeExtension.create(ExplorationDrillMenu::new));
 
     private ModMenuTypes() {}
 }

@@ -14,9 +14,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 
 /**
- * Simulated normally follows glue connections only. Drill parts are linked by their controller data
- * instead, so add the complete valid drill to Simulated's search queue before it builds the final
- * collection for Sable.
+ * Simulated normally follows glue connections only. Drill and seismic station parts are linked by
+ * their main block instead, so add the complete structure to Simulated's search queue before it
+ * builds the final collection for Sable.
  */
 @Pseudo
 @Mixin(targets = "dev.simulated_team.simulated.util.assembly.SimAssemblyContraption", remap = false)
@@ -32,7 +32,7 @@ public abstract class SimulatedPhysicsAssemblerMixin {
             locals = LocalCapture.CAPTURE_FAILHARD,
             require = 0,
             remap = false)
-    private void oresAndDrills$queueCompleteDrill(
+    private void oresAndDrills$queueCompleteStructure(
             Level level,
             Queue<BlockPos> queue,
             Set<BlockPos> movedBlocks,

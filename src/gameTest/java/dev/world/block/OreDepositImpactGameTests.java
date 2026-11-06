@@ -39,8 +39,8 @@ public final class OreDepositImpactGameTests {
     private static final Vec3 DOWN = new Vec3(0.0D, -1.0D, 0.0D);
 
     /**
-     * One hit is shared by all blocks of a physical vein, with the point of impact as epicentre:
-     * a block there loses 8% of its own ore to a heavy hit, farther ones less. Another ore in the
+     * One hit is shared by all blocks of a physical vein, with the point of impact as epicentre: a
+     * block there loses 8% of its own ore to a heavy hit, farther ones less. Another ore in the
      * same body is a vein of its own. Every tier included.
      */
     @GameTest(template = "empty", timeoutTicks = 200)
@@ -82,8 +82,8 @@ public final class OreDepositImpactGameTests {
 
     /**
      * Seen from above, a vein wears down from its outline in x/z inwards, every layer of a column
-     * alike, and its centre column is left alone. An exhausted column stays part of the outline
-     * and keeps covering the centre behind it.
+     * alike, and its centre column is left alone. An exhausted column stays part of the outline and
+     * keeps covering the centre behind it.
      */
     @GameTest(template = "empty", timeoutTicks = 200)
     public static void veinErodesFromItsOutlineAndKeepsItsCentre(GameTestHelper helper) {

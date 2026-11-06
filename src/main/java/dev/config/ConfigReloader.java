@@ -25,6 +25,7 @@ public final class ConfigReloader {
         OreDepositOrePalette.clearAvailableCache();
         DepositTerrainValidator.clearCache();
         OreDepositLocateService.invalidateAll();
+        dev.world.geology.survey.SeismicSurveyService.invalidateForecasts();
         OreSettingsPresetManager.refreshActivePreset();
         OresAndDrillsMod.LOGGER.debug("Ores & Drills: config reloaded");
     }

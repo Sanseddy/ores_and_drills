@@ -4,6 +4,7 @@ import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.serialization.MapCodec;
 import dev.OresAndDrillsMod;
+import dev.client.map.OreMapColors;
 import dev.client.ore.speck.ArgbImage;
 import dev.client.ore.speck.OreSpeckLayout;
 import dev.world.level.levelgen.OreDepositOrePalette;
@@ -66,6 +67,7 @@ public record OreSpeckTextureSource() implements SpriteSource {
     @Override
     public void run(ResourceManager resourceManager, Output output) {
         OreDepositOreColors.clearCache();
+        OreMapColors.clearCache();
         OreSpeckLibrary.clearCache();
         int resolution = OreSpeckLibrary.resolutionFor(resourceManager);
         int generated = 0;
@@ -145,6 +147,7 @@ public record OreSpeckTextureSource() implements SpriteSource {
         int resolution = firstSlot.contents().width();
 
         OreDepositOreColors.clearCache();
+        OreMapColors.clearCache();
         OreSpeckLibrary.clearCache();
         atlas.bind();
         int updated = 0;

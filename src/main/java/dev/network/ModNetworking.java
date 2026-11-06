@@ -1,7 +1,11 @@
 package dev.network;
 
+import dev.client.geology.SeismicClientData;
+import dev.client.geology.lidar.LidarClientCache;
 import dev.client.map.OreMapMarkers;
 import dev.registry.ModBlocks;
+import dev.world.geology.lidar.LidarSync;
+import dev.world.geology.station.SeismicStationViewers;
 import dev.world.inventory.AbstractEnergyDrillMenu;
 import dev.world.level.levelgen.ConfirmedDeposit;
 import dev.world.level.levelgen.ConfirmedDepositIndex;
@@ -44,7 +48,7 @@ public final class ModNetworking {
     private ModNetworking() {}
 
     public static void register(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar("10");
+        var registrar = event.registrar("13");
         registrar
                 .playToServer(
                         FluidTankClickPayload.TYPE,
@@ -124,7 +128,42 @@ public final class ModNetworking {
                         DiscoveredOreDepositPayload.TYPE,
                         DiscoveredOreDepositPayload.STREAM_CODEC,
                         (payload, context) ->
-                                context.enqueueWork(() -> OreMapMarkers.discover(payload)));
+                                context.enqueueWork(() -> OreMapMarkers.discover(payload)))
+                .playToServer(
+                        SeismicStationRequestPayload.TYPE,
+                        SeismicStationRequestPayload.STREAM_CODEC,
+                        (payload, context) ->
+                                context.enqueueWork(
+                                        () -> {
+                                            if (context.player() instanceof ServerPlayer player) {
+                                                SeismicStationViewers.handle(player, payload);
+                                            }
+                                        }))
+                .playToClient(
+                        SeismicSurveyListPayload.TYPE,
+                        SeismicSurveyListPayload.STREAM_CODEC,
+                        (payload, context) ->
+                                context.enqueueWork(() -> SeismicClientData.acceptList(payload)))
+                .playToClient(
+                        SeismicSurveyMapPayload.TYPE,
+                        SeismicSurveyMapPayload.STREAM_CODEC,
+                        (payload, context) ->
+                                context.enqueueWork(() -> SeismicClientData.acceptMap(payload)))
+                .playToServer(
+                        LidarSyncRequestPayload.TYPE,
+                        LidarSyncRequestPayload.STREAM_CODEC,
+                        (payload, context) ->
+                                context.enqueueWork(
+                                        () -> {
+                                            if (context.player() instanceof ServerPlayer player) {
+                                                LidarSync.request(player, payload);
+                                            }
+                                        }))
+                .playToClient(
+                        LidarUpdatePayload.TYPE,
+                        LidarUpdatePayload.STREAM_CODEC,
+                        (payload, context) ->
+                                context.enqueueWork(() -> LidarClientCache.accept(payload)));
     }
 
     private static void discoverDeposit(ServerPlayer player, BlockPos pos) {

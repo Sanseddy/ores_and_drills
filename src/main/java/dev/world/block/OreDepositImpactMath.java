@@ -71,9 +71,9 @@ public final class OreDepositImpactMath {
 
     /**
      * Ore each block loses to one hit. Only the outermost layer that still holds ore is hit, so the
-     * vein wears down from its edges and the layers behind it wait until that layer is empty.
-     * There every block loses {@code share} of its original ore scaled by how near the epicentre it
-     * is ({@code weights}), never more than it holds.
+     * vein wears down from its edges and the layers behind it wait until that layer is empty. There
+     * every block loses {@code share} of its original ore scaled by how near the epicentre it is
+     * ({@code weights}), never more than it holds.
      *
      * @param rolls a uniform random number in [0, 1) per block, see {@link #roundUnits}
      */
@@ -102,8 +102,8 @@ public final class OreDepositImpactMath {
     }
 
     /**
-     * Where an impact landed on a vein: the middle of its blocks lying furthest along the
-     * direction the body was moving, within half a block of the foremost one.
+     * Where an impact landed on a vein: the middle of its blocks lying furthest along the direction
+     * the body was moving, within half a block of the foremost one.
      *
      * @param points centres of every block of the vein
      */

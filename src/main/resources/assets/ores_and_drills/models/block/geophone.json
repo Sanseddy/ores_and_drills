@@ -1,0 +1,374 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "particle": "ores_and_drills:block/geophone_body",
+    "body": "ores_and_drills:block/geophone_body",
+    "metal": "ores_and_drills:block/geophone_metal",
+    "cable": "ores_and_drills:block/geophone_cable"
+  },
+  "elements": [
+    {
+      "from": [
+        5,
+        0,
+        5
+      ],
+      "to": [
+        11,
+        1,
+        11
+      ],
+      "faces": {
+        "north": {
+          "texture": "#metal",
+          "uv": [
+            5,
+            15,
+            11,
+            16
+          ]
+        },
+        "south": {
+          "texture": "#metal",
+          "uv": [
+            5,
+            15,
+            11,
+            16
+          ]
+        },
+        "east": {
+          "texture": "#metal",
+          "uv": [
+            5,
+            15,
+            11,
+            16
+          ]
+        },
+        "west": {
+          "texture": "#metal",
+          "uv": [
+            5,
+            15,
+            11,
+            16
+          ]
+        },
+        "up": {
+          "texture": "#metal",
+          "uv": [
+            5,
+            5,
+            11,
+            11
+          ]
+        },
+        "down": {
+          "texture": "#metal",
+          "uv": [
+            5,
+            5,
+            11,
+            11
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        6,
+        1,
+        6
+      ],
+      "to": [
+        10,
+        6,
+        10
+      ],
+      "faces": {
+        "north": {
+          "texture": "#body",
+          "uv": [
+            6,
+            10,
+            10,
+            15
+          ]
+        },
+        "south": {
+          "texture": "#body",
+          "uv": [
+            6,
+            10,
+            10,
+            15
+          ]
+        },
+        "east": {
+          "texture": "#body",
+          "uv": [
+            6,
+            10,
+            10,
+            15
+          ]
+        },
+        "west": {
+          "texture": "#body",
+          "uv": [
+            6,
+            10,
+            10,
+            15
+          ]
+        },
+        "up": {
+          "texture": "#body",
+          "uv": [
+            6,
+            6,
+            10,
+            10
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        6.5,
+        6,
+        6.5
+      ],
+      "to": [
+        9.5,
+        7,
+        9.5
+      ],
+      "faces": {
+        "north": {
+          "texture": "#metal",
+          "uv": [
+            6.5,
+            9,
+            9.5,
+            10
+          ]
+        },
+        "south": {
+          "texture": "#metal",
+          "uv": [
+            6.5,
+            9,
+            9.5,
+            10
+          ]
+        },
+        "east": {
+          "texture": "#metal",
+          "uv": [
+            6.5,
+            9,
+            9.5,
+            10
+          ]
+        },
+        "west": {
+          "texture": "#metal",
+          "uv": [
+            6.5,
+            9,
+            9.5,
+            10
+          ]
+        },
+        "up": {
+          "texture": "#metal",
+          "uv": [
+            6.5,
+            6.5,
+            9.5,
+            9.5
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        7.5,
+        7,
+        7.5
+      ],
+      "to": [
+        8.5,
+        9,
+        8.5
+      ],
+      "faces": {
+        "north": {
+          "texture": "#metal",
+          "uv": [
+            7.5,
+            7,
+            8.5,
+            9
+          ]
+        },
+        "south": {
+          "texture": "#metal",
+          "uv": [
+            7.5,
+            7,
+            8.5,
+            9
+          ]
+        },
+        "east": {
+          "texture": "#metal",
+          "uv": [
+            7.5,
+            7,
+            8.5,
+            9
+          ]
+        },
+        "west": {
+          "texture": "#metal",
+          "uv": [
+            7.5,
+            7,
+            8.5,
+            9
+          ]
+        },
+        "up": {
+          "texture": "#metal",
+          "uv": [
+            7.5,
+            7.5,
+            8.5,
+            8.5
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        8.5,
+        7.5,
+        7.5
+      ],
+      "to": [
+        12,
+        8.5,
+        8.5
+      ],
+      "faces": {
+        "north": {
+          "texture": "#cable",
+          "uv": [
+            8.5,
+            7.5,
+            12,
+            8.5
+          ]
+        },
+        "south": {
+          "texture": "#cable",
+          "uv": [
+            8.5,
+            7.5,
+            12,
+            8.5
+          ]
+        },
+        "east": {
+          "texture": "#cable",
+          "uv": [
+            7.5,
+            7.5,
+            8.5,
+            8.5
+          ]
+        },
+        "up": {
+          "texture": "#cable",
+          "uv": [
+            8.5,
+            7.5,
+            12,
+            8.5
+          ]
+        },
+        "down": {
+          "texture": "#cable",
+          "uv": [
+            8.5,
+            7.5,
+            12,
+            8.5
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        11,
+        1,
+        7.5
+      ],
+      "to": [
+        12,
+        7.5,
+        8.5
+      ],
+      "faces": {
+        "north": {
+          "texture": "#cable",
+          "uv": [
+            11,
+            8.5,
+            12,
+            15
+          ]
+        },
+        "south": {
+          "texture": "#cable",
+          "uv": [
+            11,
+            8.5,
+            12,
+            15
+          ]
+        },
+        "east": {
+          "texture": "#cable",
+          "uv": [
+            7.5,
+            8.5,
+            8.5,
+            15
+          ]
+        },
+        "west": {
+          "texture": "#cable",
+          "uv": [
+            7.5,
+            8.5,
+            8.5,
+            15
+          ]
+        },
+        "down": {
+          "texture": "#cable",
+          "uv": [
+            11,
+            7.5,
+            12,
+            8.5
+          ]
+        }
+      }
+    }
+  ]
+}

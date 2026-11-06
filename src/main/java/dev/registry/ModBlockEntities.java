@@ -6,6 +6,8 @@ import dev.drill.BurnerMiningDrill;
 import dev.drill.ElectricMiningDrill;
 import dev.drill.UltimateMiningDrill;
 import dev.world.block.entity.DrillPartBlockEntity;
+import dev.world.geology.exploration.ExplorationDrillBlockEntity;
+import dev.world.geology.station.SeismicStationBlockEntity;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.neoforge.registries.DeferredHolder;
@@ -70,6 +72,28 @@ public final class ModBlockEntities {
                                                     ModBlocks.ELECTRIC_MINING_DRILL_PART.get(),
                                                     ModBlocks.ADVANCED_MINING_DRILL_PART.get(),
                                                     ModBlocks.ULTIMATE_MINING_DRILL_PART.get())
+                                            .build(null));
+
+    public static final DeferredHolder<
+                    BlockEntityType<?>, BlockEntityType<SeismicStationBlockEntity>>
+            SEISMIC_STATION =
+                    BLOCK_ENTITY_TYPES.register(
+                            "seismic_survey_station",
+                            () ->
+                                    BlockEntityType.Builder.of(
+                                                    SeismicStationBlockEntity::new,
+                                                    ModBlocks.SEISMIC_STATION.get())
+                                            .build(null));
+
+    public static final DeferredHolder<
+                    BlockEntityType<?>, BlockEntityType<ExplorationDrillBlockEntity>>
+            EXPLORATION_DRILL =
+                    BLOCK_ENTITY_TYPES.register(
+                            "exploration_drill",
+                            () ->
+                                    BlockEntityType.Builder.of(
+                                                    ExplorationDrillBlockEntity::new,
+                                                    ModBlocks.EXPLORATION_DRILL.get())
                                             .build(null));
 
     private ModBlockEntities() {}

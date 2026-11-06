@@ -17,6 +17,8 @@ import dev.registry.ModSounds;
 import dev.registry.ModWorldgen;
 import dev.world.block.OreDepositExplosionHandler;
 import dev.world.block.OreDepositMiningSpeed;
+import dev.world.geology.RockPhysics;
+import dev.world.geology.survey.SeismicSurveyService;
 import dev.world.level.levelgen.DepositTerrainValidator;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.IEventBus;
@@ -34,8 +36,13 @@ public final class OresAndDrillsMod {
 
     public OresAndDrillsMod(IEventBus modEventBus, ModContainer modContainer) {
         modContainer.registerConfig(ModConfig.Type.COMMON, OreDepositConfig.SPEC);
+        modContainer.registerConfig(
+                ModConfig.Type.COMMON,
+                dev.config.SeismicSurveyConfig.SPEC,
+                dev.config.SeismicSurveyConfig.FILE_NAME);
 
         ModAttachments.ATTACHMENTS.register(modEventBus);
+        dev.registry.ModDataComponents.COMPONENTS.register(modEventBus);
         ModBlocks.BLOCKS.register(modEventBus);
         ModBlocks.ITEMS.register(modEventBus);
         ModBlockEntities.BLOCK_ENTITY_TYPES.register(modEventBus);
@@ -55,6 +62,12 @@ public final class OresAndDrillsMod {
         NeoForge.EVENT_BUS.addListener(OreDepositLocateCommand::register);
         NeoForge.EVENT_BUS.addListener(OreDepositLocateService::onServerTick);
         NeoForge.EVENT_BUS.addListener(OreDepositLocateService::onServerStopped);
+        NeoForge.EVENT_BUS.addListener(SeismicSurveyService::onServerTick);
+        NeoForge.EVENT_BUS.addListener(dev.world.geology.lidar.LidarSync::onServerTick);
+        NeoForge.EVENT_BUS.addListener(SeismicSurveyService::onServerStopped);
+        NeoForge.EVENT_BUS.addListener(SeismicSurveyService::onLevelUnload);
+        NeoForge.EVENT_BUS.addListener(RockPhysics::onAddReloadListeners);
+        NeoForge.EVENT_BUS.addListener(RockPhysics::onTagsUpdated);
         NeoForge.EVENT_BUS.addListener(
                 (net.neoforged.neoforge.event.server.ServerStoppingEvent event) ->
                         dev.world.level.levelgen.SmallDepositDiagnostics.logAll());

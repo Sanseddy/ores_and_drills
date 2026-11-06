@@ -32,7 +32,9 @@ import net.minecraft.world.phys.Vec3;
 public final class OreDepositImpactDamage {
     /** Long enough that a crash and the bounces right after it usually count as one impact. */
     static final int IMMUNITY_TICKS = 20;
+
     private static final int PRUNE_THRESHOLD = 256;
+
     /** The vein is worn down in plan view: only its outline in x/z is an edge. */
     private static final LongUnaryOperator[] HORIZONTAL_NEIGHBOURS =
             Direction.Plane.HORIZONTAL.stream()
@@ -122,8 +124,8 @@ public final class OreDepositImpactDamage {
     }
 
     /**
-     * The share this hit costs: all of it outside the immunity window; inside it the same impact
-     * is still going on, so only what a stronger reading adds on top of the share already taken.
+     * The share this hit costs: all of it outside the immunity window; inside it the same impact is
+     * still going on, so only what a stronger reading adds on top of the share already taken.
      */
     private static double claimShare(ServerLevel level, VeinKey key, double share) {
         long now = level.getGameTime();

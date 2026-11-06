@@ -1,0 +1,148 @@
+{
+  "textures": {
+    "particle": "ores_and_drills:block/exploration_drill_casing",
+    "frame": "ores_and_drills:block/exploration_drill_frame",
+    "base": "ores_and_drills:block/exploration_drill_base",
+    "casing": "ores_and_drills:block/exploration_drill_casing",
+    "rod": "ores_and_drills:block/exploration_drill_rod",
+    "lamp": "ores_and_drills:block/exploration_drill_lamp_on"
+  },
+  "elements": [
+    {
+      "from": [
+        6.5,
+        16,
+        6.5
+      ],
+      "to": [
+        9.5,
+        17,
+        9.5
+      ],
+      "faces": {
+        "north": {
+          "texture": "#frame",
+          "uv": [
+            6.5,
+            0,
+            9.5,
+            0
+          ]
+        },
+        "south": {
+          "texture": "#frame",
+          "uv": [
+            6.5,
+            0,
+            9.5,
+            0
+          ]
+        },
+        "east": {
+          "texture": "#frame",
+          "uv": [
+            6.5,
+            0,
+            9.5,
+            0
+          ]
+        },
+        "west": {
+          "texture": "#frame",
+          "uv": [
+            6.5,
+            0,
+            9.5,
+            0
+          ]
+        },
+        "up": {
+          "texture": "#frame",
+          "uv": [
+            6.5,
+            6.5,
+            9.5,
+            9.5
+          ]
+        },
+        "down": {
+          "texture": "#frame",
+          "uv": [
+            6.5,
+            6.5,
+            9.5,
+            9.5
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        7,
+        17,
+        7
+      ],
+      "to": [
+        9,
+        19,
+        9
+      ],
+      "faces": {
+        "north": {
+          "texture": "#lamp",
+          "uv": [
+            7,
+            0,
+            9,
+            0
+          ]
+        },
+        "south": {
+          "texture": "#lamp",
+          "uv": [
+            7,
+            0,
+            9,
+            0
+          ]
+        },
+        "east": {
+          "texture": "#lamp",
+          "uv": [
+            7,
+            0,
+            9,
+            0
+          ]
+        },
+        "west": {
+          "texture": "#lamp",
+          "uv": [
+            7,
+            0,
+            9,
+            0
+          ]
+        },
+        "up": {
+          "texture": "#lamp",
+          "uv": [
+            7,
+            7,
+            9,
+            9
+          ]
+        },
+        "down": {
+          "texture": "#lamp",
+          "uv": [
+            7,
+            7,
+            9,
+            9
+          ]
+        }
+      }
+    }
+  ]
+}

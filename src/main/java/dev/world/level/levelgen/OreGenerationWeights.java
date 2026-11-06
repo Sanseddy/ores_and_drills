@@ -114,6 +114,11 @@ public final class OreGenerationWeights {
 
     private OreGenerationWeights() {}
 
+    /** Changes whenever the data {@link #dataFor} returns changes; for caches built from it. */
+    public static int dataEpoch() {
+        return dataEpoch;
+    }
+
     public static synchronized void clear() {
         OBSERVED_FEATURES.clear();
         OBSERVED_BIOME_FEATURES.clear();

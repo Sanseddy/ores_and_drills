@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "ores_and_drills:block/geophone"
+    },
+    "facing=east": {
+      "model": "ores_and_drills:block/geophone",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "ores_and_drills:block/geophone",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "ores_and_drills:block/geophone",
+      "y": 270
+    }
+  }
+}

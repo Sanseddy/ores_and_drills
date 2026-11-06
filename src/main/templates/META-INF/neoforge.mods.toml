@@ -79,7 +79,9 @@ side = "BOTH"
 [[dependencies.${mod_id}]]
 modId = "journeymap"
 type = "optional"
-versionRange = "[6.0.0,)"
+# JourneyMap prefixes its mod version with the Minecraft version (for example,
+# 1.21.1-6.0.0), so the dependency range must use the same version scheme.
+versionRange = "[1.21.1-6.0.0,)"
 ordering = "AFTER"
 side = "CLIENT"
 

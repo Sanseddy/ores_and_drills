@@ -272,6 +272,7 @@ public final class DepositTerrainValidator {
     public static void onTagsUpdated(TagsUpdatedEvent event) {
         clearCache();
         OreDepositLocateService.invalidateAll();
+        dev.world.geology.survey.SeismicSurveyService.invalidateForecasts();
         OreTags.clearCache();
         OreUnifier.clearCache();
         OreDepositOrePalette.clearAvailableCache();

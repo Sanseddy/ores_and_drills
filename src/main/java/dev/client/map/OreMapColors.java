@@ -1,20 +1,14 @@
 package dev.client.map;
 
 import dev.client.ore.OreDepositOreColors;
-import dev.world.level.levelgen.OreTags;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.Mth;
-import net.minecraft.world.level.block.Block;
 
 /**
- * Flat, high-contrast resource colours in the spirit of Factorio's map view. Vanilla ore blocks all
- * share the stone map colour, so the colour comes from the ore's material ({@code
- * #c:ores/<material>} or its id), falling back to the most saturated tone of the ore's own texture
- * for unknown modded ores.
+ * Resolves each map color from the texture of the item actually dropped by its ore. No material or
+ * mod-specific color table is involved.
  */
 public final class OreMapColors {
     private static final Map<ResourceLocation, Integer> CACHE = new ConcurrentHashMap<>();
@@ -26,45 +20,21 @@ public final class OreMapColors {
         return CACHE.computeIfAbsent(oreId, OreMapColors::resolve);
     }
 
-    private static int resolve(ResourceLocation oreId) {
-        if (BuiltInRegistries.BLOCK.containsKey(oreId)) {
-            Block block = BuiltInRegistries.BLOCK.get(oreId);
-            Integer tagged =
-                    OreTags.oreTagIds(block)
-                            .filter(location -> location.getNamespace().equals("c"))
-                            .map(ResourceLocation::getPath)
-                            .filter(path -> path.startsWith("ores/"))
-                            .map(
-                                    path ->
-                                            OreMapPalette.materialColor(
-                                                    path.substring("ores/".length())))
-                            .filter(color -> color != null)
-                            .findFirst()
-                            .orElse(null);
-            if (tagged != null) {
-                return tagged;
-            }
-        }
-        Integer named = OreMapPalette.materialColor(oreId.getPath());
-        if (named != null) {
-            return named;
-        }
-        Integer textured = textureColor(oreId);
-        return textured != null
-                ? textured
-                : Mth.hsvToRgb((oreId.hashCode() & 0xFFFF) / 65536.0F, 0.6F, 0.85F) & 0xFFFFFF;
+    public static void clearCache() {
+        CACHE.clear();
     }
 
-    private static Integer textureColor(ResourceLocation oreId) {
+    private static int resolve(ResourceLocation oreId) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.getResourceManager() == null) {
-            return null;
+            return oreId.hashCode() & 0xFFFFFF;
         }
         try {
-            return OreMapPalette.mostVivid(
-                    OreDepositOreColors.paletteForOre(minecraft.getResourceManager(), oreId));
+            int color =
+                    OreDepositOreColors.averageColorForOre(minecraft.getResourceManager(), oreId);
+            return color >= 0 ? color : oreId.hashCode() & 0xFFFFFF;
         } catch (RuntimeException exception) {
-            return null;
+            return oreId.hashCode() & 0xFFFFFF;
         }
     }
 }

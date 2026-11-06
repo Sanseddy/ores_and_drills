@@ -10,6 +10,10 @@
     "ores_and_drills:advanced_mining_drill",
     "ores_and_drills:advanced_mining_drill_part",
     "ores_and_drills:ultimate_mining_drill",
-    "ores_and_drills:ultimate_mining_drill_part"
+    "ores_and_drills:ultimate_mining_drill_part",
+    "ores_and_drills:seismic_survey_station",
+    "ores_and_drills:seismic_survey_station_part",
+    "ores_and_drills:geophone",
+    "ores_and_drills:exploration_drill"
   ]
 }

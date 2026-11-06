@@ -1,0 +1,146 @@
+{
+  "textures": {
+    "particle": "ores_and_drills:block/exploration_drill_casing",
+    "casing": "ores_and_drills:block/exploration_drill_casing",
+    "rod": "ores_and_drills:block/exploration_drill_rod",
+    "analyzer": "ores_and_drills:block/exploration_drill_analyzer"
+  },
+  "elements": [
+    {
+      "from": [
+        9,
+        7,
+        13
+      ],
+      "to": [
+        10,
+        13,
+        14
+      ],
+      "faces": {
+        "north": {
+          "texture": "#rod",
+          "uv": [
+            9,
+            3,
+            10,
+            9
+          ]
+        },
+        "south": {
+          "texture": "#rod",
+          "uv": [
+            9,
+            3,
+            10,
+            9
+          ]
+        },
+        "east": {
+          "texture": "#rod",
+          "uv": [
+            13,
+            3,
+            14,
+            9
+          ]
+        },
+        "west": {
+          "texture": "#rod",
+          "uv": [
+            13,
+            3,
+            14,
+            9
+          ]
+        },
+        "up": {
+          "texture": "#rod",
+          "uv": [
+            9,
+            13,
+            10,
+            14
+          ]
+        },
+        "down": {
+          "texture": "#rod",
+          "uv": [
+            9,
+            13,
+            10,
+            14
+          ]
+        }
+      }
+    },
+    {
+      "from": [
+        8.5,
+        13,
+        12.5
+      ],
+      "to": [
+        10.5,
+        14,
+        14.5
+      ],
+      "faces": {
+        "north": {
+          "texture": "#analyzer",
+          "uv": [
+            8.5,
+            2,
+            10.5,
+            3
+          ]
+        },
+        "south": {
+          "texture": "#analyzer",
+          "uv": [
+            8.5,
+            2,
+            10.5,
+            3
+          ]
+        },
+        "east": {
+          "texture": "#analyzer",
+          "uv": [
+            12.5,
+            2,
+            14.5,
+            3
+          ]
+        },
+        "west": {
+          "texture": "#analyzer",
+          "uv": [
+            12.5,
+            2,
+            14.5,
+            3
+          ]
+        },
+        "up": {
+          "texture": "#analyzer",
+          "uv": [
+            8.5,
+            12.5,
+            10.5,
+            14.5
+          ]
+        },
+        "down": {
+          "texture": "#analyzer",
+          "uv": [
+            8.5,
+            12.5,
+            10.5,
+            14.5
+          ]
+        }
+      }
+    }
+  ]
+}
