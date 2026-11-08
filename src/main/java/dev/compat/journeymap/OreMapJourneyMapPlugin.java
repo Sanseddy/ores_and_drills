@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.Set;
 import journeymap.api.v2.client.IClientAPI;
 import journeymap.api.v2.client.IClientPlugin;
+import journeymap.api.v2.client.display.DisplayType;
 import journeymap.api.v2.client.display.IOverlayListener;
 import journeymap.api.v2.client.display.PolygonOverlay;
 import journeymap.api.v2.client.event.FullscreenRenderEvent;
@@ -36,9 +37,10 @@ import net.minecraft.resources.ResourceLocation;
 
 /**
  * JourneyMap integration through its public API: every patch becomes a native polygon overlay, so
- * it shows on the fullscreen map, the minimap and the web map with JourneyMap's own hover title,
- * and the fullscreen toolbar gets a native toggle button. Discovered by JourneyMap through the
- * annotation.
+ * it shows on the fullscreen map, the minimap and the web map, and the fullscreen toolbar gets a
+ * native toggle button. The hover label is drawn by this plugin, as on the other maps; the overlays
+ * carry no title, which JourneyMap would draw as a second label. Discovered by JourneyMap through
+ * the annotation.
  */
 @JourneyMapPlugin(apiVersion = "2.0.0")
 public final class OreMapJourneyMapPlugin implements IClientPlugin {
@@ -127,7 +129,7 @@ public final class OreMapJourneyMapPlugin implements IClientPlugin {
             if (minecraft.level != syncedLevel) {
                 // A new world or dimension instance: start from a clean slate rather than trusting
                 // old overlays.
-                api.removeAll(OresAndDrillsMod.MOD_ID);
+                api.removeAll(OresAndDrillsMod.MOD_ID, DisplayType.Polygon);
                 SHOWN.clear();
             }
             if (toggleButton != null) {
@@ -151,7 +153,9 @@ public final class OreMapJourneyMapPlugin implements IClientPlugin {
 
     private static void sync() throws Exception {
         if (!OreMapMarkers.isEnabled()) {
-            api.removeAll(OresAndDrillsMod.MOD_ID);
+            // Polygons only: the plain removeAll(modId) also deletes the waypoints players placed
+            // through this mod, and JourneyMap persists that deletion.
+            api.removeAll(OresAndDrillsMod.MOD_ID, DisplayType.Polygon);
             SHOWN.clear();
             return;
         }
@@ -198,9 +202,8 @@ public final class OreMapJourneyMapPlugin implements IClientPlugin {
     private static Shown overlaysFor(OreMapPatch patch) {
         ResourceKey<net.minecraft.world.level.Level> dimension =
                 ResourceKey.create(Registries.DIMENSION, patch.dimension());
-        String title = OreMapTooltip.title(patch);
-        List<PolygonOverlay> base = polygonsFor(patch, dimension, title, false);
-        List<PolygonOverlay> checker = polygonsFor(patch, dimension, title, true);
+        List<PolygonOverlay> base = polygonsFor(patch, dimension, false);
+        List<PolygonOverlay> checker = polygonsFor(patch, dimension, true);
         ArrayList<PolygonOverlay> all = new ArrayList<>(base.size() + checker.size());
         all.addAll(base);
         all.addAll(checker);
@@ -234,7 +237,6 @@ public final class OreMapJourneyMapPlugin implements IClientPlugin {
     private static List<PolygonOverlay> polygonsFor(
             OreMapPatch patch,
             ResourceKey<net.minecraft.world.level.Level> dimension,
-            String title,
             boolean outline) {
         int centerX = patch.center().getX();
         int centerZ = patch.center().getZ();
@@ -268,8 +270,7 @@ public final class OreMapJourneyMapPlugin implements IClientPlugin {
                 PolygonHelper.createPolygonFromArea(new Area(rows), patch.center().getY())) {
             PolygonOverlay overlay =
                     new PolygonOverlay(OresAndDrillsMod.MOD_ID, dimension, shape, polygon);
-            overlay.setTitle(title)
-                    .setOverlayGroupName(I18n.get("gui.ores_and_drills.ore_map.group"))
+            overlay.setOverlayGroupName(I18n.get("gui.ores_and_drills.ore_map.group"))
                     .setMinZoom(0)
                     .setDisplayOrder(outline ? -999 : -1000);
             overlays.add(overlay);

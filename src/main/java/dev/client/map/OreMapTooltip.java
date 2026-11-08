@@ -45,18 +45,6 @@ public final class OreMapTooltip {
         return lines;
     }
 
-    /** Single-line form for maps that only accept a plain title string. */
-    public static String title(OreMapPatch patch) {
-        StringBuilder title = new StringBuilder();
-        for (Component line : lines(patch, null)) {
-            if (!title.isEmpty()) {
-                title.append(" — ");
-            }
-            title.append(line.getString());
-        }
-        return title.toString();
-    }
-
     /**
      * Tooltips are dark; very dark resources such as coal get a light grey name instead of their
      * own colour.
