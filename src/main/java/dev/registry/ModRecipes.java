@@ -24,5 +24,17 @@ public final class ModRecipes {
     public static final Supplier<RecipeSerializer<DrillMiningRecipe>> DRILL_MINING_SERIALIZER =
             SERIALIZERS.register("drill_mining", DrillMiningRecipe.Serializer::new);
 
+    public static final Supplier<RecipeType<dev.world.assembly.AssemblyRecipe>> DRILL_ASSEMBLY =
+            TYPES.register(
+                    "drill_assembly",
+                    () ->
+                            RecipeType.simple(
+                                    ResourceLocation.fromNamespaceAndPath(
+                                            OresAndDrillsMod.MOD_ID, "drill_assembly")));
+    public static final Supplier<RecipeSerializer<dev.world.assembly.AssemblyRecipe>>
+            DRILL_ASSEMBLY_SERIALIZER =
+                    SERIALIZERS.register(
+                            "drill_assembly", dev.world.assembly.AssemblyRecipe.Serializer::new);
+
     private ModRecipes() {}
 }

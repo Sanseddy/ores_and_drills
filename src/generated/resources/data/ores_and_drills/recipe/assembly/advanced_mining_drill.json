@@ -1,0 +1,46 @@
+{
+  "type": "ores_and_drills:drill_assembly",
+  "duration": 360,
+  "parts": [
+    {
+      "count": 4,
+      "ingredient": {
+        "item": "ores_and_drills:drill_frame"
+      }
+    },
+    {
+      "count": 2,
+      "ingredient": {
+        "item": "ores_and_drills:electric_motor"
+      }
+    },
+    {
+      "count": 2,
+      "ingredient": {
+        "item": "ores_and_drills:reinforced_drill_head"
+      }
+    },
+    {
+      "count": 1,
+      "ingredient": {
+        "item": "ores_and_drills:fluid_manifold"
+      }
+    },
+    {
+      "count": 1,
+      "ingredient": {
+        "item": "ores_and_drills:precision_control"
+      }
+    },
+    {
+      "count": 8,
+      "ingredient": {
+        "tag": "c:ingots/iron"
+      }
+    }
+  ],
+  "result": {
+    "count": 1,
+    "id": "ores_and_drills:advanced_mining_drill"
+  }
+}

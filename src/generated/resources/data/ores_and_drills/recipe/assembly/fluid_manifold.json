@@ -1,0 +1,34 @@
+{
+  "type": "ores_and_drills:drill_assembly",
+  "duration": 100,
+  "parts": [
+    {
+      "count": 6,
+      "ingredient": {
+        "tag": "c:ingots/copper"
+      }
+    },
+    {
+      "count": 2,
+      "ingredient": {
+        "tag": "c:ingots/iron"
+      }
+    },
+    {
+      "count": 1,
+      "ingredient": {
+        "item": "minecraft:piston"
+      }
+    },
+    {
+      "count": 1,
+      "ingredient": {
+        "item": "minecraft:bucket"
+      }
+    }
+  ],
+  "result": {
+    "count": 1,
+    "id": "ores_and_drills:fluid_manifold"
+  }
+}

@@ -14,6 +14,9 @@ thousands of units are worked with drills.
   ore a block holds, the longer it takes to break.
 - **Four drills.** Drills mine the ore beneath and around them, keeping deposit blocks in place while
   they still hold ore.
+- **Drill manufacturing.** Craft the starter burner drill at a crafting table, then assemble the
+  other drills from flat pixel-art components at a two-block table with visible assembly phases and JEI/EMI
+  recipes ([manufacturing guide](docs/en/drill-assembly.md)).
 - **Per-world generation settings.** The "Ore Settings" button on the world creation screen opens a
   table of every ore: on/off, Frequency, Size, Richness, per-dimension exclusions, mod priority and the
   "Vanilla-like" mode.
@@ -87,6 +90,7 @@ Generation changes apply only to new chunks; terrain that is already generated i
   mode, `/locate`.
 - [Datapacks: deposits and presets](docs/en/ore-deposit-datapacks.md): rule and preset format.
 - [Drill mining recipes](docs/en/drill-mining-recipes.md): fluids, conditions, recipe selection.
+- [Drill manufacturing](docs/en/drill-assembly.md): components, assembly table and custom recipes.
 - [Seismic survey](docs/en/seismic-survey.md): equipment, the physical model, accuracy, limitations.
 - [Development](docs/en/development.md): building, tests, code rules.
 

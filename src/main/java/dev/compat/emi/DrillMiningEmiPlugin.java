@@ -59,6 +59,7 @@ public final class DrillMiningEmiPlugin implements EmiPlugin {
 
     @Override
     public void register(EmiRegistry registry) {
+        AssemblyEmiRecipes.register(registry);
         // No category workstations: they would list every drill on every page. Each recipe carries
         // its own catalysts with only the drills able to mine it, which also drive the "Uses"
         // lookup on a drill.

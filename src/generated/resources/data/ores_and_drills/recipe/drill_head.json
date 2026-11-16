@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "I": {
+      "tag": "c:ingots/iron"
+    },
+    "R": {
+      "tag": "c:rods/iron"
+    }
+  },
+  "pattern": [
+    " I ",
+    "IRI",
+    " R "
+  ],
+  "result": {
+    "count": 1,
+    "id": "ores_and_drills:drill_head"
+  }
+}

@@ -50,6 +50,9 @@ public final class ClientEvents {
     @SubscribeEvent
     public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerBlockEntityRenderer(
+                dev.registry.ModAssembly.BLOCK_ENTITY.get(),
+                dev.client.assembly.AssemblyRenderer::new);
+        event.registerBlockEntityRenderer(
                 ModBlockEntities.BURNER_MINING_DRILL.get(),
                 context -> new BurnerMiningDrill.Renderer());
         event.registerBlockEntityRenderer(
@@ -68,6 +71,8 @@ public final class ClientEvents {
 
     @SubscribeEvent
     public static void registerScreens(RegisterMenuScreensEvent event) {
+        event.register(
+                dev.registry.ModAssembly.MENU.get(), dev.client.assembly.AssemblyScreen::new);
         event.register(ModMenuTypes.BURNER_MINING_DRILL.get(), BurnerMiningDrill.Screen::new);
         event.register(ModMenuTypes.ELECTRIC_MINING_DRILL.get(), ElectricMiningDrill.Screen::new);
         event.register(ModMenuTypes.ADVANCED_MINING_DRILL.get(), AdvancedMiningDrill.Screen::new);

@@ -1,0 +1,26 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "ores_and_drills:drill_assembly_table"
+        }
+      ],
+      "conditions": [
+        {
+          "condition": "minecraft:survives_explosion"
+        },
+        {
+          "condition": "minecraft:block_state_property",
+          "block": "ores_and_drills:drill_assembly_table",
+          "properties": {
+            "extension": "false"
+          }
+        }
+      ]
+    }
+  ]
+}

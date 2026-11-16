@@ -43,6 +43,7 @@ public final class OresAndDrillsMod {
 
         ModAttachments.ATTACHMENTS.register(modEventBus);
         dev.registry.ModDataComponents.COMPONENTS.register(modEventBus);
+        dev.registry.ModAssembly.initialize();
         ModBlocks.BLOCKS.register(modEventBus);
         ModBlocks.ITEMS.register(modEventBus);
         ModBlockEntities.BLOCK_ENTITY_TYPES.register(modEventBus);

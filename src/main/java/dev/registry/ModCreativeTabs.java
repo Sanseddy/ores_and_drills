@@ -29,6 +29,9 @@ public final class ModCreativeTabs {
                                     .withTabsBefore(CreativeModeTabs.SPAWN_EGGS)
                                     .displayItems(
                                             (parameters, output) -> {
+                                                output.accept(ModAssembly.TABLE_ITEM.get());
+                                                ModAssembly.COMPONENTS.forEach(
+                                                        item -> output.accept(item.get()));
                                                 output.accept(
                                                         ModBlocks.BURNER_MINING_DRILL_ITEM.get());
                                                 output.accept(

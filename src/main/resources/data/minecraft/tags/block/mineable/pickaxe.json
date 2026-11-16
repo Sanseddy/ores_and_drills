@@ -14,6 +14,7 @@
     "ores_and_drills:seismic_survey_station",
     "ores_and_drills:seismic_survey_station_part",
     "ores_and_drills:geophone",
-    "ores_and_drills:exploration_drill"
+    "ores_and_drills:exploration_drill",
+    "ores_and_drills:drill_assembly_table"
   ]
 }

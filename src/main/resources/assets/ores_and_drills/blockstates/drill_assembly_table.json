@@ -1,0 +1,36 @@
+{
+  "variants": {
+    "facing=east,extension=false": {
+      "model": "ores_and_drills:block/drill_assembly_table",
+      "y": 0
+    },
+    "facing=east,extension=true": {
+      "model": "ores_and_drills:block/drill_assembly_table_extension",
+      "y": 0
+    },
+    "facing=south,extension=false": {
+      "model": "ores_and_drills:block/drill_assembly_table",
+      "y": 90
+    },
+    "facing=south,extension=true": {
+      "model": "ores_and_drills:block/drill_assembly_table_extension",
+      "y": 90
+    },
+    "facing=west,extension=false": {
+      "model": "ores_and_drills:block/drill_assembly_table",
+      "y": 180
+    },
+    "facing=west,extension=true": {
+      "model": "ores_and_drills:block/drill_assembly_table_extension",
+      "y": 180
+    },
+    "facing=north,extension=false": {
+      "model": "ores_and_drills:block/drill_assembly_table",
+      "y": 270
+    },
+    "facing=north,extension=true": {
+      "model": "ores_and_drills:block/drill_assembly_table_extension",
+      "y": 270
+    }
+  }
+}

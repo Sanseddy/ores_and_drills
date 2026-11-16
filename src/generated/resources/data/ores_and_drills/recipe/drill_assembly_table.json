@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "C": {
+      "tag": "minecraft:planks"
+    },
+    "F": {
+      "item": "ores_and_drills:drill_frame"
+    },
+    "I": {
+      "tag": "c:ingots/iron"
+    }
+  },
+  "pattern": [
+    "CCC",
+    "IFI",
+    "I I"
+  ],
+  "result": {
+    "count": 1,
+    "id": "ores_and_drills:drill_assembly_table"
+  }
+}

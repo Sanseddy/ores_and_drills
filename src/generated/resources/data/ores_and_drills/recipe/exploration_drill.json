@@ -1,0 +1,40 @@
+{
+  "type": "ores_and_drills:drill_assembly",
+  "duration": 200,
+  "parts": [
+    {
+      "count": 1,
+      "ingredient": {
+        "item": "ores_and_drills:drill_frame"
+      }
+    },
+    {
+      "count": 1,
+      "ingredient": {
+        "item": "ores_and_drills:electric_motor"
+      }
+    },
+    {
+      "count": 1,
+      "ingredient": {
+        "item": "ores_and_drills:drill_head"
+      }
+    },
+    {
+      "count": 4,
+      "ingredient": {
+        "tag": "c:dusts/redstone"
+      }
+    },
+    {
+      "count": 1,
+      "ingredient": {
+        "tag": "c:glass_blocks/colorless"
+      }
+    }
+  ],
+  "result": {
+    "count": 1,
+    "id": "ores_and_drills:exploration_drill"
+  }
+}

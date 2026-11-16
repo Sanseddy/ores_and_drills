@@ -1,0 +1,30 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "C": {
+      "item": "minecraft:furnace"
+    },
+    "D": {
+      "item": "ores_and_drills:mechanical_drive"
+    },
+    "F": {
+      "item": "ores_and_drills:drill_frame"
+    },
+    "H": {
+      "item": "ores_and_drills:drill_head"
+    },
+    "I": {
+      "tag": "c:ingots/iron"
+    }
+  },
+  "pattern": [
+    " F ",
+    "DCH",
+    " I "
+  ],
+  "result": {
+    "count": 1,
+    "id": "ores_and_drills:burner_mining_drill"
+  }
+}

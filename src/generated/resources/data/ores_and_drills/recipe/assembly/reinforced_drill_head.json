@@ -1,0 +1,28 @@
+{
+  "type": "ores_and_drills:drill_assembly",
+  "duration": 160,
+  "parts": [
+    {
+      "count": 1,
+      "ingredient": {
+        "item": "ores_and_drills:drill_head"
+      }
+    },
+    {
+      "count": 3,
+      "ingredient": {
+        "tag": "c:gems/diamond"
+      }
+    },
+    {
+      "count": 4,
+      "ingredient": {
+        "tag": "c:ingots/iron"
+      }
+    }
+  ],
+  "result": {
+    "count": 1,
+    "id": "ores_and_drills:reinforced_drill_head"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "type": "ores_and_drills:drill_assembly",
+  "duration": 480,
+  "parts": [
+    {
+      "count": 8,
+      "ingredient": {
+        "item": "ores_and_drills:drill_frame"
+      }
+    },
+    {
+      "count": 4,
+      "ingredient": {
+        "item": "ores_and_drills:electric_motor"
+      }
+    },
+    {
+      "count": 4,
+      "ingredient": {
+        "item": "ores_and_drills:reinforced_drill_head"
+      }
+    },
+    {
+      "count": 2,
+      "ingredient": {
+        "item": "ores_and_drills:fluid_manifold"
+      }
+    },
+    {
+      "count": 2,
+      "ingredient": {
+        "item": "ores_and_drills:precision_control"
+      }
+    },
+    {
+      "count": 2,
+      "ingredient": {
+        "tag": "c:ingots/netherite"
+      }
+    }
+  ],
+  "result": {
+    "count": 1,
+    "id": "ores_and_drills:ultimate_mining_drill"
+  }
+}

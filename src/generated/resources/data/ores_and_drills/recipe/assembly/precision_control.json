@@ -1,0 +1,40 @@
+{
+  "type": "ores_and_drills:drill_assembly",
+  "duration": 180,
+  "parts": [
+    {
+      "count": 1,
+      "ingredient": {
+        "item": "ores_and_drills:mechanical_drive"
+      }
+    },
+    {
+      "count": 4,
+      "ingredient": {
+        "tag": "c:ingots/gold"
+      }
+    },
+    {
+      "count": 8,
+      "ingredient": {
+        "tag": "c:dusts/redstone"
+      }
+    },
+    {
+      "count": 4,
+      "ingredient": {
+        "tag": "c:gems/quartz"
+      }
+    },
+    {
+      "count": 1,
+      "ingredient": {
+        "item": "minecraft:comparator"
+      }
+    }
+  ],
+  "result": {
+    "count": 1,
+    "id": "ores_and_drills:precision_control"
+  }
+}

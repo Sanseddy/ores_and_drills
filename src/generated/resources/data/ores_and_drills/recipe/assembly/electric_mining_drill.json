@@ -1,0 +1,40 @@
+{
+  "type": "ores_and_drills:drill_assembly",
+  "duration": 240,
+  "parts": [
+    {
+      "count": 2,
+      "ingredient": {
+        "item": "ores_and_drills:drill_frame"
+      }
+    },
+    {
+      "count": 1,
+      "ingredient": {
+        "item": "ores_and_drills:electric_motor"
+      }
+    },
+    {
+      "count": 2,
+      "ingredient": {
+        "item": "ores_and_drills:drill_head"
+      }
+    },
+    {
+      "count": 1,
+      "ingredient": {
+        "item": "ores_and_drills:mechanical_drive"
+      }
+    },
+    {
+      "count": 4,
+      "ingredient": {
+        "tag": "c:ingots/copper"
+      }
+    }
+  ],
+  "result": {
+    "count": 1,
+    "id": "ores_and_drills:electric_mining_drill"
+  }
+}
